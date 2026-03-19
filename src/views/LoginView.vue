@@ -47,11 +47,21 @@ const showPassword = ref(false);
   isolation: isolate;
 }
 
+.login-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/login-bg-anime.png") center / cover no-repeat;
+  opacity: 0.16;
+  z-index: 0;
+}
+
 .bg-shape {
   position: absolute;
   transform-origin: center;
-  z-index: 0;
+  z-index: 1;
   filter: saturate(1.05);
+  opacity: 0;
 }
 
 .bg-a {
@@ -61,6 +71,7 @@ const showPassword = ref(false);
   top: -24vmax;
   background: #6f76bf;
   transform: rotate(45deg);
+  animation: shapeInA 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 0.02s forwards;
 }
 
 .bg-b {
@@ -70,6 +81,7 @@ const showPassword = ref(false);
   top: -22vmax;
   background: #7fc2de;
   transform: rotate(45deg);
+  animation: shapeInB 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s forwards;
 }
 
 .bg-c {
@@ -79,6 +91,7 @@ const showPassword = ref(false);
   bottom: -42vmax;
   background: #e4bf9c;
   transform: rotate(45deg);
+  animation: shapeInC 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.18s forwards;
 }
 
 .bg-d {
@@ -88,6 +101,7 @@ const showPassword = ref(false);
   bottom: -36vmax;
   background: #e59ea9;
   transform: rotate(45deg);
+  animation: shapeInD 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.24s forwards;
 }
 
 .bg-e {
@@ -95,8 +109,18 @@ const showPassword = ref(false);
   height: 48vmax;
   left: 50%;
   top: 50%;
-  background: #f4f4f4;
+  overflow: hidden;
   transform: translate(-50%, -50%) rotate(45deg);
+  animation: shapeInCenter 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.52s forwards;
+}
+
+.bg-e::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  background: url("/login-bg-anime.png") center 42% / cover no-repeat;
+  transform: rotate(-45deg) scale(1.42);
+  transform-origin: center;
 }
 
 .bg-f {
@@ -104,8 +128,9 @@ const showPassword = ref(false);
   height: 56vmax;
   left: 58%;
   top: 52%;
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.22);
   transform: translate(-50%, -50%) rotate(45deg);
+  animation: shapeInCenterSoft 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.64s forwards;
 }
 
 .login-shell {
@@ -120,15 +145,37 @@ const showPassword = ref(false);
 
 .login-card {
   width: min(460px, calc(100% - 1rem));
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.34);
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  box-shadow: 0 18px 44px rgba(31, 41, 55, 0.14);
-  padding: 1.5rem;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
   display: grid;
   gap: 0.9rem;
+  opacity: 0;
+  transform: translateY(18px) scale(0.98);
+  animation: formWrapIn 0.55s ease-out 0.95s forwards;
+}
+
+.login-card > * {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: formItemIn 0.5s ease forwards;
+}
+
+.login-card > *:nth-child(1) {
+  animation-delay: 1.05s;
+}
+
+.login-card > *:nth-child(2) {
+  animation-delay: 1.14s;
+}
+
+.login-card > *:nth-child(3) {
+  animation-delay: 1.22s;
+}
+
+.login-card > *:nth-child(4) {
+  animation-delay: 1.3s;
 }
 
 h1 {
@@ -136,6 +183,7 @@ h1 {
   text-align: center;
   font-size: clamp(1.7rem, 2.8vw, 2.1rem);
   color: #0f172a;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
 }
 
 label {
@@ -150,9 +198,9 @@ input {
   width: 100%;
   height: 46px;
   border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   padding: 0 0.82rem;
-  background: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.14);
   font: inherit;
   color: #0f172a;
   outline: none;
@@ -177,9 +225,9 @@ input:focus {
   top: 7px;
   height: 32px;
   padding: 0 0.62rem;
-  border: 1px solid rgba(148, 163, 184, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.62);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.2);
   color: #334155;
   font-weight: 700;
   cursor: pointer;
@@ -198,13 +246,103 @@ input:focus {
   cursor: pointer;
 }
 
+@keyframes shapeInA {
+  from {
+    opacity: 0;
+    transform: translate(-16vmax, -12vmax) rotate(45deg) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(45deg) scale(1);
+  }
+}
+
+@keyframes shapeInB {
+  from {
+    opacity: 0;
+    transform: translate(16vmax, -12vmax) rotate(45deg) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(45deg) scale(1);
+  }
+}
+
+@keyframes shapeInC {
+  from {
+    opacity: 0;
+    transform: translate(-14vmax, 12vmax) rotate(45deg) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(45deg) scale(1);
+  }
+}
+
+@keyframes shapeInD {
+  from {
+    opacity: 0;
+    transform: translate(14vmax, 12vmax) rotate(45deg) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(45deg) scale(1);
+  }
+}
+
+@keyframes shapeInCenter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(45deg) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(45deg) scale(1);
+  }
+}
+
+@keyframes shapeInCenterSoft {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(45deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(45deg) scale(1);
+  }
+}
+
+@keyframes formWrapIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes formItemIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-shape,
+  .login-card,
+  .login-card > * {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (max-width: 900px) {
   .login-shell {
     width: min(1160px, calc(100% - 1.4rem));
   }
 
   .login-card {
-    padding: 1.15rem;
+    padding: 0;
   }
 
   .bg-e {
