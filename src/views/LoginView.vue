@@ -1,7 +1,129 @@
 ﻿<script setup>
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
+import { useRoute } from "vue-router";
+
+const route = useRoute();
 
 const showPassword = ref(false);
+const isRegister = computed(() => route.meta.authMode === "register");
+
+const email = ref("");
+const password = ref("");
+const confirmPassword = ref("");
+const verifyCode = ref("");
+
+const sendingCode = ref(false);
+const countdown = ref(0);
+const formTip = ref("");
+
+let countdownTimer = null;
+
+const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value));
+
+const sendCodeText = computed(() => {
+  if (sendingCode.value) {
+    return "发送中...";
+  }
+
+  if (countdown.value > 0) {
+    return `${countdown.value}s 后重发`;
+  }
+
+  return "发送验证码";
+});
+
+const canSendCode = computed(() => {
+  return isRegister.value && emailValid.value && !sendingCode.value && countdown.value === 0;
+});
+
+function clearCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
+function startCountdown(seconds = 60) {
+  countdown.value = seconds;
+  clearCountdown();
+
+  countdownTimer = setInterval(() => {
+    if (countdown.value <= 1) {
+      countdown.value = 0;
+      clearCountdown();
+      return;
+    }
+
+    countdown.value -= 1;
+  }, 1000);
+}
+
+async function onSendCode() {
+  if (!emailValid.value) {
+    formTip.value = "请先输入正确的邮箱地址";
+    return;
+  }
+
+  if (!canSendCode.value) {
+    return;
+  }
+
+  sendingCode.value = true;
+  formTip.value = "";
+
+  try {
+    // TODO: 接入后端发送邮箱验证码接口。
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    formTip.value = "验证码已发送，请查收邮箱";
+    startCountdown(60);
+  } catch (error) {
+    formTip.value = "验证码发送失败，请稍后重试";
+  } finally {
+    sendingCode.value = false;
+  }
+}
+
+function onSubmit() {
+  formTip.value = "";
+
+  if (!emailValid.value) {
+    formTip.value = "请输入正确的邮箱地址";
+    return;
+  }
+
+  if (!password.value) {
+    formTip.value = "请输入密码";
+    return;
+  }
+
+  if (isRegister.value) {
+    if (!verifyCode.value) {
+      formTip.value = "请输入邮箱验证码";
+      return;
+    }
+
+    if (!confirmPassword.value) {
+      formTip.value = "请再次输入密码";
+      return;
+    }
+
+    if (password.value !== confirmPassword.value) {
+      formTip.value = "两次输入的密码不一致";
+      return;
+    }
+
+    // TODO: 接入后端注册接口。
+    formTip.value = "注册信息校验通过，等待接入后端接口";
+    return;
+  }
+
+  // TODO: 接入后端登录接口。
+  formTip.value = "登录信息校验通过，等待接入后端接口";
+}
+
+onBeforeUnmount(() => {
+  clearCountdown();
+});
 </script>
 
 <template>
@@ -14,25 +136,66 @@ const showPassword = ref(false);
     <div class="bg-shape bg-f" />
 
     <div class="login-shell">
-      <form class="login-card" @submit.prevent>
-        <h1>Please Sign In</h1>
+      <form class="login-card" @submit.prevent="onSubmit">
+        <h1>{{ isRegister ? "创建账号" : "请登录" }}</h1>
 
         <label>
-          <span>Email</span>
-          <input type="email" placeholder="email" autocomplete="email" />
+          <span>邮箱</span>
+          <input v-model.trim="email" type="email" placeholder="请输入邮箱" autocomplete="email" />
         </label>
 
         <label>
-          <span>Password</span>
+          <span>密码</span>
           <div class="password-wrap">
-            <input :type="showPassword ? 'text' : 'password'" placeholder="password" autocomplete="current-password" />
+            <input
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="请输入密码"
+              :autocomplete="isRegister ? 'new-password' : 'current-password'"
+            />
             <button type="button" class="toggle" @click="showPassword = !showPassword">
-              {{ showPassword ? "Hide" : "Show" }}
+              {{ showPassword ? "隐藏" : "显示" }}
             </button>
           </div>
         </label>
 
-        <button class="submit" type="submit">Sign In</button>
+        <label v-if="isRegister">
+          <span>邮箱验证码</span>
+          <div class="code-wrap">
+            <input
+              v-model.trim="verifyCode"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="请输入验证码"
+              autocomplete="one-time-code"
+            />
+            <button type="button" class="send-code" :disabled="!canSendCode" @click="onSendCode">
+              {{ sendCodeText }}
+            </button>
+          </div>
+        </label>
+
+        <label v-if="isRegister">
+          <span>确认密码</span>
+          <input
+            v-model="confirmPassword"
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="请再次输入密码"
+            autocomplete="new-password"
+          />
+        </label>
+
+        <button class="submit" type="submit">{{ isRegister ? "注册" : "登录" }}</button>
+
+        <p class="auth-switch">
+          <span>{{ isRegister ? "已有账号？" : "还没有账号？" }}</span>
+          <RouterLink :to="isRegister ? '/login' : '/register'">
+            {{ isRegister ? "立即登录" : "立即注册" }}
+          </RouterLink>
+        </p>
+
+        <p v-if="formTip" class="form-tip">{{ formTip }}</p>
       </form>
     </div>
   </section>
@@ -178,6 +341,18 @@ const showPassword = ref(false);
   animation-delay: 1.3s;
 }
 
+.login-card > *:nth-child(5) {
+  animation-delay: 1.38s;
+}
+
+.login-card > *:nth-child(6) {
+  animation-delay: 1.46s;
+}
+
+.login-card > *:nth-child(7) {
+  animation-delay: 1.54s;
+}
+
 h1 {
   margin: 0 0 0.2rem;
   text-align: center;
@@ -211,7 +386,8 @@ input:focus {
   box-shadow: 0 0 0 4px rgba(111, 118, 191, 0.18);
 }
 
-.password-wrap {
+.password-wrap,
+.code-wrap {
   position: relative;
 }
 
@@ -219,7 +395,12 @@ input:focus {
   padding-right: 4.4rem;
 }
 
-.toggle {
+.code-wrap input {
+  padding-right: 7.7rem;
+}
+
+.toggle,
+.send-code {
   position: absolute;
   right: 7px;
   top: 7px;
@@ -233,6 +414,15 @@ input:focus {
   cursor: pointer;
 }
 
+.send-code {
+  min-width: 100px;
+}
+
+.send-code:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .submit {
   margin-top: 0.3rem;
   height: 46px;
@@ -244,6 +434,28 @@ input:focus {
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
+}
+
+.auth-switch {
+  margin: 0.2rem 0 0;
+  text-align: center;
+  color: #334155;
+  font-size: 0.93rem;
+}
+
+.auth-switch a {
+  margin-left: 0.42rem;
+  color: #0f172a;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.form-tip {
+  margin: 0;
+  color: #1e293b;
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 @keyframes shapeInA {

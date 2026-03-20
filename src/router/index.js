@@ -29,6 +29,15 @@ const router = createRouter({
       meta: {
         fullscreen: true
       }
+    },
+    {
+      path: "/register",
+      name: "register",
+      component: LoginView,
+      meta: {
+        fullscreen: true,
+        authMode: "register"
+      }
     }
   ]
 });

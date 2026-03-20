@@ -1,0 +1,4 @@
+node_modules/.vite/
+.devserver.log
+.devserver.err.log
+.tools/
