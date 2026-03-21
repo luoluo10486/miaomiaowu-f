@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
@@ -19,6 +19,10 @@ const submitting = ref(false);
 const countdown = ref(0);
 const formTip = ref("");
 const formTipType = ref("info");
+const loginMusicRef = ref(null);
+const needMusicGesture = ref(false);
+const isMusicPlaying = ref(false);
+const loginTrackName = "Drink, Pray, Love!";
 
 let countdownTimer = null;
 
@@ -46,6 +50,14 @@ const submitText = computed(() => {
 
 const canSendCode = computed(() => {
   return isRegister.value && emailValid.value && !sendingCode.value && countdown.value === 0 && !submitting.value;
+});
+
+const musicTooltipText = computed(() => {
+  if (needMusicGesture.value) {
+    return `${loginTrackName} · 点击播放`;
+  }
+
+  return isMusicPlaying.value ? `${loginTrackName} · 正在播放` : `${loginTrackName} · 已暂停`;
 });
 
 function setTip(message, type = "info") {
@@ -119,6 +131,64 @@ function saveAuthToken(payload) {
   if (token) {
     localStorage.setItem("auth_token", token);
   }
+}
+
+function stopLoginMusic() {
+  const audio = loginMusicRef.value;
+  if (!audio) {
+    return;
+  }
+
+  audio.pause();
+  audio.currentTime = 0;
+  isMusicPlaying.value = false;
+  needMusicGesture.value = false;
+}
+
+async function tryPlayLoginMusic() {
+  if (isRegister.value) {
+    return;
+  }
+
+  const audio = loginMusicRef.value;
+  if (!audio) {
+    return;
+  }
+
+  audio.volume = 0.45;
+
+  try {
+    await audio.play();
+    isMusicPlaying.value = true;
+    needMusicGesture.value = false;
+  } catch {
+    isMusicPlaying.value = false;
+    needMusicGesture.value = true;
+  }
+}
+
+function onMusicToggleClick() {
+  const audio = loginMusicRef.value;
+  if (!audio) {
+    return;
+  }
+
+  if (audio.paused) {
+    void tryPlayLoginMusic();
+    return;
+  }
+
+  audio.pause();
+  isMusicPlaying.value = false;
+}
+
+function onMusicPlay() {
+  isMusicPlaying.value = true;
+  needMusicGesture.value = false;
+}
+
+function onMusicPause() {
+  isMusicPlaying.value = false;
 }
 
 async function onSendCode() {
@@ -235,12 +305,22 @@ watch(
     } else {
       setTip("", "info");
     }
+
+    nextTick(() => {
+      if (isRegister.value) {
+        stopLoginMusic();
+        return;
+      }
+
+      void tryPlayLoginMusic();
+    });
   },
   { immediate: true }
 );
 
 onBeforeUnmount(() => {
   clearCountdown();
+  stopLoginMusic();
 });
 </script>
 
@@ -252,6 +332,29 @@ onBeforeUnmount(() => {
     <div class="bg-shape bg-d" />
     <div class="bg-shape bg-e" />
     <div class="bg-shape bg-f" />
+    <audio ref="loginMusicRef" src="/login-bgm.mp3" preload="auto" loop @play="onMusicPlay" @pause="onMusicPause" />
+    <button
+      v-if="!isRegister"
+      type="button"
+      class="music-trigger"
+      :class="{ 'is-playing': isMusicPlaying, 'is-blocked': needMusicGesture }"
+      :aria-label="isMusicPlaying ? '暂停音乐' : '播放音乐'"
+      @click="onMusicToggleClick"
+    >
+      <svg class="music-trigger__icon music-note" viewBox="0 0 64 64" aria-hidden="true">
+        <path
+          d="M31 12v27.5M31 12l18 11M31 12c6 1 9 4 11 8.5"
+          fill="none"
+          stroke="#5853a6"
+          stroke-width="3.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <ellipse cx="25.5" cy="45.5" rx="9.5" ry="7.5" fill="#f4c24f" />
+        <ellipse cx="25.5" cy="45.5" rx="9.5" ry="7.5" fill="none" stroke="#5853a6" stroke-width="3.3" />
+      </svg>
+      <span class="music-trigger__tooltip" role="tooltip">{{ musicTooltipText }}</span>
+    </button>
 
     <div class="login-shell">
       <form class="login-card" @submit.prevent="onSubmit">
@@ -593,6 +696,104 @@ input:focus {
   color: #b91c1c;
 }
 
+.music-trigger {
+  position: fixed;
+  right: 1.15rem;
+  bottom: 1.15rem;
+  z-index: 4;
+  width: 50px;
+  height: 50px;
+  border-radius: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  cursor: pointer;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  overflow: visible;
+}
+
+.music-trigger:hover {
+  transform: translateY(-2px) scale(1.06);
+}
+
+.music-trigger.is-blocked {
+  opacity: 0.88;
+}
+
+.music-trigger__icon {
+  width: 38px;
+  height: 38px;
+  filter: drop-shadow(0 2px 5px rgba(15, 23, 42, 0.22));
+}
+
+.music-trigger__tooltip {
+  position: absolute;
+  right: calc(100% + 0.62rem);
+  top: 50%;
+  transform: translateY(-50%) translateX(6px) scale(0.98);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 0.18rem 0.1rem;
+  border: 0;
+  background: transparent;
+  color: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.38), 0 1px 2px rgba(15, 23, 42, 0.42);
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.music-trigger:hover .music-trigger__tooltip,
+.music-trigger:focus-visible .music-trigger__tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0) scale(1);
+}
+
+.music-trigger.is-playing {
+  opacity: 1;
+}
+
+.music-trigger.is-playing .music-note {
+  animation: noteSwing 1.3s ease-in-out infinite;
+}
+
+@keyframes noteAlert {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 2px 5px rgba(15, 23, 42, 0.22));
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 3px 8px rgba(220, 38, 38, 0.28));
+  }
+}
+
+.music-trigger.is-blocked .music-note {
+  animation: noteAlert 1.2s ease-in-out infinite;
+}
+
+@keyframes noteSwing {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-1px) rotate(-4deg);
+  }
+  75% {
+    transform: translateY(-1px) rotate(4deg);
+  }
+}
+
+
 @keyframes shapeInA {
   from {
     opacity: 0;
@@ -695,6 +896,13 @@ input:focus {
   .bg-e {
     width: 74vmax;
     height: 74vmax;
+  }
+
+  .music-trigger {
+    right: 0.8rem;
+    bottom: 0.8rem;
+    width: 46px;
+    height: 46px;
   }
 }
 </style>
