@@ -1,6 +1,7 @@
 ﻿<script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import LoginClothScene from "../components/LoginClothScene.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -334,6 +335,7 @@ onBeforeUnmount(() => {
     <div class="bg-shape bg-d" />
     <div class="bg-shape bg-e" />
     <div class="bg-shape bg-f" />
+    <LoginClothScene class="page-particles" />
     <a
       class="github-link"
       href="https://github.com/luoluo10486"
@@ -432,12 +434,33 @@ onBeforeUnmount(() => {
 
         <label v-if="isRegister">
           <span>确认密码</span>
-          <input
-            v-model="confirmPassword"
-            :type="showPassword ? 'text' : 'password'"
-            placeholder="请再次输入密码"
-            autocomplete="new-password"
-          />
+          <div class="password-wrap">
+            <input
+              v-model="confirmPassword"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="请再次输入密码"
+              autocomplete="new-password"
+            />
+            <button
+              type="button"
+              class="toggle"
+              :class="showPassword ? 'is-visible' : 'is-hidden'"
+              :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+              :title="showPassword ? '隐藏密码' : '显示密码'"
+              @click="showPassword = !showPassword"
+            >
+              <svg v-if="showPassword" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6Z" />
+                <circle cx="12" cy="12" r="2.8" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 15c2.2-2.6 5-4 8-4 3.1 0 5.8 1.4 8 4" />
+                <path d="M8.2 18 6.8 20" />
+                <path d="M12 17.6V20" />
+                <path d="m15.8 18 1.4 2" />
+              </svg>
+            </button>
+          </div>
         </label>
 
         <button class="submit" type="submit" :disabled="submitting">{{ submitText }}</button>
@@ -559,17 +582,20 @@ onBeforeUnmount(() => {
   width: min(1160px, calc(100% - 2.4rem));
   margin: 0 auto;
   position: relative;
-  z-index: 2;
+  z-index: 3;
   display: grid;
   place-items: center;
 }
 
 .login-card {
   width: min(460px, calc(100% - 1rem));
+  justify-self: center;
   background: transparent;
   border: 0;
   box-shadow: none;
+  backdrop-filter: none;
   padding: 0;
+  border-radius: 0;
   display: grid;
   gap: 0.9rem;
   opacity: 0;
@@ -611,9 +637,31 @@ input {
   outline: none;
 }
 
+input,
+input:hover,
+input:focus,
+input:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 input:focus {
   border-color: rgba(99, 102, 241, 0.6);
   box-shadow: 0 0 0 4px rgba(111, 118, 191, 0.18);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #0f172a;
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.08) inset;
+  box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.08) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
 }
 
 .password-wrap,
@@ -748,11 +796,18 @@ input:focus {
   color: #b91c1c;
 }
 
+.page-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 .github-link {
   position: fixed;
   top: 1rem;
   right: 1rem;
-  z-index: 4;
+  z-index: 5;
   width: 36px;
   height: 36px;
   display: grid;
@@ -778,7 +833,7 @@ input:focus {
   position: fixed;
   right: 1.15rem;
   bottom: 1.15rem;
-  z-index: 4;
+  z-index: 5;
   width: 50px;
   height: 50px;
   border-radius: 0;
@@ -965,10 +1020,11 @@ input:focus {
 @media (max-width: 900px) {
   .login-shell {
     width: min(1160px, calc(100% - 1.4rem));
+    place-items: center;
   }
 
   .login-card {
-    padding: 0;
+    width: min(460px, calc(100% - 0.2rem));
   }
 
   .bg-e {
@@ -986,6 +1042,12 @@ input:focus {
   .github-link {
     top: 0.78rem;
     right: 0.78rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .login-card {
+    width: min(100%, calc(100% - 0.1rem));
   }
 }
 </style>
