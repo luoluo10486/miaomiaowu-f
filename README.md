@@ -30,7 +30,14 @@ npm run dev
 可通过环境变量配置后端地址：
 
 ```env
-VITE_API_BASE_URL=http://localhost:8081
+VITE_API_BASE_URL=http://localhost:8080
 ```
+
+开发环境如果后端在 `http://localhost:8080`，项目也内置了 Vite 代理：
+
+- 前端请求 `/luoluo/*`
+- Vite 自动转发到 `http://localhost:8080/luoluo/*`
+
+这样本地联调时可以避免浏览器跨域拦截。
 
 > 当后端实际路径是 `/api/v1/member/auth/*` 时，可通过网关转发或前端路径映射来对齐。

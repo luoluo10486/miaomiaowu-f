@@ -7,16 +7,23 @@ const route = useRoute();
 const router = useRouter();
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim();
 const AUTH_API_PREFIX = "/luoluo";
+const DEFAULT_AUTH_REDIRECT = "/";
 
 const showPassword = ref(false);
 const authMode = ref(route.query.mode === "register" ? "register" : "login");
 const isRegister = computed(() => authMode.value === "register");
 
 const email = ref("");
+const nickname = ref("");
+const phone = ref("");
 const password = ref("");
 const confirmPassword = ref("");
 const verifyCode = ref("");
+const captchaCode = ref("");
+const captchaKey = ref("");
+const captchaImageSrc = ref("");
 
+const loadingCaptcha = ref(false);
 const sendingCode = ref(false);
 const submitting = ref(false);
 const countdown = ref(0);
@@ -30,6 +37,7 @@ const loginTrackName = "Drink, Pray, Love!";
 let countdownTimer = null;
 
 const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value));
+const phoneValid = computed(() => /^1\d{10}$/.test(phone.value));
 
 const sendCodeText = computed(() => {
   if (sendingCode.value) {
@@ -52,7 +60,16 @@ const submitText = computed(() => {
 });
 
 const canSendCode = computed(() => {
-  return isRegister.value && emailValid.value && !sendingCode.value && countdown.value === 0 && !submitting.value;
+  return (
+    isRegister.value &&
+    emailValid.value &&
+    captchaCode.value.trim().length > 0 &&
+    !!captchaKey.value &&
+    !loadingCaptcha.value &&
+    !sendingCode.value &&
+    countdown.value === 0 &&
+    !submitting.value
+  );
 });
 const authCardKey = computed(() => (isRegister.value ? "register-card" : "login-card"));
 
@@ -76,9 +93,12 @@ function switchAuthMode(mode) {
 
   authMode.value = mode;
   showPassword.value = false;
+  nickname.value = "";
+  phone.value = "";
   password.value = "";
   confirmPassword.value = "";
   verifyCode.value = "";
+  captchaCode.value = "";
   clearCountdown();
   countdown.value = 0;
   setTip("", "info");
@@ -110,6 +130,127 @@ function normalizeVerifyCode() {
   verifyCode.value = verifyCode.value.replace(/\D/g, "").slice(0, 6);
 }
 
+function normalizeNickname() {
+  nickname.value = nickname.value.replace(/\s+/g, " ").trimStart().slice(0, 20);
+}
+
+function normalizePhone() {
+  phone.value = phone.value.replace(/\D/g, "").slice(0, 11);
+}
+
+function normalizeCaptchaCode() {
+  captchaCode.value = captchaCode.value.replace(/\s+/g, "").slice(0, 8);
+}
+
+function resetCaptchaState() {
+  captchaCode.value = "";
+  captchaKey.value = "";
+  captchaImageSrc.value = "";
+}
+
+function unwrapResponseData(payload) {
+  if (payload && typeof payload === "object" && "data" in payload) {
+    return payload.data;
+  }
+
+  return payload;
+}
+
+function extractCaptchaPayload(payload) {
+  const queue = [payload];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) {
+      continue;
+    }
+
+    visited.add(current);
+
+    const captchaKey = typeof current.captchaKey === "string" ? current.captchaKey.trim() : "";
+    const imageBase64 = typeof current.imageBase64 === "string" ? current.imageBase64.trim() : "";
+    if (captchaKey && imageBase64) {
+      return { captchaKey, imageBase64 };
+    }
+
+    if ("data" in current) {
+      queue.push(current.data);
+    }
+
+    if ("result" in current) {
+      queue.push(current.result);
+    }
+  }
+
+  return { captchaKey: "", imageBase64: "" };
+}
+
+function buildCaptchaFormatError(payload) {
+  const message = typeof payload?.message === "string" ? payload.message.trim() : "";
+  if (message.startsWith("<!DOCTYPE") || message.startsWith("<html") || message.startsWith("<!doctype")) {
+    return "图形验证码接口返回了 HTML 页面，请检查接口地址或网关转发配置";
+  }
+
+  return "图形验证码返回格式不正确";
+}
+
+async function parseResponsePayload(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+  const normalizedText = rawText.trim();
+
+  if (!normalizedText) {
+    return {};
+  }
+
+  if (contentType.includes("application/json")) {
+    return JSON.parse(normalizedText);
+  }
+
+  // Some backends return JSON without the correct content-type header.
+  if (normalizedText.startsWith("{") || normalizedText.startsWith("[")) {
+    try {
+      return JSON.parse(normalizedText);
+    } catch {
+      return { message: rawText };
+    }
+  }
+
+  return { message: rawText };
+}
+
+async function refreshCaptcha() {
+  if (!isRegister.value || loadingCaptcha.value) {
+    return;
+  }
+
+  loadingCaptcha.value = true;
+
+  try {
+    const payload = await requestAuth("/system/public/captcha/image", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const data = unwrapResponseData(payload);
+    const { captchaKey: nextCaptchaKey, imageBase64 } = extractCaptchaPayload(data);
+
+    if (!nextCaptchaKey || !imageBase64) {
+      console.error("captcha payload mismatch", payload);
+      throw new Error(buildCaptchaFormatError(payload));
+    }
+
+    captchaKey.value = nextCaptchaKey;
+    captchaCode.value = "";
+    captchaImageSrc.value = `data:image/svg+xml;base64,${imageBase64}`;
+  } catch (error) {
+    resetCaptchaState();
+    setTip(error?.message || "图形验证码加载失败，请稍后重试", "error");
+  } finally {
+    loadingCaptcha.value = false;
+  }
+}
+
 function validatePassword(rawPassword) {
   const value = rawPassword.trim();
 
@@ -124,22 +265,44 @@ function validatePassword(rawPassword) {
   return "";
 }
 
-async function requestAuth(path, body) {
+async function requestAuth(path, options = {}) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const response = await fetch(`${API_BASE_URL}${AUTH_API_PREFIX}${normalizedPath}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+  const normalizedOptions =
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    !("method" in options) &&
+    !("body" in options) &&
+    !("headers" in options) &&
+    !("cache" in options)
+      ? { body: options }
+      : options;
+  const {
+    method = "POST",
+    body,
+    headers = {},
+    cache = "default"
+  } = normalizedOptions;
+
+  const requestHeaders = { ...headers };
+  const requestInit = {
+    method,
+    headers: requestHeaders,
     credentials: "include",
-    body: JSON.stringify(body)
-  });
+    cache
+  };
 
-  const contentType = response.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-  const payload = isJson ? await response.json() : { message: await response.text() };
+  if (body !== undefined) {
+    requestHeaders["Content-Type"] = requestHeaders["Content-Type"] || "application/json";
+    requestInit.body = requestHeaders["Content-Type"] === "application/json" ? JSON.stringify(body) : body;
+  }
 
-  if (!response.ok) {
+  const response = await fetch(`${API_BASE_URL}${AUTH_API_PREFIX}${normalizedPath}`, requestInit);
+
+  const payload = await parseResponsePayload(response);
+  const hasBusinessCode = payload && typeof payload === "object" && "code" in payload;
+
+  if (!response.ok || (hasBusinessCode && payload.code !== 0 && payload.code !== "0")) {
     throw new Error(payload?.message || payload?.error || "请求失败，请稍后重试");
   }
 
@@ -151,6 +314,15 @@ function saveAuthToken(payload) {
   if (token) {
     localStorage.setItem("auth_token", token);
   }
+}
+
+function resolvePostLoginRedirect() {
+  const redirect = typeof route.query.redirect === "string" ? route.query.redirect.trim() : "";
+  if (!redirect.startsWith("/") || redirect.startsWith("/login")) {
+    return DEFAULT_AUTH_REDIRECT;
+  }
+
+  return redirect;
 }
 
 function stopLoginMusic() {
@@ -217,17 +389,37 @@ async function onSendCode() {
     return;
   }
 
+  normalizeCaptchaCode();
+
+  if (!captchaKey.value || !captchaImageSrc.value) {
+    setTip("图形验证码尚未准备好，请刷新后重试", "error");
+    return;
+  }
+
+  if (!captchaCode.value.trim()) {
+    setTip("请输入图形验证码", "error");
+    return;
+  }
+
   sendingCode.value = true;
   setTip("", "info");
 
   try {
-    const payload = await requestAuth("/api/auth/send-code", { email: email.value.trim() });
+    const payload = await requestAuth("/system/public/member/auth/code/send", {
+      body: {
+        grantType: "email",
+        email: email.value.trim(),
+        captchaKey: captchaKey.value,
+        captchaCode: captchaCode.value.trim()
+      }
+    });
     setTip(payload?.message || "验证码已发送，请查收邮箱", "success");
     startCountdown(60);
   } catch (error) {
     setTip(error?.message || "验证码发送失败，请稍后重试", "error");
   } finally {
     sendingCode.value = false;
+    await refreshCaptcha();
   }
 }
 
@@ -253,7 +445,19 @@ async function onSubmit() {
 
   try {
     if (isRegister.value) {
+      normalizeNickname();
+      normalizePhone();
       normalizeVerifyCode();
+
+      if (!nickname.value.trim()) {
+        setTip("请输入昵称", "error");
+        return;
+      }
+
+      if (!phoneValid.value) {
+        setTip("请输入正确的 11 位手机号", "error");
+        return;
+      }
 
       if (verifyCode.value.length !== 6) {
         setTip("请输入 6 位邮箱验证码", "error");
@@ -271,11 +475,19 @@ async function onSubmit() {
       }
 
       const payload = await requestAuth("/api/auth/register", {
+        registerType: "email",
+        username: nickname.value.trim(),
+        displayName: nickname.value.trim(),
+        phone: phone.value,
         email: email.value.trim(),
         password: password.value.trim(),
+        confirmPassword: confirmPassword.value.trim(),
+        emailCode: verifyCode.value,
         code: verifyCode.value
       });
 
+      nickname.value = "";
+      phone.value = "";
       password.value = "";
       confirmPassword.value = "";
       verifyCode.value = "";
@@ -293,7 +505,7 @@ async function onSubmit() {
 
     saveAuthToken(payload);
     setTip(payload?.message || "登录成功，正在跳转", "success");
-    await router.push("/");
+    await router.push(resolvePostLoginRedirect());
   } catch (error) {
     setTip(error?.message || "请求失败，请稍后重试", "error");
   } finally {
@@ -317,6 +529,19 @@ watch(
     nextTick(() => {
       void tryPlayLoginMusic();
     });
+  },
+  { immediate: true }
+);
+
+watch(
+  isRegister,
+  (registerMode) => {
+    if (registerMode) {
+      void refreshCaptcha();
+      return;
+    }
+
+    resetCaptchaState();
   },
   { immediate: true }
 );
@@ -383,6 +608,31 @@ onBeforeUnmount(() => {
           <input v-model.trim="email" type="email" placeholder="请输入邮箱" autocomplete="email" />
         </label>
 
+        <label v-if="isRegister">
+          <span>昵称</span>
+          <input
+            v-model="nickname"
+            type="text"
+            maxlength="20"
+            placeholder="请输入昵称"
+            autocomplete="nickname"
+            @input="normalizeNickname"
+          />
+        </label>
+
+        <label v-if="isRegister">
+          <span>手机号</span>
+          <input
+            v-model="phone"
+            type="tel"
+            inputmode="numeric"
+            maxlength="11"
+            placeholder="请输入手机号"
+            autocomplete="tel"
+            @input="normalizePhone"
+          />
+        </label>
+
         <label>
           <span>密码</span>
           <div class="password-wrap">
@@ -415,24 +665,6 @@ onBeforeUnmount(() => {
         </label>
 
         <label v-if="isRegister">
-          <span>邮箱验证码</span>
-          <div class="code-wrap">
-            <input
-              v-model.trim="verifyCode"
-              type="text"
-              inputmode="numeric"
-              maxlength="6"
-              placeholder="请输入验证码"
-              autocomplete="one-time-code"
-              @input="normalizeVerifyCode"
-            />
-            <button type="button" class="send-code" :disabled="!canSendCode" @click="onSendCode">
-              {{ sendCodeText }}
-            </button>
-          </div>
-        </label>
-
-        <label v-if="isRegister">
           <span>确认密码</span>
           <div class="password-wrap">
             <input
@@ -459,6 +691,50 @@ onBeforeUnmount(() => {
                 <path d="M12 17.6V20" />
                 <path d="m15.8 18 1.4 2" />
               </svg>
+            </button>
+          </div>
+        </label>
+
+        <label v-if="isRegister">
+          <span>图形验证码</span>
+          <div class="captcha-wrap">
+            <input
+              v-model.trim="captchaCode"
+              type="text"
+              inputmode="text"
+              maxlength="8"
+              placeholder="请输入图形验证码"
+              autocomplete="off"
+              @input="normalizeCaptchaCode"
+            />
+            <button
+              type="button"
+              class="captcha-preview"
+              :disabled="loadingCaptcha"
+              :aria-label="loadingCaptcha ? '图形验证码加载中' : '刷新图形验证码'"
+              :title="loadingCaptcha ? '图形验证码加载中' : '点击刷新图形验证码'"
+              @click="refreshCaptcha"
+            >
+              <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="图形验证码" />
+              <span v-else>{{ loadingCaptcha ? "加载中..." : "点击刷新" }}</span>
+            </button>
+          </div>
+        </label>
+
+        <label v-if="isRegister">
+          <span>邮箱验证码</span>
+          <div class="code-wrap">
+            <input
+              v-model.trim="verifyCode"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              placeholder="请输入验证码"
+              autocomplete="one-time-code"
+              @input="normalizeVerifyCode"
+            />
+            <button type="button" class="send-code" :disabled="!canSendCode" @click="onSendCode">
+              {{ sendCodeText }}
             </button>
           </div>
         </label>
@@ -669,12 +945,46 @@ input::-ms-clear {
   position: relative;
 }
 
+.captcha-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 0.7rem;
+}
+
 .password-wrap input {
   padding-right: 3rem;
 }
 
 .code-wrap input {
   padding-right: 7.7rem;
+}
+
+.captcha-wrap input {
+  text-transform: uppercase;
+}
+
+.captcha-preview {
+  height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #334155;
+  font: inherit;
+  font-weight: 700;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.captcha-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.captcha-preview:disabled {
+  opacity: 0.72;
+  cursor: wait;
 }
 
 .toggle {
@@ -1048,6 +1358,10 @@ input::-ms-clear {
 @media (max-width: 560px) {
   .login-card {
     width: min(100%, calc(100% - 0.1rem));
+  }
+
+  .captcha-wrap {
+    grid-template-columns: 1fr;
   }
 }
 </style>
