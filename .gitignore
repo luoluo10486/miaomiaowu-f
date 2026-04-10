@@ -4,3 +4,6 @@ dist/
 .devserver.log
 .devserver.err.log
 .tools/
+
+# Local/temporary content
+awesome-design-md-main/
