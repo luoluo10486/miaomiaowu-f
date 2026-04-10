@@ -603,6 +603,10 @@ onBeforeUnmount(() => {
       <form :key="authCardKey" class="login-card" @submit.prevent="onSubmit">
         <h1>{{ isRegister ? "创建账号" : "请登录" }}</h1>
 
+        <div class="form-tip-slot" aria-live="polite">
+          <p v-if="formTip" :class="['form-tip', `form-tip--${formTipType}`]">{{ formTip }}</p>
+        </div>
+
         <label>
           <span>邮箱</span>
           <input v-model.trim="email" type="email" placeholder="请输入邮箱" autocomplete="email" />
@@ -751,8 +755,6 @@ onBeforeUnmount(() => {
             {{ isRegister ? "立即登录" : "立即注册" }}
           </button>
         </p>
-
-        <p v-if="formTip" :class="['form-tip', `form-tip--${formTipType}`]">{{ formTip }}</p>
       </form>
     </div>
   </section>
@@ -1087,11 +1089,18 @@ input::-ms-clear {
   cursor: pointer;
 }
 
+.form-tip-slot {
+  min-height: 1.4rem;
+  display: grid;
+  align-items: start;
+}
+
 .form-tip {
   margin: 0;
   text-align: center;
   font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.45;
 }
 
 .form-tip--info {
