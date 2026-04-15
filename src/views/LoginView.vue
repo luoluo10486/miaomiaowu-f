@@ -34,8 +34,21 @@ const loginMusicRef = ref(null);
 const needMusicGesture = ref(false);
 const isMusicPlaying = ref(false);
 const loginTrackName = "Drink, Pray, Love!";
+const loginVolume = ref(0.45);
+const volumeTrackRef = ref(null);
+const isVolumeCharging = ref(false);
+const volumeChargeRatio = ref(0);
+const isVolumeProjectileFlying = ref(false);
+const volumeProjectileX = ref(-18);
+const volumeProjectileY = ref(0);
+const volumeProjectileScale = ref(1);
+const volumeProjectileOpacity = ref(0);
 
 let countdownTimer = null;
+let volumeChargeFrameId = 0;
+let volumeShotFrameId = 0;
+let volumeChargeStartedAt = 0;
+let activeVolumePointerId = null;
 
 const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value));
 const phoneValid = computed(() => /^1\d{10}$/.test(phone.value));
@@ -82,9 +95,227 @@ const musicTooltipText = computed(() => {
   return isMusicPlaying.value ? `${loginTrackName} · 正在播放` : `${loginTrackName} · 已暂停`;
 });
 
+const volumeFillStyle = computed(() => ({
+  transform: `translateY(-50%) scaleX(${Math.max(loginVolume.value, 0.001)})`
+}));
+
+const volumeTriggerIconStyle = computed(() => {
+  if (!isVolumeCharging.value) {
+    return {
+      transform: "translateY(0) rotate(0deg) scale(1)"
+    };
+  }
+
+  const ratio = volumeChargeRatio.value;
+  const rotate = -6 - ratio * 30;
+  const lift = -1 - ratio * 5;
+  const scale = 1 + ratio * 0.08;
+
+  return {
+    transform: `translateY(${lift}px) rotate(${rotate}deg) scale(${scale})`
+  };
+});
+
+const volumeProjectileStyle = computed(() => {
+  if (isVolumeCharging.value) {
+    return {
+      opacity: 0
+    };
+  }
+
+  if (isVolumeProjectileFlying.value) {
+    return {
+      left: `${volumeProjectileX.value}px`,
+      top: `calc(50% + ${volumeProjectileY.value}px)`,
+      transform: `translate(-50%, -50%) scale(${volumeProjectileScale.value})`,
+      opacity: volumeProjectileOpacity.value
+    };
+  }
+
+  return {
+    left: `calc(${loginVolume.value * 100}% - 6px)`,
+    top: "50%",
+    transform: "translateY(-50%) scale(1)",
+    opacity: 1
+  };
+});
+
 function setTip(message, type = "info") {
   formTip.value = message;
   formTipType.value = type;
+}
+
+function clampVolume(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, value));
+}
+
+function syncLoginMusicVolume() {
+  const audio = loginMusicRef.value;
+  if (!audio) {
+    return;
+  }
+
+  audio.volume = clampVolume(loginVolume.value);
+}
+
+function setLoginMusicVolume(nextVolume) {
+  loginVolume.value = clampVolume(nextVolume);
+  syncLoginMusicVolume();
+}
+
+function getVolumeTrackWidth() {
+  return Math.max(volumeTrackRef.value?.clientWidth || 0, 132);
+}
+
+function stopVolumeChargeLoop() {
+  if (volumeChargeFrameId) {
+    cancelAnimationFrame(volumeChargeFrameId);
+    volumeChargeFrameId = 0;
+  }
+}
+
+function stopVolumeShotLoop() {
+  if (volumeShotFrameId) {
+    cancelAnimationFrame(volumeShotFrameId);
+    volumeShotFrameId = 0;
+  }
+}
+
+function resetVolumeProjectile() {
+  isVolumeProjectileFlying.value = false;
+  volumeProjectileX.value = -18;
+  volumeProjectileY.value = 0;
+  volumeProjectileScale.value = 1;
+  volumeProjectileOpacity.value = 1;
+}
+
+function stepVolumeCharge(timestamp) {
+  if (!isVolumeCharging.value) {
+    return;
+  }
+
+  if (!volumeChargeStartedAt) {
+    volumeChargeStartedAt = timestamp;
+  }
+
+  const elapsed = timestamp - volumeChargeStartedAt;
+  const ratio = Math.min(elapsed / 1500, 1);
+
+  volumeChargeRatio.value = ratio;
+  volumeChargeFrameId = requestAnimationFrame(stepVolumeCharge);
+}
+
+function animateVolumeProjectile(targetVolume, chargeRatio) {
+  stopVolumeShotLoop();
+
+  const trackWidth = getVolumeTrackWidth();
+  const startX = -31 + chargeRatio * 3;
+  const startY = -1 - chargeRatio * 10;
+  const startVolume = loginVolume.value;
+  const endX = trackWidth * targetVolume;
+  const arcHeight = 12 + chargeRatio * 28;
+  const duration = 320 + chargeRatio * 280;
+  const startTime = performance.now();
+
+  isVolumeProjectileFlying.value = true;
+  volumeProjectileX.value = startX;
+  volumeProjectileY.value = startY;
+  volumeProjectileScale.value = 0.96 + chargeRatio * 0.1;
+  volumeProjectileOpacity.value = 1;
+
+  const step = (timestamp) => {
+    const progress = Math.min((timestamp - startTime) / duration, 1);
+    const eased = 1 - (1 - progress) ** 3;
+    const nextX = startX + (endX - startX) * eased;
+    const nextY = startY * (1 - progress) - Math.sin(Math.PI * progress) * arcHeight;
+
+    volumeProjectileX.value = nextX;
+    volumeProjectileY.value = nextY;
+    volumeProjectileScale.value = 1.02 - progress * 0.14;
+    volumeProjectileOpacity.value = progress > 0.9 ? 1 - (progress - 0.9) / 0.1 : 1;
+    setLoginMusicVolume(startVolume + (targetVolume - startVolume) * eased);
+
+    if (progress < 1) {
+      volumeShotFrameId = requestAnimationFrame(step);
+      return;
+    }
+
+    setLoginMusicVolume(targetVolume);
+    resetVolumeProjectile();
+  };
+
+  volumeShotFrameId = requestAnimationFrame(step);
+}
+
+function releaseVolumePointer(event) {
+  if (activeVolumePointerId === null) {
+    return;
+  }
+
+  try {
+    event?.currentTarget?.releasePointerCapture?.(activeVolumePointerId);
+  } catch {
+    return;
+  } finally {
+    activeVolumePointerId = null;
+  }
+}
+
+function finishVolumeCharge(event, shouldLaunch = true) {
+  if (!isVolumeCharging.value) {
+    return;
+  }
+
+  const chargeRatio = volumeChargeRatio.value;
+
+  isVolumeCharging.value = false;
+  stopVolumeChargeLoop();
+  releaseVolumePointer(event);
+  volumeChargeStartedAt = 0;
+
+  if (!shouldLaunch) {
+    resetVolumeProjectile();
+    return;
+  }
+
+  const targetVolume = clampVolume(0.04 + chargeRatio * 0.96);
+  animateVolumeProjectile(targetVolume, chargeRatio);
+}
+
+function onVolumePressStart(event) {
+  if (isVolumeCharging.value) {
+    return;
+  }
+
+  event.preventDefault();
+  stopVolumeShotLoop();
+  isVolumeProjectileFlying.value = false;
+
+  volumeChargeRatio.value = 0;
+  volumeChargeStartedAt = 0;
+  isVolumeCharging.value = true;
+
+  try {
+    event.currentTarget?.setPointerCapture?.(event.pointerId);
+    activeVolumePointerId = event.pointerId;
+  } catch {
+    activeVolumePointerId = null;
+  }
+
+  stopVolumeChargeLoop();
+  volumeChargeFrameId = requestAnimationFrame(stepVolumeCharge);
+}
+
+function onVolumePressEnd(event) {
+  finishVolumeCharge(event, true);
+}
+
+function onVolumePressCancel(event) {
+  finishVolumeCharge(event, false);
 }
 
 function switchAuthMode(mode) {
@@ -341,7 +572,7 @@ async function tryPlayLoginMusic() {
     return;
   }
 
-  audio.volume = 0.45;
+  syncLoginMusicVolume();
 
   try {
     await audio.play();
@@ -369,6 +600,7 @@ function onMusicToggleClick() {
 }
 
 function onMusicPlay() {
+  syncLoginMusicVolume();
   isMusicPlaying.value = true;
   needMusicGesture.value = false;
 }
@@ -559,6 +791,8 @@ watch(
 
 onBeforeUnmount(() => {
   clearCountdown();
+  stopVolumeChargeLoop();
+  stopVolumeShotLoop();
   stopLoginMusic();
 });
 </script>
@@ -588,27 +822,66 @@ onBeforeUnmount(() => {
       </svg>
     </a>
     <audio ref="loginMusicRef" src="/login-bgm.mp3" preload="auto" loop @play="onMusicPlay" @pause="onMusicPause" />
-    <button
-      type="button"
-      class="music-trigger"
-      :class="{ 'is-playing': isMusicPlaying, 'is-blocked': needMusicGesture }"
-      :aria-label="isMusicPlaying ? '暂停音乐' : '播放音乐'"
-      @click="onMusicToggleClick"
-    >
-      <svg class="music-trigger__icon music-note" viewBox="0 0 64 64" aria-hidden="true">
-        <path
-          d="M31 12v27.5M31 12l18 11M31 12c6 1 9 4 11 8.5"
-          fill="none"
-          stroke="#5853a6"
-          stroke-width="3.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <ellipse cx="25.5" cy="45.5" rx="9.5" ry="7.5" fill="#f4c24f" />
-        <ellipse cx="25.5" cy="45.5" rx="9.5" ry="7.5" fill="none" stroke="#5853a6" stroke-width="3.3" />
-      </svg>
-      <span class="music-trigger__tooltip" role="tooltip">{{ musicTooltipText }}</span>
-    </button>
+    <div class="media-controls">
+      <div class="volume-control" :class="{ 'is-charging': isVolumeCharging }">
+        <button
+          type="button"
+          class="volume-trigger"
+          aria-label="长按蓄力调节音乐音量"
+          @pointerdown="onVolumePressStart"
+          @pointerup="onVolumePressEnd"
+          @pointercancel="onVolumePressCancel"
+          @contextmenu.prevent
+        >
+          <svg class="volume-trigger__icon" :style="volumeTriggerIconStyle" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M28 19 17.5 28.5H10v7h7.5L28 45V19Z" fill="#f3dd8a" />
+            <path
+              class="volume-trigger__wave volume-trigger__wave--a"
+              d="M37 25.5c2.6 1.8 4.2 4.1 4.2 6.5S39.6 36.7 37 38.5"
+              fill="none"
+              stroke="#d2ac3f"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+            <path
+              class="volume-trigger__wave volume-trigger__wave--b"
+              d="M43 19.5c4.6 3.3 7.2 7.7 7.2 12.5S47.6 41.2 43 44.5"
+              fill="none"
+              stroke="#d2ac3f"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <div ref="volumeTrackRef" class="volume-track" aria-hidden="true">
+          <span class="volume-track__rail" />
+          <span class="volume-track__fill" :style="volumeFillStyle" />
+          <span class="volume-track__projectile" :style="volumeProjectileStyle" />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="music-trigger"
+        :class="{ 'is-playing': isMusicPlaying, 'is-blocked': needMusicGesture }"
+        :aria-label="isMusicPlaying ? '暂停音乐' : '播放音乐'"
+        @click="onMusicToggleClick"
+      >
+        <svg class="music-trigger__icon music-note" viewBox="0 0 64 64" aria-hidden="true">
+          <path
+            d="M31 12v27.5M31 12l18 11M31 12c6 1 9 4 11 8.5"
+            fill="none"
+            stroke="#5853a6"
+            stroke-width="3.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <ellipse cx="25.5" cy="45.5" rx="9.5" ry="7.5" fill="#f4c24f" />
+          <ellipse cx="25.5" cy="45.5" rx="9.5" ry="7.5" fill="none" stroke="#5853a6" stroke-width="3.3" />
+        </svg>
+        <span class="music-trigger__tooltip" role="tooltip">{{ musicTooltipText }}</span>
+      </button>
+    </div>
 
     <div class="login-shell">
       <form :key="authCardKey" class="login-card" @submit.prevent="onSubmit">
@@ -1163,11 +1436,106 @@ input::-ms-clear {
   height: 28px;
 }
 
-.music-trigger {
+.media-controls {
   position: fixed;
-  right: 1.15rem;
-  bottom: 1.15rem;
+  right: 1rem;
+  bottom: 1rem;
   z-index: 5;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.85rem;
+}
+
+.volume-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.volume-trigger {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.volume-trigger__icon {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.2));
+  transform-origin: 18px 32px;
+  transition: transform 0.14s ease;
+}
+
+.volume-trigger__wave {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.volume-control.is-charging .volume-trigger__wave--a {
+  animation: volumeWavePulse 0.34s ease-in-out infinite alternate;
+}
+
+.volume-control.is-charging .volume-trigger__wave--b {
+  animation: volumeWavePulse 0.42s ease-in-out infinite alternate;
+}
+
+.volume-track {
+  position: relative;
+  width: 154px;
+  height: 28px;
+  overflow: visible;
+}
+
+.volume-track__rail,
+.volume-track__fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-radius: 999px;
+}
+
+.volume-track__rail {
+  height: 2px;
+  background: rgba(255, 241, 193, 0.95);
+  transform: translateY(-50%);
+}
+
+.volume-track__fill {
+  height: 3px;
+  background: linear-gradient(90deg, rgba(247, 228, 153, 0.92), rgba(221, 183, 70, 0.98));
+  transform-origin: left center;
+}
+
+.volume-track__projectile {
+  position: absolute;
+  top: 50%;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.volume-track__projectile {
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle at 35% 35%, #fff6cf, #e4c35e 72%);
+  box-shadow: 0 5px 12px rgba(188, 149, 48, 0.28);
+}
+
+.music-trigger {
+  position: relative;
   width: 50px;
   height: 50px;
   border-radius: 0;
@@ -1257,6 +1625,17 @@ input::-ms-clear {
   }
   75% {
     transform: translateY(-1px) rotate(4deg);
+  }
+}
+
+@keyframes volumeWavePulse {
+  from {
+    opacity: 0.55;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.04);
   }
 }
 
@@ -1366,9 +1745,21 @@ input::-ms-clear {
     height: 74vmax;
   }
 
-  .music-trigger {
+  .media-controls {
     right: 0.8rem;
     bottom: 0.8rem;
+    gap: 0.6rem;
+  }
+
+  .volume-control {
+    padding: 0;
+  }
+
+  .volume-track {
+    width: 132px;
+  }
+
+  .music-trigger {
     width: 46px;
     height: 46px;
   }
@@ -1382,6 +1773,29 @@ input::-ms-clear {
 @media (max-width: 560px) {
   .login-card {
     width: min(100%, calc(100% - 0.1rem));
+  }
+
+  .media-controls {
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .volume-control {
+    padding: 0;
+  }
+
+  .volume-track {
+    width: 108px;
+  }
+
+  .volume-trigger {
+    width: 38px;
+    height: 38px;
+  }
+
+  .volume-trigger__icon {
+    width: 30px;
+    height: 30px;
   }
 
   .captcha-wrap {
