@@ -237,6 +237,15 @@ export async function stopRagTask(taskId) {
   });
 }
 
+export async function submitRagMessageFeedback(messageId, vote) {
+  return requestRag(`/conversations/messages/${messageId}/feedback`, {
+    method: "POST",
+    body: {
+      vote
+    }
+  });
+}
+
 export function createRagChatStream(params, handlers = {}) {
   const authToken = getStoredAuthToken();
   const controller = new AbortController();
