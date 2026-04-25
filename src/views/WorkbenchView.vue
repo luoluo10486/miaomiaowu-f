@@ -242,46 +242,7 @@ onBeforeUnmount(() => {
             <strong>滚动鼠标，长卷会向左展开。</strong>
             <small>Scroll to explore</small>
           </div>
-
-          <svg class="watercolor-tree watercolor-focus" viewBox="0 0 720 680" role="img" aria-label="水彩大树">
-            <defs>
-              <filter id="paper-noise">
-                <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="4" seed="8" />
-                <feColorMatrix type="saturate" values="0.35" />
-                <feBlend mode="multiply" in2="SourceGraphic" />
-              </filter>
-              <filter id="soft-blur">
-                <feGaussianBlur stdDeviation="8" />
-              </filter>
-              <radialGradient id="leaf-a" cx="42%" cy="36%" r="62%">
-                <stop offset="0" stop-color="#c9dda0" stop-opacity="0.95" />
-                <stop offset="0.48" stop-color="#73925e" stop-opacity="0.74" />
-                <stop offset="1" stop-color="#35483a" stop-opacity="0.18" />
-              </radialGradient>
-              <radialGradient id="leaf-b" cx="58%" cy="44%" r="70%">
-                <stop offset="0" stop-color="#a7c276" stop-opacity="0.82" />
-                <stop offset="0.58" stop-color="#536d4e" stop-opacity="0.62" />
-                <stop offset="1" stop-color="#223126" stop-opacity="0.2" />
-              </radialGradient>
-            </defs>
-            <g class="mist-layer" opacity="0.42" filter="url(#soft-blur)">
-              <path d="M70 472 C180 410 298 448 380 492 C480 548 604 520 690 456 L690 620 L70 620Z" fill="#ffffff" />
-              <path d="M318 104 C420 44 560 88 616 180 C662 256 642 384 540 438 C412 506 238 450 196 314 C170 228 222 154 318 104Z" fill="#ffffff" opacity="0.55" />
-            </g>
-            <g class="tree-canopy" filter="url(#paper-noise)">
-              <path d="M262 72 C332 26 472 44 520 120 C604 126 660 194 642 286 C700 362 626 456 526 454 C472 534 338 544 278 468 C184 482 104 416 124 316 C54 238 112 132 218 146 C224 114 236 90 262 72Z" fill="url(#leaf-a)" opacity="0.84" />
-              <path d="M154 206 C208 126 306 128 356 196 C438 160 540 194 560 286 C630 330 614 424 524 444 C478 502 368 488 338 420 C260 460 160 414 174 318 C118 286 122 238 154 206Z" fill="url(#leaf-b)" opacity="0.72" />
-              <circle cx="248" cy="232" r="92" fill="#d5e6ad" opacity="0.36" filter="url(#soft-blur)" />
-              <circle cx="418" cy="248" r="118" fill="#406145" opacity="0.32" filter="url(#soft-blur)" />
-              <circle cx="334" cy="384" r="108" fill="#5d7b55" opacity="0.32" filter="url(#soft-blur)" />
-            </g>
-            <g opacity="0.86">
-              <path d="M354 286 C338 368 348 462 326 584" fill="none" stroke="#2d362d" stroke-width="28" stroke-linecap="round" />
-              <path d="M354 318 C292 268 246 218 196 158" fill="none" stroke="#5e6c5c" stroke-width="22" stroke-linecap="round" opacity="0.82" />
-              <path d="M374 330 C430 252 496 194 560 130" fill="none" stroke="#4c5d4e" stroke-width="22" stroke-linecap="round" opacity="0.82" />
-              <ellipse cx="386" cy="610" rx="206" ry="34" fill="#747a70" opacity="0.18" filter="url(#soft-blur)" />
-            </g>
-          </svg>
+          <img class="watercolor-tree person-asset person-asset--opening watercolor-focus" src="/artwork/workbench-person-opening.png" alt="?????" />
 
           <span class="chapter-marker" data-chapter="opening" />
           <p class="open-note">• Open the landscape</p>
@@ -297,29 +258,7 @@ onBeforeUnmount(() => {
             <strong>进入知识问答空间，展开历史会话、流式回答与深度思考。</strong>
             <small>Click to open</small>
           </div>
-
-          <svg class="watercolor-cow watercolor-focus" viewBox="0 0 680 430" role="img" aria-label="水彩牛与草地">
-            <defs>
-              <filter id="cow-blur">
-                <feGaussianBlur stdDeviation="3" />
-              </filter>
-              <linearGradient id="grass" x1="0" x2="1">
-                <stop offset="0" stop-color="#c7d9a0" stop-opacity="0.24" />
-                <stop offset="0.45" stop-color="#9cb96e" stop-opacity="0.72" />
-                <stop offset="1" stop-color="#78985d" stop-opacity="0.2" />
-              </linearGradient>
-            </defs>
-            <path d="M84 282 C190 220 310 244 410 290 C506 336 598 318 650 280 C642 374 170 382 84 282Z" fill="#fff" opacity="0.72" filter="url(#cow-blur)" />
-            <ellipse cx="364" cy="350" rx="290" ry="26" fill="url(#grass)" />
-            <g opacity="0.86">
-              <ellipse cx="330" cy="206" rx="128" ry="66" fill="#5d675d" />
-              <circle cx="432" cy="194" r="58" fill="#4d584f" opacity="0.62" />
-              <circle cx="512" cy="202" r="56" fill="#26332b" />
-              <circle cx="236" cy="194" r="46" fill="#fbfbf0" />
-              <rect x="282" y="250" width="24" height="108" rx="12" fill="#414d43" />
-              <rect x="438" y="250" width="24" height="108" rx="12" fill="#414d43" />
-            </g>
-          </svg>
+          <img class="watercolor-cow person-asset person-asset--rag watercolor-focus" src="/artwork/workbench-person-rag.png" alt="RAG ????" />
 
           <button class="floating-entry floating-entry--rag" type="button" @click="router.push('/rag')">
             打开 RAG 问答
@@ -338,31 +277,7 @@ onBeforeUnmount(() => {
             <strong>进入后台管理页面，查看知识库、链路追踪、系统配置与用户概览。</strong>
             <small>Click to open</small>
           </div>
-
-          <svg class="watercolor-village watercolor-focus" viewBox="0 0 920 430" role="img" aria-label="水彩村落">
-            <defs>
-              <filter id="village-soft">
-                <feGaussianBlur stdDeviation="2" />
-              </filter>
-            </defs>
-            <path d="M70 310 C194 246 314 260 440 300 C590 348 760 330 874 274 L874 386 L70 386Z" fill="#fff" opacity="0.74" filter="url(#village-soft)" />
-            <path d="M88 324 C252 292 550 292 854 326" stroke="#aeca78" stroke-width="28" stroke-linecap="round" opacity="0.62" />
-            <g opacity="0.82">
-              <path d="M280 246 L350 184 L430 246Z" fill="#756f60" />
-              <rect x="300" y="246" width="110" height="72" fill="#c9b992" />
-              <path d="M410 250 L486 192 L570 250Z" fill="#675f52" />
-              <rect x="432" y="250" width="116" height="76" fill="#d4c4a0" />
-              <path d="M552 262 L620 210 L700 262Z" fill="#7f7662" />
-              <rect x="574" y="262" width="108" height="62" fill="#c2b28f" />
-              <rect x="506" y="280" width="18" height="68" rx="9" fill="#5a8d98" />
-              <circle cx="515" cy="268" r="11" fill="#d8b58b" />
-            </g>
-            <g opacity="0.42" filter="url(#village-soft)">
-              <circle cx="720" cy="210" r="66" fill="#78905f" />
-              <circle cx="198" cy="240" r="58" fill="#9eb878" />
-              <circle cx="760" cy="238" r="48" fill="#4d624b" />
-            </g>
-          </svg>
+          <img class="watercolor-village person-asset person-asset--admin watercolor-focus" src="/artwork/workbench-person-admin.png" alt="????" />
 
           <button class="floating-entry floating-entry--admin" type="button" @click="router.push('/admin')">
             打开后台管理
@@ -381,24 +296,7 @@ onBeforeUnmount(() => {
             <strong>从这张水彩长卷进入你的知识空间。</strong>
             <small>Final choice</small>
           </div>
-
-          <svg class="watercolor-island watercolor-focus" viewBox="0 0 900 460" role="img" aria-label="水彩田园">
-            <defs>
-              <filter id="island-soft">
-                <feGaussianBlur stdDeviation="2.4" />
-              </filter>
-            </defs>
-            <path d="M88 314 C210 224 328 258 438 312 C536 360 668 328 802 260 L830 344 C612 412 300 410 88 314Z" fill="#fff" opacity="0.78" filter="url(#island-soft)" />
-            <path d="M152 308 C282 260 464 258 604 300" stroke="#acd075" stroke-width="42" stroke-linecap="round" opacity="0.72" />
-            <g opacity="0.72">
-              <circle cx="602" cy="220" r="64" fill="#6f8e5e" filter="url(#island-soft)" />
-              <circle cx="688" cy="216" r="78" fill="#57734f" filter="url(#island-soft)" />
-              <path d="M574 274 L636 226 L708 274Z" fill="#9f7c56" />
-              <rect x="596" y="274" width="96" height="48" fill="#d4bd91" />
-              <circle cx="248" cy="306" r="18" fill="#f2f2de" />
-              <circle cx="278" cy="310" r="14" fill="#e8e8d2" />
-            </g>
-          </svg>
+          <img class="watercolor-island person-asset person-asset--choice watercolor-focus" src="/artwork/workbench-person-choice.png" alt="????" />
 
           <div class="final-choice">
             <button type="button" @click="router.push('/rag')">
@@ -583,37 +481,61 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.watercolor-tree {
+.person-asset {
   position: absolute;
-  left: 35vw;
-  top: 9vh;
   z-index: 4;
-  width: min(720px, 52vw);
   height: auto;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  filter:
+    drop-shadow(0 34px 36px rgba(80, 76, 66, 0.18))
+    saturate(0.94)
+    contrast(0.98);
+  transform-origin: 50% 72%;
+}
+
+.person-asset::selection {
+  background: transparent;
+}
+
+.watercolor-tree {
+  left: 32vw;
+  top: 7vh;
+  width: min(620px, 44vw);
 }
 
 .watercolor-cow {
-  position: absolute;
   left: 38vw;
-  bottom: 8vh;
-  z-index: 4;
-  width: min(680px, 50vw);
+  bottom: 0;
+  width: min(620px, 44vw);
 }
 
 .watercolor-village {
-  position: absolute;
-  left: 34vw;
-  bottom: 9vh;
-  z-index: 4;
-  width: min(920px, 62vw);
+  left: 40vw;
+  bottom: 0;
+  width: min(620px, 44vw);
 }
 
 .watercolor-island {
+  left: 36vw;
+  bottom: 0;
+  width: min(680px, 48vw);
+}
+
+.story-panel::after {
+  content: "";
   position: absolute;
-  left: 34vw;
-  bottom: 9vh;
-  z-index: 4;
-  width: min(900px, 62vw);
+  z-index: 3;
+  left: 30vw;
+  right: 9vw;
+  bottom: 7vh;
+  height: 15vh;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(96, 94, 82, 0.16), transparent 66%),
+    radial-gradient(ellipse at 30% 42%, rgba(255, 255, 255, 0.52), transparent 58%);
+  filter: blur(12px);
 }
 
 .floating-entry {
