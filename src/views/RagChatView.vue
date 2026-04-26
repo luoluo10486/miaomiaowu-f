@@ -68,9 +68,10 @@ const userInitial = computed(() => {
 });
 const sessionSearch = ref("");
 const activeWorkbenchMode = ref("summary");
+const showRetrievalPanel = ref(false);
 const workbenchModes = [
   { key: "summary", label: "内容总结" },
-  { key: "explain", label: "代码解释" },
+  { key: "retrieval", label: "检索信息" },
   { key: "compare", label: "方案对比" }
 ];
 const quickActions = [
@@ -106,6 +107,11 @@ const filteredSessions = computed(() => {
   }
 
   return sessions.value.filter((item) => item.title.toLowerCase().includes(keyword));
+});
+const hasCompletedRagAnswer = computed(() => {
+  return messages.value.some(
+    (message) => message.role === "assistant" && message.status === "done" && message.content
+  );
 });
 const groupedSessions = computed(() => {
   const now = new Date();
@@ -307,9 +313,44 @@ function createConversation() {
 
   currentSessionId.value = "";
   messages.value = [];
+  showRetrievalPanel.value = false;
+  activeWorkbenchMode.value = "summary";
   setNotice("", "info");
   focusComposer();
   resizeComposer();
+}
+
+function goBack() {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+    return;
+  }
+
+  router.push("/workspace");
+}
+
+function handleWorkbenchModeClick(modeKey) {
+  activeWorkbenchMode.value = modeKey;
+
+  if (modeKey !== "retrieval") {
+    showRetrievalPanel.value = false;
+    return;
+  }
+
+  if (!hasCompletedRagAnswer.value || isStreaming.value) {
+    showRetrievalPanel.value = false;
+    setNotice("完成一次 RAG 问答后，才会展示检索信息。", "info");
+    return;
+  }
+
+  showRetrievalPanel.value = true;
+}
+
+function closeRetrievalPanel() {
+  showRetrievalPanel.value = false;
+  if (activeWorkbenchMode.value === "retrieval") {
+    activeWorkbenchMode.value = "summary";
+  }
 }
 
 async function loadSuggestions() {
@@ -373,6 +414,8 @@ async function selectSession(sessionId) {
 
   currentSessionId.value = sessionId;
   loadingMessages.value = true;
+  showRetrievalPanel.value = false;
+  activeWorkbenchMode.value = "summary";
   setNotice("", "info");
 
   try {
@@ -533,6 +576,10 @@ async function sendMessage() {
   }
 
   setNotice("", "info");
+  showRetrievalPanel.value = false;
+  if (activeWorkbenchMode.value === "retrieval") {
+    activeWorkbenchMode.value = "summary";
+  }
 
   const userMessage = {
     id: `user-${Date.now()}`,
@@ -753,26 +800,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="rag-shell">
+  <section :class="['rag-shell', { 'is-retrieval-open': showRetrievalPanel }]">
     <header class="rag-topbar">
-      <div class="rag-brand">
-        <img class="rag-brand__logo" src="/rag-icons/brand-mark.svg" alt="RAG 问答" />
-        <img class="rag-brand__seal" src="/rag-icons/ask-seal.svg" alt="" aria-hidden="true" />
-        <div>
-          <strong>RAG 问答</strong>
-          <span>Clean workspace</span>
-        </div>
-      </div>
+      <button class="back-button" type="button" @click="goBack">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 18 9 12l6-6" />
+        </svg>
+        返回
+      </button>
 
       <div class="rag-topbar__actions">
-        <button class="ghost-button" type="button" @click="router.push('/workspace')">工作台</button>
-        <button class="ghost-button" type="button" @click="router.push('/admin')">后台管理</button>
         <div class="rag-user">
           <img class="rag-user__avatar" src="/rag-icons/user-avatar.svg" alt="" aria-hidden="true" />
           <strong>{{ currentUserName }}</strong>
           <span class="rag-user__chevron" aria-hidden="true">⌄</span>
         </div>
-        <button class="ghost-button ghost-button--danger" type="button" @click="handleLogout">退出</button>
       </div>
     </header>
 
@@ -846,7 +888,7 @@ onBeforeUnmount(() => {
               :key="mode.key"
               type="button"
               :class="{ 'is-active': activeWorkbenchMode === mode.key }"
-              @click="activeWorkbenchMode = mode.key"
+              @click="handleWorkbenchModeClick(mode.key)"
             >
               {{ mode.label }}
             </button>
@@ -1081,7 +1123,10 @@ onBeforeUnmount(() => {
         </footer>
       </main>
 
-      <aside class="insight-stack" aria-label="检索信息">
+      <aside v-if="showRetrievalPanel" class="insight-stack" aria-label="检索信息">
+        <button class="insight-close-button" type="button" aria-label="关闭检索信息" @click="closeRetrievalPanel">
+          ×
+        </button>
         <section class="insight-card insight-card--sources">
           <header>
             <h2>检索来源</h2>
@@ -3407,6 +3452,210 @@ onBeforeUnmount(() => {
 
   .composer-actions .send-button {
     flex: 1;
+  }
+}
+
+/* Latest prototype behavior: minimal topbar, exact full-page background, lazy retrieval drawer */
+.rag-shell {
+  position: relative;
+  height: 100vh;
+  padding: 0 24px 24px;
+  grid-template-rows: 64px minmax(0, 1fr);
+  background: #f6eedf;
+  overflow: hidden;
+}
+
+.rag-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: url("/artwork/rag-chat-background.png") center center / cover no-repeat;
+  transform: translateX(0);
+  transform-origin: center;
+  transition: transform 0.28s ease;
+}
+
+.rag-shell.is-retrieval-open::before {
+  transform: translateX(-180px);
+}
+
+.rag-shell::after {
+  display: none;
+}
+
+.rag-topbar {
+  width: min(1780px, 100%);
+  min-height: 64px;
+  padding: 0;
+}
+
+.rag-brand {
+  display: none;
+}
+
+.rag-topbar__actions {
+  margin-left: auto;
+}
+
+.back-button {
+  min-width: 82px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(102, 86, 60, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 251, 243, 0.72);
+  color: #26352e;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76), 0 10px 20px rgba(70, 55, 31, 0.06);
+}
+
+.back-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.back-button:hover,
+.rag-user:hover {
+  border-color: rgba(35, 67, 59, 0.36);
+  background: rgba(255, 251, 243, 0.86);
+}
+
+.rag-layout {
+  width: min(1780px, 100%);
+  grid-template-columns: 340px minmax(0, 1fr);
+  transition: grid-template-columns 0.28s ease;
+}
+
+.rag-shell.is-retrieval-open .rag-layout {
+  grid-template-columns: 340px minmax(0, 1fr) 340px;
+}
+
+.insight-stack {
+  position: relative;
+  animation: retrievalPanelIn 0.24s ease both;
+}
+
+.insight-close-button {
+  position: absolute;
+  top: -54px;
+  right: 0;
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 251, 243, 0.92);
+  color: #1f2f29;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba(62, 47, 24, 0.12);
+}
+
+.insight-card {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.9), rgba(247, 239, 223, 0.84)),
+    rgba(255, 250, 239, 0.88);
+}
+
+.sidebar-card,
+.chat-card {
+  border-color: rgba(103, 83, 49, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.34), rgba(247, 239, 223, 0.22)),
+    rgba(255, 250, 239, 0.18);
+  box-shadow: 0 14px 32px rgba(62, 47, 24, 0.06), inset 0 1px rgba(255, 255, 255, 0.46);
+  backdrop-filter: blur(5px);
+}
+
+.chat-card__header,
+.composer,
+.chat-card__body,
+.message-list {
+  background: transparent;
+}
+
+.welcome-figure {
+  display: none;
+}
+
+.welcome-hero {
+  background: transparent;
+}
+
+.suggestion-card,
+.composer-box,
+.session-item,
+.sidebar-search input,
+.history-more-button {
+  background: rgba(255, 251, 243, 0.34);
+  backdrop-filter: blur(3px);
+}
+
+.notice-bar {
+  background: rgba(229, 216, 181, 0.48);
+}
+
+.insight-card {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.88), rgba(247, 239, 223, 0.8)),
+    rgba(255, 250, 239, 0.86);
+  backdrop-filter: blur(10px);
+}
+
+@keyframes retrievalPanelIn {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1280px) {
+  .rag-layout,
+  .rag-shell.is-retrieval-open .rag-layout {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .insight-stack {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rag-shell.is-retrieval-open::before {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .rag-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .rag-layout,
+  .rag-shell.is-retrieval-open .rag-layout,
+  .insight-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-close-button {
+    top: -8px;
+    right: 8px;
   }
 }
 </style>
