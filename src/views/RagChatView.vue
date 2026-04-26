@@ -67,13 +67,7 @@ const userInitial = computed(() => {
   return currentUserName.value.slice(0, 1).toUpperCase() || "U";
 });
 const sessionSearch = ref("");
-const activeWorkbenchMode = ref("summary");
 const showRetrievalPanel = ref(false);
-const workbenchModes = [
-  { key: "summary", label: "内容总结" },
-  { key: "retrieval", label: "检索信息" },
-  { key: "compare", label: "方案对比" }
-];
 const quickActions = [
   {
     key: "summary",
@@ -151,14 +145,6 @@ const requestStats = computed(() => [
   { label: "Trace ID", value: currentSessionId.value || "f8c7a2e1-9d3e-4b91-8c01" },
   { label: "请求时间", value: new Date().toLocaleString("zh-CN", { hour12: false }) }
 ]);
-const sendButtonText = computed(() => {
-  if (isStreaming.value) {
-    return "停止生成";
-  }
-
-  return "发送";
-});
-
 function setNotice(message, type = "info") {
   noticeText.value = message;
   noticeType.value = type;
@@ -314,7 +300,6 @@ function createConversation() {
   currentSessionId.value = "";
   messages.value = [];
   showRetrievalPanel.value = false;
-  activeWorkbenchMode.value = "summary";
   setNotice("", "info");
   focusComposer();
   resizeComposer();
@@ -329,28 +314,8 @@ function goBack() {
   router.push("/workspace");
 }
 
-function handleWorkbenchModeClick(modeKey) {
-  activeWorkbenchMode.value = modeKey;
-
-  if (modeKey !== "retrieval") {
-    showRetrievalPanel.value = false;
-    return;
-  }
-
-  if (!hasCompletedRagAnswer.value || isStreaming.value) {
-    showRetrievalPanel.value = false;
-    setNotice("完成一次 RAG 问答后，才会展示检索信息。", "info");
-    return;
-  }
-
-  showRetrievalPanel.value = true;
-}
-
 function closeRetrievalPanel() {
   showRetrievalPanel.value = false;
-  if (activeWorkbenchMode.value === "retrieval") {
-    activeWorkbenchMode.value = "summary";
-  }
 }
 
 async function loadSuggestions() {
@@ -415,7 +380,6 @@ async function selectSession(sessionId) {
   currentSessionId.value = sessionId;
   loadingMessages.value = true;
   showRetrievalPanel.value = false;
-  activeWorkbenchMode.value = "summary";
   setNotice("", "info");
 
   try {
@@ -425,6 +389,7 @@ async function selectSession(sessionId) {
     }
 
     messages.value = Array.isArray(data) ? data.map(mapMessage) : [];
+    showRetrievalPanel.value = hasCompletedRagAnswer.value;
     scrollToBottom();
   } catch (error) {
     setNotice(error?.message || "加载消息失败，请稍后重试", "error");
@@ -577,9 +542,6 @@ async function sendMessage() {
 
   setNotice("", "info");
   showRetrievalPanel.value = false;
-  if (activeWorkbenchMode.value === "retrieval") {
-    activeWorkbenchMode.value = "summary";
-  }
 
   const userMessage = {
     id: `user-${Date.now()}`,
@@ -678,6 +640,7 @@ async function sendMessage() {
         }
 
         finishStreamingMessage("done", payload);
+        showRetrievalPanel.value = true;
       },
       onCancel(payload) {
         finishStreamingMessage("cancelled", payload);
@@ -809,13 +772,7 @@ onBeforeUnmount(() => {
         返回
       </button>
 
-      <div class="rag-topbar__actions">
-        <div class="rag-user">
-          <img class="rag-user__avatar" src="/rag-icons/user-avatar.svg" alt="" aria-hidden="true" />
-          <strong>{{ currentUserName }}</strong>
-          <span class="rag-user__chevron" aria-hidden="true">⌄</span>
-        </div>
-      </div>
+      <div class="rag-topbar__actions"></div>
     </header>
 
     <div class="rag-layout">
@@ -873,39 +830,21 @@ onBeforeUnmount(() => {
         </div>
 
         <button class="history-more-button" type="button">查看全部历史会话 →</button>
+
+        <div class="sidebar-footer">
+          <div class="rag-user rag-user--sidebar">
+            <img class="rag-user__avatar" src="/rag-icons/user-avatar.svg" alt="" aria-hidden="true" />
+            <strong>{{ currentUserName }}</strong>
+            <span class="rag-user__chevron" aria-hidden="true">⌄</span>
+          </div>
+        </div>
       </aside>
 
       <main class="chat-card">
         <header class="chat-card__header">
           <div class="chat-title">
             <h1>对话手稿</h1>
-            <span aria-hidden="true">问</span>
           </div>
-
-          <div class="workbench-tabs" role="tablist" aria-label="对话模式">
-            <button
-              v-for="mode in workbenchModes"
-              :key="mode.key"
-              type="button"
-              :class="{ 'is-active': activeWorkbenchMode === mode.key }"
-              @click="handleWorkbenchModeClick(mode.key)"
-            >
-              {{ mode.label }}
-            </button>
-          </div>
-
-          <button
-            type="button"
-            :class="['thinking-toggle', { 'is-active': deepThinkingEnabled }]"
-            :disabled="isStreaming"
-            @click="deepThinkingEnabled = !deepThinkingEnabled"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 3a4 4 0 0 0-4 4v2.5A3.5 3.5 0 0 0 6.5 16H7v2a3 3 0 0 0 5 2.24A3 3 0 0 0 17 18v-2h.5A3.5 3.5 0 0 0 19 9.5V7a4 4 0 0 0-4-4 3.98 3.98 0 0 0-3 1.36A3.98 3.98 0 0 0 9 3Z" />
-              <path d="M12 4.36v15.88" />
-            </svg>
-            深度思考
-          </button>
         </header>
 
         <div v-if="noticeText" :class="['notice-bar', `notice-bar--${noticeType}`]">
@@ -925,33 +864,6 @@ onBeforeUnmount(() => {
                 <div class="welcome-figure" aria-hidden="true" />
               </div>
 
-              <div class="suggestions-grid">
-                <button
-                  v-for="(item, index) in quickActions"
-                  :key="item.key"
-                  type="button"
-                  class="suggestion-card"
-                  @click="handleSuggestionClick(suggestions[index]?.question || DEFAULT_SUGGESTIONS[index]?.question)"
-                >
-                  <span class="suggestion-card__icon" aria-hidden="true">
-                    <svg v-if="item.key === 'summary'" viewBox="0 0 24 24">
-                      <path d="M4 5.5c3.3-1.6 6.4-1.4 9 .5v13c-2.6-1.9-5.7-2.1-9-.5v-13Z" />
-                      <path d="M13 6c2.6-1.9 5.7-2.1 9-.5v13c-3.3-1.6-6.4-1.4-9 .5V6Z" />
-                    </svg>
-                    <svg v-else-if="item.key === 'tasks'" viewBox="0 0 24 24">
-                      <path d="M8 6h12M8 12h12M8 18h12" />
-                      <path d="M4 6h.01M4 12h.01M4 18h.01" />
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24">
-                      <path d="M12 4v16M5 8h14" />
-                      <path d="M6 8 3 15h6L6 8ZM18 8l-3 7h6l-3-7Z" />
-                    </svg>
-                  </span>
-                  <strong>{{ item.title }}</strong>
-                  <small>{{ item.description }}</small>
-                  <span class="suggestion-card__arrow">→</span>
-                </button>
-              </div>
             </div>
 
             <div v-else ref="messageScrollerRef" class="message-list">
@@ -1049,76 +961,47 @@ onBeforeUnmount(() => {
           <div v-if="thinkingMessage" class="thinking-tip">深度思考中，正在生成推理内容...</div>
 
           <div class="composer-box">
-            <textarea
-              ref="textareaRef"
-              v-model="draft"
-              class="composer__input"
-              rows="2"
-              :placeholder="
-                deepThinkingEnabled
-                  ? '输入需要深度分析的问题...'
-                  : '输入你的问题，Enter 发送'
-              "
-              @input="resizeComposer"
-              @keydown="handleComposerKeydown"
-            />
+            <div class="composer-input-shell">
+              <textarea
+                ref="textareaRef"
+                v-model="draft"
+                class="composer__input"
+                rows="2"
+                :placeholder="
+                  deepThinkingEnabled
+                    ? '输入需要深度分析的问题...'
+                    : '输入你的问题，Enter 发送'
+                "
+                @input="resizeComposer"
+                @keydown="handleComposerKeydown"
+              />
+            </div>
 
             <div class="composer__footer">
               <div class="composer-tools">
-                <button type="button">
+                <button
+                  type="button"
+                  :class="['thinking-toggle', 'composer-thinking-toggle', { 'is-active': deepThinkingEnabled }]"
+                  :disabled="isStreaming"
+                  @click="deepThinkingEnabled = !deepThinkingEnabled"
+                >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 4v16M6 8v8M18 8v8" />
+                    <path d="M9 3a4 4 0 0 0-4 4v2.5A3.5 3.5 0 0 0 6.5 16H7v2a3 3 0 0 0 5 2.24A3 3 0 0 0 17 18v-2h.5A3.5 3.5 0 0 0 19 9.5V7a4 4 0 0 0-4-4 3.98 3.98 0 0 0-3 1.36A3.98 3.98 0 0 0 9 3Z" />
+                    <path d="M12 4.36v15.88" />
                   </svg>
-                  默认检索
-                  <span>⌄</span>
-                </button>
-                <button type="button">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
-                    <path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-                  </svg>
-                  联网检索
-                  <span class="tool-switch" aria-hidden="true"></span>
-                </button>
-                <button type="button">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M7 8h10M7 12h6M5 4h14v16H5z" />
-                  </svg>
-                  引用优先
-                  <span>⌄</span>
+                  深度思考
                 </button>
               </div>
 
               <div class="composer-actions">
-                <button type="button" title="附件">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9-9a4 4 0 1 1 5.6 5.7l-8.8 8.8a2 2 0 0 1-2.9-2.8l8.2-8.2" />
-                  </svg>
-                </button>
-                <button type="button" title="变量">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8 4c-2 1.2-2 4-2 6s0 4-2 5c2 1 2 3 2 5s0 4.8 2 6M16 4c2 1.2 2 4 2 6s0 4 2 5c-2 1-2 3-2 5s0 4.8-2 6" />
-                  </svg>
-                </button>
-                <button type="button" title="润色">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 3c0 5-2.5 7.5-7.5 7.5C9.5 10.5 12 13 12 18c0-5 2.5-7.5 7.5-7.5C14.5 10.5 12 8 12 3Z" />
-                    <path d="M19 16c0 2-1 3-3 3 2 0 3 1 3 3 0-2 1-3 3-3-2 0-3-1-3-3Z" />
-                  </svg>
-                </button>
                 <button class="send-button" :class="{ 'is-stop': isStreaming }" type="button" @click="sendMessage">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="m22 2-7 20-4-9-9-4 20-7Z" />
                     <path d="M22 2 11 13" />
                   </svg>
-                  {{ sendButtonText }}
                 </button>
               </div>
             </div>
-          </div>
-          <div class="composer__hint">
-            <span>Enter 发送</span>
-            <span>Shift + Enter 换行</span>
           </div>
         </footer>
       </main>
@@ -3613,6 +3496,182 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(10px);
 }
 
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.rag-user--sidebar {
+  width: 100%;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 16px;
+  border-radius: 10px;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.rag-user--sidebar strong {
+  flex: 1;
+  max-width: none;
+}
+
+.rag-user--sidebar:hover {
+  background: transparent !important;
+}
+
+.chat-card {
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.welcome-shell {
+  align-content: center;
+  padding-bottom: 28px;
+}
+
+.welcome-hero {
+  min-height: 320px;
+  border-bottom: 0;
+}
+
+.composer {
+  padding: 0 16px 14px;
+}
+
+.composer-box {
+  padding: 12px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.composer-input-shell {
+  position: relative;
+  min-height: 82px;
+  padding: 12px 14px 10px;
+  background: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.composer-input-shell::before,
+.composer-input-shell::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.composer-input-shell::before {
+  top: 0;
+  left: 0;
+  width: 84px;
+  height: 18px;
+  border-top: 1px solid rgba(103, 83, 49, 0.45);
+  border-left: 1px solid rgba(103, 83, 49, 0.45);
+}
+
+.composer-input-shell::after {
+  right: 0;
+  bottom: 0;
+  width: 104px;
+  height: 18px;
+  border-right: 1px solid rgba(103, 83, 49, 0.4);
+  border-bottom: 1px solid rgba(103, 83, 49, 0.4);
+}
+
+.composer__input {
+  display: block;
+  width: 100%;
+  min-height: 64px;
+  padding: 0;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.composer__input::placeholder {
+  color: rgba(79, 72, 61, 0.72);
+}
+
+.composer__footer {
+  margin-top: 2px;
+  padding: 0;
+}
+
+.composer-tools button,
+.composer-actions button,
+.composer-thinking-toggle,
+.send-button {
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+.composer-tools {
+  flex: 1;
+}
+
+.composer-actions {
+  justify-content: flex-end;
+}
+
+.composer-thinking-toggle {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(103, 83, 49, 0.2);
+  border-radius: 8px;
+  background: transparent !important;
+  color: #34423b;
+}
+
+.composer-thinking-toggle:hover {
+  border-color: rgba(35, 67, 59, 0.36);
+  background: transparent !important;
+}
+
+.composer-thinking-toggle.is-active {
+  border-color: rgba(35, 67, 59, 0.48);
+  background: transparent !important;
+  color: #24433b;
+}
+
+.composer-thinking-toggle:disabled {
+  opacity: 0.56;
+}
+
+.send-button {
+  width: 54px;
+  min-width: 54px;
+  height: 42px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 251, 243, 0.92);
+}
+
+.send-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-card__header {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding: 16px 24px 10px;
+}
+
+.chat-title h1 {
+  font-size: 28px;
+}
+
 @keyframes retrievalPanelIn {
   from {
     transform: translateX(20px);
@@ -3656,6 +3715,10 @@ onBeforeUnmount(() => {
   .insight-close-button {
     top: -8px;
     right: 8px;
+  }
+
+  .sidebar-footer {
+    padding-top: 12px;
   }
 }
 </style>
