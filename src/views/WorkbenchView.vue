@@ -19,9 +19,10 @@ let animationContext = null;
 
 const artworkUrls = {
   home: resolvePublicAssetUrl("artwork/workbench-person-opening.png"),
-  rag: resolvePublicAssetUrl("artwork/workbench-person-rag.png"),
+  rag: resolvePublicAssetUrl("artwork/workbench-person-rag.png"),image.png太极
   admin: resolvePublicAssetUrl("artwork/workbench-person-admin.png"),
   ideas: resolvePublicAssetUrl("artwork/workbench-person-idea.png"),
+  gallery: resolvePublicAssetUrl("artwork/workbench-person-choice.png"),
   todo: resolvePublicAssetUrl("artwork/workbench-person-choice.png")
 };
 
@@ -30,6 +31,7 @@ const chapters = [
   { key: "rag", label: "问答" },
   { key: "admin", label: "管理" },
   { key: "ideas", label: "小巧思" },
+  { key: "gallery", label: "美图鉴赏" },
   { key: "todo", label: "待开发" }
 ];
 
@@ -210,6 +212,17 @@ onBeforeUnmount(() => {
             class="person-asset person-asset--ideas"
             :src="artworkUrls.ideas"
             alt="小巧思人物主体"
+          />
+        </section>
+
+        <section class="story-panel story-panel--gallery">
+          <button class="scene-label scene-label--button" type="button" @click="router.push('/gallery')">
+            美图鉴赏
+          </button>
+          <img
+            class="person-asset person-asset--gallery"
+            :src="artworkUrls.gallery"
+            alt="美图鉴赏人物主体"
           />
         </section>
 
@@ -397,6 +410,12 @@ onBeforeUnmount(() => {
   left: 41vw;
   top: 10vh;
   width: min(700px, 50vw);
+}
+
+.person-asset--gallery {
+  left: 40vw;
+  top: 8vh;
+  width: min(700px, 52vw);
 }
 
 .person-asset--todo {

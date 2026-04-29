@@ -6,6 +6,7 @@ const RagChatView = () => import("../views/RagChatView.vue");
 const WorkbenchView = () => import("../views/WorkbenchView.vue");
 const AdminConsoleView = () => import("../views/AdminConsoleView.vue");
 const IdeaNotesView = () => import("../views/IdeaNotesView.vue");
+const GalleryView = () => import("../views/GalleryView.vue");
 
 function resolveRedirectTarget(target) {
   if (typeof target !== "string") {
@@ -65,6 +66,16 @@ const router = createRouter({
         requiresAuth: true,
         title: "小巧思",
         description: "记录工作台视觉表达与动效升级方案。"
+      }
+    },
+    {
+      path: "/gallery",
+      name: "gallery",
+      component: GalleryView,
+      meta: {
+        requiresAuth: true,
+        title: "美图鉴赏",
+        description: "3D 立体旋转展示高木同学美图收藏。"
       }
     },
     {
