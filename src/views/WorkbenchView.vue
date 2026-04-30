@@ -22,7 +22,7 @@ const artworkUrls = {
   rag: resolvePublicAssetUrl("artwork/workbench-person-rag.png"),
   admin: resolvePublicAssetUrl("artwork/workbench-person-admin.png"),
   ideas: resolvePublicAssetUrl("artwork/workbench-person-idea.png"),
-  gallery: resolvePublicAssetUrl("artwork/workbench-person-choice.png"),
+  gallery: resolvePublicAssetUrl("artwork/workbench-person-gallery.png"),
   todo: resolvePublicAssetUrl("artwork/workbench-person-choice.png")
 };
 
