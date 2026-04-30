@@ -19,7 +19,7 @@ let animationContext = null;
 
 const artworkUrls = {
   home: resolvePublicAssetUrl("artwork/workbench-person-opening.png"),
-  rag: resolvePublicAssetUrl("artwork/workbench-person-rag.png"),image.png太极
+  rag: resolvePublicAssetUrl("artwork/workbench-person-rag.png"),
   admin: resolvePublicAssetUrl("artwork/workbench-person-admin.png"),
   ideas: resolvePublicAssetUrl("artwork/workbench-person-idea.png"),
   gallery: resolvePublicAssetUrl("artwork/workbench-person-choice.png"),
@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
           <img
             class="person-asset person-asset--ideas"
             :src="artworkUrls.ideas"
-            alt="小巧思人物主体"
+            alt="小巧思人物主题"
           />
         </section>
 
@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
           <img
             class="person-asset person-asset--todo"
             :src="artworkUrls.todo"
-            alt="待开发人物主体"
+            alt="待开发人物主题"
           />
         </section>
       </div>
