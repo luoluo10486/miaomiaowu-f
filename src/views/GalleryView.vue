@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, computed } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { defaultGalleryDetail, galleryDetails } from "../data/gallerySources";
 import { officialGalleryDetails, officialGalleryImages } from "../data/officialGallerySources";
@@ -139,10 +139,12 @@ const rotationX = ref(12);
 const sceneScale = ref(0.84);
 const isDragging = ref(false);
 const refreshOnReload = ref(readStorage(GALLERY_REFRESH_MODE_STORAGE_KEY) === "refresh");
+const activeTweetMeta = ref(null);
 let lastMouseX = 0;
 let lastMouseY = 0;
 let animId = null;
 let cleanupCanvas = null;
+let activeTweetRequestId = 0;
 
 const activeFilename = computed(() => {
   if (lightboxIndex.value < 0) return "";
@@ -155,6 +157,18 @@ const activeGalleryDetail = computed(() => {
 
 const localizedGalleryDetail = computed(() => {
   return localizeGalleryDetail(activeFilename.value, activeGalleryDetail.value);
+});
+
+const displayAuthorName = computed(() => {
+  return activeTweetMeta.value?.authorName || localizedGalleryDetail.value.title;
+});
+
+const displayAuthorUrl = computed(() => {
+  return activeTweetMeta.value?.authorUrl || "";
+});
+
+const displayTweetText = computed(() => {
+  return activeTweetMeta.value?.tweetText || localizedGalleryDetail.value.description;
 });
 
 function getGalleryImageUrl(filename) {
@@ -402,8 +416,7 @@ function buildOfficialTitle(description, translatedDescription) {
 }
 
 function buildAuthorTitle(detail) {
-  const date = getTaggedDate(detail?.tags);
-  return date ? `山本崇一朗插画 · ${date}` : "山本崇一朗插画";
+  return "山本崇一朗";
 }
 
 function buildAuthorDescription(detail) {
@@ -595,8 +608,101 @@ function getBackLabel() {
   return "返回";
 }
 
+function decodeHtmlEntities(text) {
+  if (!text) return "";
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
+function extractTweetTextFromHtml(html) {
+  const match = html?.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (!match) return "";
+  return decodeHtmlEntities(
+    match[1]
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<a [^>]*>pic\.twitter\.com\/[^<]+<\/a>/gi, "")
+      .replace(/<a [^>]*>([\s\S]*?)<\/a>/gi, "$1")
+      .replace(/<[^>]+>/g, " ")
+  )
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function getTweetMetaCacheKey(sourceUrl) {
+  return `gallery_tweet_meta:${sourceUrl}`;
+}
+
+function readTweetMetaCache(sourceUrl) {
+  try {
+    const raw = window.localStorage.getItem(getTweetMetaCacheKey(sourceUrl));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTweetMetaCache(sourceUrl, data) {
+  try {
+    window.localStorage.setItem(getTweetMetaCacheKey(sourceUrl), JSON.stringify(data));
+  } catch {
+    return;
+  }
+}
+
+function loadTweetMeta(sourceUrl) {
+  const requestId = ++activeTweetRequestId;
+  activeTweetMeta.value = null;
+
+  if (!sourceUrl || !sourceUrl.includes("twitter.com/")) return;
+
+  const cached = readTweetMetaCache(sourceUrl);
+  if (cached?.authorName || cached?.tweetText) {
+    activeTweetMeta.value = cached;
+  }
+
+  const callbackName = `__galleryTweetMeta_${requestId}_${Date.now()}`;
+  const cleanup = () => {
+    try { delete window[callbackName]; } catch { window[callbackName] = undefined; }
+    script.remove();
+  };
+  const script = document.createElement("script");
+  const endpoint = `https://publish.twitter.com/oembed?url=${encodeURIComponent(sourceUrl)}&omit_script=true&callback=${callbackName}`;
+
+  window[callbackName] = (payload) => {
+    if (requestId !== activeTweetRequestId) {
+      cleanup();
+      return;
+    }
+    const meta = {
+      authorName: payload?.author_name || "",
+      authorUrl: payload?.author_url || "",
+      tweetText: extractTweetTextFromHtml(payload?.html || "")
+    };
+    if (meta.authorName || meta.tweetText) {
+      activeTweetMeta.value = meta;
+      writeTweetMetaCache(sourceUrl, meta);
+    }
+    cleanup();
+  };
+
+  script.onerror = cleanup;
+  script.src = endpoint;
+  document.body.appendChild(script);
+}
+
 function openSourceLink() {
   const url = activeGalleryDetail.value.sourceUrl;
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function openAuthorLink() {
+  const url = displayAuthorUrl.value;
   if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
 
@@ -752,6 +858,10 @@ function initCanvas() {
   };
 }
 
+watch(activeFilename, () => {
+  loadTweetMeta(activeGalleryDetail.value?.sourceUrl || "");
+});
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeydown);
   window.addEventListener("pointermove", onPointerMove);
@@ -904,9 +1014,22 @@ onBeforeUnmount(() => {
 
           <aside class="lightbox__info">
             <p class="lightbox__eyebrow">{{ localizedGalleryDetail.collection }}</p>
-            <h2>{{ localizedGalleryDetail.title }}</h2>
+            <h2>
+              <button
+                class="lightbox__author"
+                type="button"
+                :disabled="!displayAuthorUrl"
+                @click="openAuthorLink"
+              >
+                <span>{{ displayAuthorName }}</span>
+                <svg v-if="displayAuthorUrl" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 17L17 7"/>
+                  <path d="M9 7h8v8"/>
+                </svg>
+              </button>
+            </h2>
             <p class="lightbox__original">{{ localizedGalleryDetail.originalTitle }}</p>
-            <p class="lightbox__desc">{{ localizedGalleryDetail.description }}</p>
+            <p class="lightbox__desc">{{ displayTweetText }}</p>
 
             <div class="lightbox__tags">
               <span v-for="tag in localizedGalleryDetail.tags" :key="tag">{{ tag }}</span>
@@ -1332,6 +1455,34 @@ onBeforeUnmount(() => {
   font-weight: 400;
   letter-spacing: 0.02em;
   font-family: "Noto Serif SC", Georgia, serif;
+}
+
+.lightbox__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.25s ease, transform 0.25s ease;
+}
+
+.lightbox__author:hover:not(:disabled) {
+  color: rgba(61, 216, 176, 0.88);
+  transform: translateX(2px);
+}
+
+.lightbox__author:disabled {
+  cursor: default;
+}
+
+.lightbox__author svg {
+  flex: 0 0 auto;
+  opacity: 0.65;
 }
 
 .lightbox__original {
