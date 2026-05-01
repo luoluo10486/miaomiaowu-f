@@ -60,10 +60,65 @@ const localGalleryImages = [
   "top-main.jpg"
 ];
 
-const galleryImages = [
+const allGalleryImages = [
   ...localGalleryImages,
   ...officialGalleryImages
 ];
+
+const DISPLAY_IMAGE_COUNT = 64;
+const GALLERY_SAMPLE_STORAGE_KEY = "gallery_bodhi_sample_v1";
+const GALLERY_REFRESH_MODE_STORAGE_KEY = "gallery_bodhi_refresh_mode";
+
+function pickRandomImages(images, count) {
+  const pool = [...images];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(count, pool.length));
+}
+
+function readStorage(key) {
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    return;
+  }
+}
+
+function readStoredGallerySample() {
+  try {
+    const stored = JSON.parse(readStorage(GALLERY_SAMPLE_STORAGE_KEY));
+    if (!Array.isArray(stored)) return [];
+    const available = new Set(allGalleryImages);
+    return stored.filter((filename) => available.has(filename)).slice(0, DISPLAY_IMAGE_COUNT);
+  } catch {
+    return [];
+  }
+}
+
+function createGallerySample() {
+  const sample = pickRandomImages(allGalleryImages, DISPLAY_IMAGE_COUNT);
+  writeStorage(GALLERY_SAMPLE_STORAGE_KEY, JSON.stringify(sample));
+  return sample;
+}
+
+function resolveInitialGallerySample() {
+  const mode = readStorage(GALLERY_REFRESH_MODE_STORAGE_KEY);
+  const stored = readStoredGallerySample();
+  if (mode !== "refresh" && stored.length === DISPLAY_IMAGE_COUNT) return stored;
+  return createGallerySample();
+}
+
+const galleryImages = ref(resolveInitialGallerySample());
 
 const allGalleryDetails = {
   ...galleryDetails,
@@ -83,6 +138,7 @@ const rotationY = ref(-18);
 const rotationX = ref(12);
 const sceneScale = ref(0.84);
 const isDragging = ref(false);
+const refreshOnReload = ref(readStorage(GALLERY_REFRESH_MODE_STORAGE_KEY) === "refresh");
 let lastMouseX = 0;
 let lastMouseY = 0;
 let animId = null;
@@ -90,11 +146,15 @@ let cleanupCanvas = null;
 
 const activeFilename = computed(() => {
   if (lightboxIndex.value < 0) return "";
-  return galleryImages[lightboxIndex.value];
+  return galleryImages.value[lightboxIndex.value];
 });
 
 const activeGalleryDetail = computed(() => {
   return allGalleryDetails[activeFilename.value] || defaultGalleryDetail;
+});
+
+const localizedGalleryDetail = computed(() => {
+  return localizeGalleryDetail(activeFilename.value, activeGalleryDetail.value);
 });
 
 function getGalleryImageUrl(filename) {
@@ -104,6 +164,202 @@ function getGalleryImageUrl(filename) {
 /* ── Bodhi Tree Canopy Layout ──
    Photos arranged in concentric rings that form a wide, flat dome —
    wider at the base, tapering toward the top, like a sacred Bodhi tree canopy. */
+function looksGarbled(value) {
+  return typeof value === "string" && /[?�]|\?\?/.test(value);
+}
+
+function formatTitle(title) {
+  if (!title || looksGarbled(title)) return "高木同学美图";
+  const match = title.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return title;
+  return `${match[1]}年${match[2]}月${match[3]}日 ${match[4]}:${match[5]}`;
+}
+
+function localizeTag(tag) {
+  const map = {
+    Official: "官方",
+    Author: "作者",
+    X: "X 平台"
+  };
+  return map[tag] || tag;
+}
+
+function cleanupTweetText(text) {
+  return text
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\btakagi3\.me\/\S+/g, "")
+    .replace(/\btoho\.co\.jp\/\S+/g, "")
+    .replace(/\btheater-ods\.toho\.co\.jp\/\S+/g, "")
+    .replace(/#いっしょに高木さん/g, "#一起看高木同学")
+    .replace(/#からかい上手の高木さん/g, "#擅长捉弄的高木同学")
+    .replace(/#高木さんめ/g, "#高木同学")
+    .replace(/‥…━━━☆/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasJapaneseKana(text) {
+  return /[\u3040-\u30ff]/.test(text);
+}
+
+function ensureChineseTweet(text) {
+  const normalized = cleanupTweetText(text);
+  if (!hasJapaneseKana(normalized)) return normalized;
+
+  if (normalized.includes("本日放送") || normalized.includes("あす放送") || normalized.includes("まもなく")) {
+    const episode = normalized.match(/第(\d+)話/)?.[1];
+    return episode
+      ? `【官方播出提醒】《擅长捉弄的高木同学》第 ${episode} 集即将播出，官方同步公开了本集相关画面与剧情看点。#高木同学`
+      : "【官方播出提醒】《擅长捉弄的高木同学》相关剧集即将播出，官方同步公开了画面与看点。#高木同学";
+  }
+  if (normalized.includes("ご視聴ありがとうございました")) {
+    const episode = normalized.match(/第(\d+)話/)?.[1];
+    return episode
+      ? `【官方播出回顾】感谢收看第 ${episode} 集。故事里的两人又向前走了一点，下集也请继续关注。#高木同学`
+      : "【官方播出回顾】感谢收看本集。高木同学与西片的故事还在继续，请继续关注。#高木同学";
+  }
+  if (normalized.includes("劇場版")) {
+    return "【剧场版官方动态】剧场版《擅长捉弄的高木同学》相关上映、Blu-ray/DVD、主题曲或入场特典信息更新。#高木同学";
+  }
+  if (normalized.includes("Blu-ray") || normalized.includes("BD&DVD") || normalized.includes("DVD")) {
+    return "【官方商品情报】《擅长捉弄的高木同学》Blu-ray/DVD 或相关特典信息公开，请关注官方后续资讯。#高木同学";
+  }
+  if (normalized.includes("猫の日")) {
+    return "【猫之日官方动态】2 月 22 日是猫之日，《擅长捉弄的高木同学》中也有许多猫咪登场的温柔片段。#高木同学";
+  }
+  if (normalized.includes("ハナの日")) {
+    return "【小花之日官方动态】8 月 7 日是“小花之日”，官方回顾了小花与高木同学、西片一起度过的温柔时光。#高木同学";
+  }
+  if (normalized.includes("キスの日")) {
+    return "【吻之日官方动态】官方整理了高木同学围绕“亲吻”展开的捉弄名场面。#高木同学";
+  }
+  if (normalized.includes("高木神社") || normalized.includes("御朱印")) {
+    return "【高木神社联动】官方介绍了高木神社相关联动、参拜或御朱印信息。#高木同学";
+  }
+  if (normalized.includes("POP UP SHOP") || normalized.includes("グッズ") || normalized.includes("特典")) {
+    return "【官方周边情报】《擅长捉弄的高木同学》周边、店铺特典或限时活动信息公开。#高木同学";
+  }
+  if (normalized.includes("サブタイトル") || normalized.includes("先行カット")) {
+    return "【官方先行情报】官方公开了《擅长捉弄的高木同学》相关集数的小标题与先行画面。#高木同学";
+  }
+  if (normalized.includes("プレイバック") || normalized.includes("振り返り")) {
+    return "【官方回顾】官方回顾了《擅长捉弄的高木同学》中的经典集数与名场面。#高木同学";
+  }
+  if (normalized.includes("EDテーマ") || normalized.includes("挿入歌") || normalized.includes("主題歌")) {
+    return "【官方音乐情报】官方公开了《擅长捉弄的高木同学》相关片尾曲、插入歌或主题曲信息。#高木同学";
+  }
+  if (normalized.includes("上映会")) {
+    return "【官方活动情报】《擅长捉弄的高木同学》相关上映会活动信息公开。#高木同学";
+  }
+  if (normalized.includes("小豆島")) {
+    return "【官方舞台介绍】《擅长捉弄的高木同学》的故事舞台与小豆岛有关，官方推荐大家有机会前往探访。#高木同学";
+  }
+
+  return "【官方推文】《擅长捉弄的高木同学》官方发布的相关动态，包含作品画面、播出信息或活动资讯。#高木同学";
+}
+
+function translateOfficialTweet(description) {
+  const text = cleanupTweetText(description);
+
+  if (text.includes("わー、蛍だ！ きれいだね")) {
+    return "【一起看高木同学】“哇，是萤火虫！好漂亮啊！”那天没能看到的萤火虫，这次终于看到了。#高木同学";
+  }
+  if (text.includes("ちーが登場")) return "【一起看高木同学】小千登场！#高木同学";
+  if (text.includes("私も西片を幸せにするよ")) return "【一起看高木同学】“我也会让西片幸福的。”#高木同学";
+  if (text.includes("まるで家族のよう")) return "【一起看高木同学】简直像一家人一样。#高木同学";
+  if (text.includes("ハマボウの花")) return "【一起看高木同学】插入曲《黄槿之花》/ 大原由衣子，和小花一起度过的日子开始了。#高木同学";
+  if (text.includes("いいこだなー、ハナ")) return "【一起看高木同学】“真是个好孩子啊，小花。”这也算暴击吗？#高木同学";
+  if (text.includes("花が好きだから、ハナ")) return "【一起看高木同学】“因为喜欢花，所以叫小花！”小花的诞生契机，来自远程剧本会议中偶然入镜的脚本家小猫。#高木同学";
+  if (text.includes("二人でこの子の飼い主探そう")) return "【一起看高木同学】“我们两个人一起帮这孩子找主人吧！”#高木同学";
+  if (text.includes("キーパーソン")) return "【一起看高木同学】本作的关键角色登场！#高木同学";
+  if (text.includes("夏休み突入記念")) return "【一起看高木同学】纪念暑假开始！#高木同学";
+  if (text.includes("西片となら見つけられるかな")) return "【一起看高木同学】“我想，如果和西片一起的话，应该能找到吧。”#高木同学";
+  if (text.includes("虫送りに いかない")) return "【一起看高木同学】高木同学，要不要一起去虫送祭？#高木同学";
+  if (text.includes("す…き")) return "【一起看高木同学】喜……欢……？#高木同学";
+  if (text.includes("じゃーんけーん")) return "【一起看高木同学】“石——头——剪——刀——布！”#高木同学";
+  if (text.includes("原画を担当したシーン")) return "【一起看高木同学】这里是山本崇一朗老师负责原画的场景。#高木同学";
+  if (text.includes("ねえ、西片")) return "【一起看高木同学】“喂，西片。”#高木同学";
+  if (text.includes("いい夫婦")) return "真是一对好夫妻啊。#高木同学 #好夫妻之日";
+
+  if (text.includes("本日放送")) {
+    return ensureChineseTweet(text
+      .replace(/【CBCテレビ 本日放送！】/g, "【CBC电视台今日播出】")
+      .replace(/本日(\d+:\d+)よりCBCテレビにて第2期の第(\d+)話が放送！/g, "今天 $1 起，CBC 电视台播出第 2 季第 $2 集！")
+      .replace(/夏祭りで一緒に屋台を回ったり勝負をしたりする二人。 やがて花火大会が始まりますが…？/g, "两人在夏日祭一起逛摊、比赛。烟花大会也即将开始……？")
+      .replace(/夏休みのある日、宿題の近況を話す二人。 でもほかにも忘れてはいけないことが…？/g, "暑假的某一天，两人聊起作业进度。但还有别的不能忘记的事……？")
+      .replace(/帰り道、謎の地図を拾った高木さんと西片。 お宝を求めて探検開始です！/g, "回家路上，高木同学和西片捡到一张神秘地图。寻宝探险开始了！")
+      .replace(/ちょっと元気がなさそうな高木さん。 西片もいつもと違う雰囲気が気になる様子です。/g, "高木同学看起来有点没精神。西片也注意到了她和平时不同的气氛。")
+      .replace(/ひざを擦りむいてしまった西片。 保健室で高木さんが手当てしてくれることになりますが…？/g, "西片擦伤了膝盖，高木同学在保健室为他处理伤口……？")
+      .replace(/林間学校へやってきた高木さんたち。 イベント盛りだくさんということは、からかいのチャンスも…？/g, "高木同学一行来到林间学校。活动这么多，也意味着捉弄的机会更多……？")
+      .replace(/1年ぶりのスポーツテストでリベンジを誓う西片。 得意の握力測定で勝負を決められるか…!?/g, "时隔一年的体能测试，西片发誓要复仇。他能在拿手的握力测试中决出胜负吗……？")
+      .replace(/西片、14歳の誕生日。 年を重ねても高木さんにからかわれるのは変わらず…？/g, "西片 14 岁生日。就算长大一岁，被高木同学捉弄这件事也不会变……？")
+      .replace(/春休み。とある作戦で高木さんを駄菓子屋に誘った西片。 この日は一年に一度の…!?/g, "春假里，西片用某个计划邀请高木同学去粗点心店。这一天是一年一度的……！？"));
+  }
+
+  if (text.includes("劇場版")) {
+    return ensureChineseTweet(text
+      .replace(/🎬劇場版「 #擅长捉弄的高木同学 」/g, "【剧场版《擅长捉弄的高木同学》】")
+      .replace(/劇場版「 #擅长捉弄的高木同学 」/g, "剧场版《擅长捉弄的高木同学》")
+      .replace(/Blu-ray＆DVDが発売！/g, "Blu-ray 与 DVD 今日发售！")
+      .replace(/Blu-ray&DVD 11\/16\(水\)発売/g, "Blu-ray 与 DVD 将于 11 月 16 日发售")
+      .replace(/上映劇場情報を更新しました。/g, "上映影院信息已更新。")
+      .replace(/セカンドラン上映中/g, "第二轮上映中")
+      .replace(/大ヒット上映中！/g, "热映中！")
+      .replace(/ご予約は/g, "预约信息请见")
+      .replace(/虫送りの夜、ハナと過ごしたやさしい時間。 高木さんと西片の忘れられない夏の思い出を、ぜひお手元でもご鑑賞ください。/g, "虫送祭之夜，与小花一起度过的温柔时光。也请把高木同学和西片难忘的夏日回忆带回身边欣赏。")
+      .replace(/商品詳細/g, "商品详情")
+      .trim());
+  }
+
+  if (text.includes("POP UP SHOP")) {
+    return text
+      .replace(/【POP UP SHOP開催！】/g, "【POP UP SHOP 开催】")
+      .replace(/タワーレコード5店舗とオンラインにて POP UP SHOPを本日より開催/g, "塔唱片 5 家门店与线上商店从今天起举办 POP UP SHOP")
+      .replace(/描き下ろしのクリスマス衣装の高木さんグッズが登場です！/g, "全新绘制的圣诞服装高木同学周边登场！")
+      .replace(/期間/g, "期间")
+      .replace(/詳細/g, "详情");
+  }
+
+  return ensureChineseTweet(text);
+}
+
+function localizeDescription(description) {
+  if (!description || looksGarbled(description)) {
+    return "这张图暂时没有完整说明，先把它安静地挂在树上，留给画面自己说话。";
+  }
+
+  return translateOfficialTweet(description)
+    .replace(/Matched to the original X post by Soichiro Yamamoto\./g, "已匹配到山本崇一朗发布的原始 X 动态。");
+}
+
+function localizeGalleryDetail(filename, detail) {
+  const sourceUrl = detail?.sourceUrl || "";
+  const isOfficial = filename.includes("official/") || sourceUrl.includes("takagi3_anime");
+  const isAuthor = sourceUrl.includes("udon0531");
+  const sourceLabel = sourceUrl
+    ? isOfficial
+      ? "查看官方来源"
+      : isAuthor
+        ? "查看作者来源"
+        : "查看来源"
+    : "暂无来源";
+
+  return {
+    ...detail,
+    collection: isOfficial ? "官方 X 图集" : isAuthor ? "作者 X 插画" : "私人收藏图集",
+    title: formatTitle(detail?.title),
+    originalTitle: detail?.originalTitle === "Karakai Jozu no Takagi-san"
+      ? "擅长捉弄的高木同学"
+      : detail?.originalTitle || "美图鉴赏",
+    description: localizeDescription(detail?.description),
+    sourceLabel,
+    note: sourceUrl
+      ? "点击图片或来源按钮，可以打开这张图对应的原始页面。"
+      : "这张图暂时没有匹配到来源链接。",
+    tags: Array.isArray(detail?.tags) ? detail.tags.map(localizeTag) : []
+  };
+}
+
 const TREE_LAYER_DEFS = [
   { radius: 110, y: -520, weight: 0.34, vine: 22, size: 0.7 },
   { radius: 205, y: -470, weight: 0.48, vine: 28, size: 0.74 },
@@ -121,16 +377,22 @@ const TREE_LAYER_DEFS = [
 ];
 
 const hangingLayers = computed(() => {
-  const total = galleryImages.length;
+  const total = galleryImages.value.length;
   const result = [];
   let idx = 0;
-  const totalWeight = TREE_LAYER_DEFS.reduce((sum, layer) => sum + layer.weight, 0);
+  const layerCount = Math.min(TREE_LAYER_DEFS.length, Math.max(6, Math.ceil(total / 8)));
+  const start = Math.max(0, Math.floor((TREE_LAYER_DEFS.length - layerCount) / 2));
+  const layerDefs = TREE_LAYER_DEFS.slice(start, start + layerCount);
+  const totalWeight = layerDefs.reduce((sum, layer) => sum + layer.weight, 0);
 
-  for (let i = 0; i < TREE_LAYER_DEFS.length; i++) {
-    const layer = TREE_LAYER_DEFS[i];
-    const remainingLayers = TREE_LAYER_DEFS.length - i - 1;
+  for (let i = 0; i < layerDefs.length; i++) {
+    const layer = layerDefs[i];
+    const remainingLayers = layerDefs.length - i - 1;
+    const remainingImages = total - idx;
     const expected = Math.round(total * (layer.weight / totalWeight));
-    const count = Math.min(Math.max(8, expected), total - idx - remainingLayers * 8);
+    const count = i === layerDefs.length - 1
+      ? remainingImages
+      : Math.min(Math.max(4, expected), Math.max(0, remainingImages - remainingLayers * 4));
     if (count <= 0) break;
     const items = [];
     for (let j = 0; j < count; j++) {
@@ -142,7 +404,7 @@ const hangingLayers = computed(() => {
       const verticalDrift = Math.sin(j * 1.61 + i * 0.73) * (12 + i * 1.5);
       const depthDrift = Math.cos(j * 1.27 + i) * 28;
       items.push({
-        filename: galleryImages[imageIndex],
+        filename: galleryImages.value[imageIndex],
         globalIndex: imageIndex,
         angle,
         radius: layer.radius + depthDrift,
@@ -163,7 +425,7 @@ const hangingLayers = computed(() => {
     for (let offset = 0; offset < remaining; offset++) {
       const imageIndex = idx + offset;
       lastLayer.items.push({
-        filename: galleryImages[imageIndex],
+        filename: galleryImages.value[imageIndex],
         globalIndex: imageIndex,
         angle: (360 / remaining) * offset + 11,
         radius: 260 + Math.sin(offset) * 24,
@@ -195,13 +457,42 @@ function closeLightbox() {
 function prevImage() {
   lightboxIndex.value = lightboxIndex.value > 0
     ? lightboxIndex.value - 1
-    : galleryImages.length - 1;
+    : galleryImages.value.length - 1;
 }
 
 function nextImage() {
-  lightboxIndex.value = lightboxIndex.value < galleryImages.length - 1
+  lightboxIndex.value = lightboxIndex.value < galleryImages.value.length - 1
     ? lightboxIndex.value + 1
     : 0;
+}
+
+function toggleRefreshMode() {
+  refreshOnReload.value = !refreshOnReload.value;
+  writeStorage(GALLERY_REFRESH_MODE_STORAGE_KEY, refreshOnReload.value ? "refresh" : "fixed");
+  if (refreshOnReload.value) {
+    galleryImages.value = createGallerySample();
+    if (lightboxIndex.value >= galleryImages.value.length) lightboxIndex.value = galleryImages.value.length - 1;
+  }
+}
+
+function getSourceTitle() {
+  return localizedGalleryDetail.value.sourceUrl ? "打开来源链接" : "暂未匹配到来源";
+}
+
+function getCloseLabel() {
+  return "关闭";
+}
+
+function getPrevLabel() {
+  return "上一张";
+}
+
+function getNextLabel() {
+  return "下一张";
+}
+
+function getBackLabel() {
+  return "返回";
 }
 
 function openSourceLink() {
@@ -396,6 +687,17 @@ onBeforeUnmount(() => {
     <!-- Background layers -->
     <div class="bg-deep"></div>
 
+    <button
+      class="sample-toggle"
+      type="button"
+      :class="{ 'is-refreshing': refreshOnReload }"
+      :aria-pressed="refreshOnReload"
+      @click="toggleRefreshMode"
+    >
+      <span class="sample-toggle__dot"></span>
+      <span>{{ refreshOnReload ? "刷新抽样" : "固定图集" }}</span>
+    </button>
+
     <!-- Back button -->
     <button class="back-btn" type="button" @click="router.push('/workspace')">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -490,41 +792,41 @@ onBeforeUnmount(() => {
             <button
               class="lightbox__card"
               type="button"
-              :disabled="!activeGalleryDetail.sourceUrl"
-              :title="activeGalleryDetail.sourceUrl ? '打开来源链接' : '暂未匹配到来源'"
+              :disabled="!localizedGalleryDetail.sourceUrl"
+              :title="getSourceTitle()"
               @click="openSourceLink"
             >
               <img
                 :src="getGalleryImageUrl(activeFilename)"
-                :alt="activeGalleryDetail.title"
+                :alt="localizedGalleryDetail.title"
               />
             </button>
           </div>
 
           <aside class="lightbox__info">
-            <p class="lightbox__eyebrow">{{ activeGalleryDetail.collection }}</p>
-            <h2>{{ activeGalleryDetail.title }}</h2>
-            <p class="lightbox__original">{{ activeGalleryDetail.originalTitle }}</p>
-            <p class="lightbox__desc">{{ activeGalleryDetail.description }}</p>
+            <p class="lightbox__eyebrow">{{ localizedGalleryDetail.collection }}</p>
+            <h2>{{ localizedGalleryDetail.title }}</h2>
+            <p class="lightbox__original">{{ localizedGalleryDetail.originalTitle }}</p>
+            <p class="lightbox__desc">{{ localizedGalleryDetail.description }}</p>
 
             <div class="lightbox__tags">
-              <span v-for="tag in activeGalleryDetail.tags" :key="tag">{{ tag }}</span>
+              <span v-for="tag in localizedGalleryDetail.tags" :key="tag">{{ tag }}</span>
             </div>
 
             <button
               class="lightbox__source"
               type="button"
-              :disabled="!activeGalleryDetail.sourceUrl"
+              :disabled="!localizedGalleryDetail.sourceUrl"
               @click="openSourceLink"
             >
-              <span>{{ activeGalleryDetail.sourceLabel }}</span>
+              <span>{{ localizedGalleryDetail.sourceLabel }}</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M7 17L17 7"/>
                 <path d="M9 7h8v8"/>
               </svg>
             </button>
 
-            <p class="lightbox__note">{{ activeGalleryDetail.note }}</p>
+            <p class="lightbox__note">{{ localizedGalleryDetail.note }}</p>
           </aside>
 
           <button class="lightbox__arrow lightbox__arrow--right" @click="nextImage" aria-label="下一张">
@@ -1098,6 +1400,49 @@ onBeforeUnmount(() => {
   border-color: rgba(199, 168, 83, 0.45);
   color: rgba(96, 118, 78, 0.95);
   box-shadow: 0 18px 46px rgba(116, 137, 92, 0.18), 0 0 34px rgba(255, 226, 139, 0.18);
+}
+
+.sample-toggle {
+  position: fixed;
+  right: 28px;
+  bottom: 26px;
+  z-index: 120;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 112px;
+  padding: 11px 15px;
+  border: 1px solid rgba(142, 167, 112, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 252, 240, 0.66);
+  color: rgba(77, 99, 72, 0.78);
+  box-shadow: 0 14px 40px rgba(113, 133, 105, 0.14);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.sample-toggle:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 248, 0.9);
+  border-color: rgba(199, 168, 83, 0.45);
+  box-shadow: 0 18px 46px rgba(116, 137, 92, 0.18), 0 0 34px rgba(255, 226, 139, 0.18);
+}
+
+.sample-toggle__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(119, 151, 103, 0.82);
+  box-shadow: 0 0 0 4px rgba(119, 151, 103, 0.12);
+}
+
+.sample-toggle.is-refreshing .sample-toggle__dot {
+  background: rgba(205, 158, 76, 0.92);
+  box-shadow: 0 0 0 4px rgba(205, 158, 76, 0.14), 0 0 18px rgba(255, 216, 128, 0.4);
 }
 
 .wall-viewport {
