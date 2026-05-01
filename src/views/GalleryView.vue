@@ -70,28 +70,23 @@ const allGalleryDetails = {
   ...officialGalleryDetails
 };
 
-/* ── Config ── */
-const RING_COUNT = 20; // photos per ring
-const RING_RADIUS = 560; // px from center (increased to avoid clipping)
-const RING2_RADIUS = 820;
-const RING3_RADIUS = 1080;
-
 /* ── State ── */
 const isReady = ref(false);
+const entranceOpacity = ref(0);
 const lightboxIndex = ref(-1);
 const lightboxVisible = ref(false);
 const cursorX = ref(-999);
 const cursorY = ref(-999);
-const snowCanvasRef = ref(null);
+const canvasRef = ref(null);
 const wallRef = ref(null);
-const rotationY = ref(0);
-const rotationX = ref(5);
-const autoRotate = ref(true);
+const rotationY = ref(-18);
+const rotationX = ref(12);
+const sceneScale = ref(0.84);
 const isDragging = ref(false);
 let lastMouseX = 0;
 let lastMouseY = 0;
 let animId = null;
-let snowAnimId = null;
+let cleanupCanvas = null;
 
 const activeFilename = computed(() => {
   if (lightboxIndex.value < 0) return "";
@@ -106,74 +101,118 @@ function getGalleryImageUrl(filename) {
   return resolvePublicAssetUrl(`gallery/${filename}`);
 }
 
-/* ── Split images into rings ── */
-const rings = computed(() => {
-  const r = [];
+/* ── Bodhi Tree Canopy Layout ──
+   Photos arranged in concentric rings that form a wide, flat dome —
+   wider at the base, tapering toward the top, like a sacred Bodhi tree canopy. */
+const TREE_LAYER_DEFS = [
+  { radius: 110, y: -520, weight: 0.34, vine: 22, size: 0.7 },
+  { radius: 205, y: -470, weight: 0.48, vine: 28, size: 0.74 },
+  { radius: 315, y: -410, weight: 0.66, vine: 36, size: 0.78 },
+  { radius: 455, y: -342, weight: 0.88, vine: 45, size: 0.82 },
+  { radius: 610, y: -270, weight: 1.07, vine: 56, size: 0.88 },
+  { radius: 750, y: -190, weight: 1.19, vine: 70, size: 0.94 },
+  { radius: 865, y: -104, weight: 1.22, vine: 84, size: 1 },
+  { radius: 930, y: -14, weight: 1.14, vine: 98, size: 1.02 },
+  { radius: 900, y: 76, weight: 1.02, vine: 112, size: 0.98 },
+  { radius: 805, y: 160, weight: 0.84, vine: 126, size: 0.92 },
+  { radius: 655, y: 232, weight: 0.65, vine: 136, size: 0.86 },
+  { radius: 475, y: 290, weight: 0.46, vine: 126, size: 0.8 },
+  { radius: 300, y: 330, weight: 0.3, vine: 106, size: 0.74 },
+];
+
+const hangingLayers = computed(() => {
+  const total = galleryImages.length;
+  const result = [];
   let idx = 0;
-  const ringCount = Math.ceil(galleryImages.length / RING_COUNT);
-  for (let ring = 0; ring < ringCount; ring++) {
-    const count = Math.min(RING_COUNT, galleryImages.length - idx);
+  const totalWeight = TREE_LAYER_DEFS.reduce((sum, layer) => sum + layer.weight, 0);
+
+  for (let i = 0; i < TREE_LAYER_DEFS.length; i++) {
+    const layer = TREE_LAYER_DEFS[i];
+    const remainingLayers = TREE_LAYER_DEFS.length - i - 1;
+    const expected = Math.round(total * (layer.weight / totalWeight));
+    const count = Math.min(Math.max(8, expected), total - idx - remainingLayers * 8);
+    if (count <= 0) break;
     const items = [];
-    for (let i = 0; i < count; i++) {
+    for (let j = 0; j < count; j++) {
+      const imageIndex = idx + j;
+      const seed = imageIndex * 12.9898 + i * 78.233;
+      const organic = Math.sin(seed) * 43758.5453;
+      const jitter = organic - Math.floor(organic);
+      const angle = (360 / count) * j + i * 19 + (j % 2) * 4 + (jitter - 0.5) * 9;
+      const verticalDrift = Math.sin(j * 1.61 + i * 0.73) * (12 + i * 1.5);
+      const depthDrift = Math.cos(j * 1.27 + i) * 28;
       items.push({
-        filename: galleryImages[idx + i],
-        globalIndex: idx + i,
-        angle: (360 / count) * i
+        filename: galleryImages[imageIndex],
+        globalIndex: imageIndex,
+        angle,
+        radius: layer.radius + depthDrift,
+        y: verticalDrift,
+        vine: layer.vine + (jitter - 0.5) * 28,
+        sway: Math.sin(j * 0.93 + i * 1.7) * 7,
+        tilt: -4 + Math.cos(j * 0.57 + i) * 8,
+        scale: layer.size * (0.9 + jitter * 0.22)
       });
     }
-    const radius = ring === 0 ? RING_RADIUS : ring === 1 ? RING2_RADIUS : RING3_RADIUS + (ring - 2) * 260;
-    r.push({
-      radius,
-      items,
-      yOffset: -120 + ring * 55
-    });
+    result.push({ radius: layer.radius, yOffset: layer.y, items });
     idx += count;
   }
-  return r;
+
+  if (idx < total && result.length) {
+    const lastLayer = result[result.length - 1];
+    const remaining = total - idx;
+    for (let offset = 0; offset < remaining; offset++) {
+      const imageIndex = idx + offset;
+      lastLayer.items.push({
+        filename: galleryImages[imageIndex],
+        globalIndex: imageIndex,
+        angle: (360 / remaining) * offset + 11,
+        radius: 260 + Math.sin(offset) * 24,
+        y: Math.cos(offset * 1.4) * 18,
+        vine: 102 + Math.sin(offset * 0.6) * 18,
+        sway: Math.sin(offset * 0.8) * 7,
+        tilt: Math.cos(offset * 0.4) * 7,
+        scale: 0.72
+      });
+    }
+  }
+
+  return result;
 });
 
 /* ── Lightbox ── */
 function openLightbox(index) {
   lightboxIndex.value = index;
   document.body.style.overflow = "hidden";
-  nextTick(() => {
-    lightboxVisible.value = true;
-  });
+  nextTick(() => { lightboxVisible.value = true; });
 }
 
 function closeLightbox() {
   lightboxVisible.value = false;
   document.body.style.overflow = "";
-  setTimeout(() => {
-    lightboxIndex.value = -1;
-  }, 400);
+  setTimeout(() => { lightboxIndex.value = -1; }, 400);
 }
 
 function prevImage() {
-  if (lightboxIndex.value > 0) lightboxIndex.value--;
-  else lightboxIndex.value = galleryImages.length - 1;
+  lightboxIndex.value = lightboxIndex.value > 0
+    ? lightboxIndex.value - 1
+    : galleryImages.length - 1;
 }
 
 function nextImage() {
-  if (lightboxIndex.value < galleryImages.length - 1) lightboxIndex.value++;
-  else lightboxIndex.value = 0;
+  lightboxIndex.value = lightboxIndex.value < galleryImages.length - 1
+    ? lightboxIndex.value + 1
+    : 0;
 }
 
 function openSourceLink() {
   const url = activeGalleryDetail.value.sourceUrl;
-  if (!url) return;
-  window.open(url, "_blank", "noopener,noreferrer");
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function openCurrentTweet() {
-  openSourceLink();
-}
-
-/* ── Mouse drag rotation ── */
+/* ── Drag rotation (no auto-rotate) ── */
 function onPointerDown(e) {
-  if (e.target.closest('.lightbox') || e.target.closest('.icon-btn')) return;
+  if (e.target.closest('.lightbox') || e.target.closest('.back-btn')) return;
   isDragging.value = true;
-  autoRotate.value = false;
   lastMouseX = e.clientX;
   lastMouseY = e.clientY;
   e.preventDefault();
@@ -183,33 +222,18 @@ function onPointerMove(e) {
   cursorX.value = e.clientX;
   cursorY.value = e.clientY;
   if (!isDragging.value) return;
-  const dx = e.clientX - lastMouseX;
-  const dy = e.clientY - lastMouseY;
-  rotationY.value += dx * 0.3;
-  rotationX.value = Math.max(-30, Math.min(30, rotationX.value - dy * 0.15));
+  rotationY.value += (e.clientX - lastMouseX) * 0.22;
+  rotationX.value = Math.max(-24, Math.min(34, rotationX.value - (e.clientY - lastMouseY) * 0.1));
   lastMouseX = e.clientX;
   lastMouseY = e.clientY;
 }
 
-function onPointerUp() {
-  if (isDragging.value) {
-    isDragging.value = false;
-    setTimeout(() => { autoRotate.value = true; }, 2000);
-  }
+function onPointerUp() { isDragging.value = false; }
+
+function onWheel(e) {
+  sceneScale.value = Math.max(0.58, Math.min(1.18, sceneScale.value - e.deltaY * 0.00055));
 }
 
-/* ── Auto rotation loop ── */
-function startAutoRotate() {
-  function tick() {
-    if (autoRotate.value && !isDragging.value) {
-      rotationY.value += 0.12;
-    }
-    animId = requestAnimationFrame(tick);
-  }
-  tick();
-}
-
-/* ── Keyboard ── */
 function handleKeydown(e) {
   if (lightboxIndex.value >= 0) {
     if (e.key === "Escape") closeLightbox();
@@ -218,130 +242,134 @@ function handleKeydown(e) {
   }
 }
 
-/* ── Image error ── */
-function handleImgError(e) {
-  e.target.style.display = "none";
-}
+function handleImgError(e) { e.target.style.display = "none"; }
 
-/* ── Snow & Starlight Canvas ── */
-function initSnowCanvas() {
-  const canvas = snowCanvasRef.value;
+/* ── Dreamy Canvas: stars + aurora + fireflies ── */
+function initCanvas() {
+  const canvas = canvasRef.value;
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
+  let w, h;
 
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
   }
   resize();
   window.addEventListener("resize", resize);
 
-  const snowflakes = [];
-  for (let i = 0; i < 60; i++) {
-    snowflakes.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      r: Math.random() * 2.2 + 0.6,
-      speed: Math.random() * 0.5 + 0.15,
-      wind: Math.random() * 0.3 - 0.15,
-      opacity: Math.random() * 0.4 + 0.15,
-      swing: Math.random() * Math.PI * 2,
-      swingSpeed: Math.random() * 0.008 + 0.003
-    });
-  }
+  const stars = Array.from({ length: 85 }, () => ({
+    x: Math.random(), y: Math.random(),
+    r: Math.random() * 1.2 + 0.35,
+    speed: Math.random() * 0.0003 + 0.0001,
+    phase: Math.random() * Math.PI * 2,
+    bright: Math.random() * 0.42 + 0.18
+  }));
 
-  const stars = [];
-  for (let i = 0; i < 35; i++) {
-    stars.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      size: Math.random() * 1.8 + 0.4,
-      opacity: Math.random() * 0.5 + 0.1,
-      twinkleSpeed: Math.random() * 0.025 + 0.008,
-      twinklePhase: Math.random() * Math.PI * 2,
-      color: [
-        `rgba(200, 180, 255, `,
-        `rgba(180, 210, 255, `,
-        `rgba(255, 220, 240, `,
-        `rgba(220, 255, 240, `
-      ][Math.floor(Math.random() * 4)]
-    });
-  }
+  const fireflies = Array.from({ length: 58 }, () => ({
+    x: Math.random(), y: Math.random(),
+    vx: (Math.random() - 0.5) * 0.0004,
+    vy: (Math.random() - 0.5) * 0.0003,
+    r: Math.random() * 2.5 + 1,
+    hue: Math.random() > 0.55 ? 150 + Math.random() * 34 : 38 + Math.random() * 18,
+    phase: Math.random() * Math.PI * 2,
+    pulseSpeed: Math.random() * 0.02 + 0.008
+  }));
 
-  let time = 0;
-  function animate() {
-    time++;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const auroraBands = Array.from({ length: 3 }, (_, i) => ({
+    baseY: 0.15 + i * 0.12,
+    amplitude: 30 + i * 15,
+    speed: 0.0003 + i * 0.0001,
+    phase: i * 2.1,
+    hue1: 170 + i * 25,
+    hue2: 200 + i * 30,
+    opacity: 0.04 + i * 0.01
+  }));
 
-    stars.forEach((star) => {
-      const twinkle = (Math.sin(time * star.twinkleSpeed + star.twinklePhase) + 1) / 2;
-      const alpha = star.opacity * (0.3 + twinkle * 0.7);
-      const size = star.size * (0.8 + twinkle * 0.4);
+  let t = 0;
+  function draw() {
+    t++;
+    ctx.clearRect(0, 0, w, h);
 
+    auroraBands.forEach(band => {
+      const y0 = band.baseY * h + Math.sin(t * band.speed + band.phase) * band.amplitude;
+      const grad = ctx.createLinearGradient(0, y0 - 60, 0, y0 + 60);
+      grad.addColorStop(0, `hsla(${band.hue1}, 65%, 72%, 0)`);
+      grad.addColorStop(0.3, `hsla(${band.hue1}, 65%, 70%, ${band.opacity * 1.35})`);
+      grad.addColorStop(0.5, `hsla(${band.hue2}, 55%, 68%, ${band.opacity * 1.8})`);
+      grad.addColorStop(0.7, `hsla(${band.hue2}, 65%, 72%, ${band.opacity * 1.2})`);
+      grad.addColorStop(1, `hsla(${band.hue1}, 65%, 72%, 0)`);
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      const g = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, size * 3.5);
-      g.addColorStop(0, star.color + (alpha * 0.5) + ")");
-      g.addColorStop(1, star.color + "0)");
-      ctx.fillStyle = g;
-      ctx.arc(star.x, star.y, size * 3.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.fillStyle = star.color + alpha + ")";
-      ctx.arc(star.x, star.y, size, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (twinkle > 0.7) {
-        ctx.strokeStyle = star.color + (alpha * 0.3) + ")";
-        ctx.lineWidth = 0.4;
-        ctx.beginPath();
-        ctx.moveTo(star.x - size * 2.5, star.y);
-        ctx.lineTo(star.x + size * 2.5, star.y);
-        ctx.moveTo(star.x, star.y - size * 2.5);
-        ctx.lineTo(star.x, star.y + size * 2.5);
-        ctx.stroke();
+      ctx.moveTo(0, y0 - 80);
+      for (let x = 0; x <= w; x += 8) {
+        const wave = Math.sin(x * 0.003 + t * band.speed * 2) * 25
+                   + Math.sin(x * 0.007 + t * band.speed * 0.5) * 15;
+        ctx.lineTo(x, y0 + wave);
       }
-    });
-
-    snowflakes.forEach((f) => {
-      f.swing += f.swingSpeed;
-      f.y += f.speed;
-      f.x += f.wind + Math.sin(f.swing) * 0.25;
-      if (f.y > canvas.height + 10) { f.y = -10; f.x = Math.random() * canvas.width; }
-      if (f.x > canvas.width + 10) f.x = -10;
-      if (f.x < -10) f.x = canvas.width + 10;
-
-      ctx.beginPath();
-      const glow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 2.5);
-      glow.addColorStop(0, `rgba(220, 230, 255, ${f.opacity * 0.35})`);
-      glow.addColorStop(1, "rgba(220, 230, 255, 0)");
-      ctx.fillStyle = glow;
-      ctx.arc(f.x, f.y, f.r * 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(255, 255, 255, ${f.opacity})`;
-      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.lineTo(w, y0 + 80);
+      ctx.lineTo(0, y0 + 80);
+      ctx.closePath();
       ctx.fill();
     });
 
-    snowAnimId = requestAnimationFrame(animate);
+    stars.forEach(s => {
+      const twinkle = (Math.sin(t * s.speed * 60 + s.phase) + 1) / 2;
+      const alpha = s.bright * (0.3 + twinkle * 0.7);
+      const x = s.x * w, y = s.y * h;
+      ctx.beginPath();
+      const g = ctx.createRadialGradient(x, y, 0, x, y, s.r * 3);
+      g.addColorStop(0, `rgba(255, 255, 245, ${alpha * 0.55})`);
+      g.addColorStop(1, "rgba(255, 255, 245, 0)");
+      ctx.fillStyle = g;
+      ctx.arc(x, y, s.r * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(255, 252, 230, ${alpha})`;
+      ctx.arc(x, y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    fireflies.forEach(f => {
+      f.x += f.vx; f.y += f.vy;
+      if (f.x < -0.05) f.x = 1.05;
+      if (f.x > 1.05) f.x = -0.05;
+      if (f.y < -0.05) f.y = 1.05;
+      if (f.y > 1.05) f.y = -0.05;
+      const pulse = (Math.sin(t * f.pulseSpeed + f.phase) + 1) / 2;
+      const alpha = 0.15 + pulse * 0.45;
+      const size = f.r * (0.7 + pulse * 0.6);
+      const x = f.x * w, y = f.y * h;
+      ctx.beginPath();
+      const g = ctx.createRadialGradient(x, y, 0, x, y, size * 5);
+      g.addColorStop(0, `hsla(${f.hue}, 80%, 70%, ${alpha * 0.3})`);
+      g.addColorStop(1, `hsla(${f.hue}, 80%, 70%, 0)`);
+      ctx.fillStyle = g;
+      ctx.arc(x, y, size * 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = `hsla(${f.hue}, 90%, 80%, ${alpha})`;
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    animId = requestAnimationFrame(draw);
   }
-  animate();
+  draw();
+  cleanupCanvas = () => {
+    window.removeEventListener("resize", resize);
+  };
 }
 
 onMounted(() => {
   window.addEventListener("keydown", handleKeydown);
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
-
   setTimeout(() => {
     isReady.value = true;
-    nextTick(() => {
-      startAutoRotate();
-      initSnowCanvas();
-    });
-  }, 200);
+    entranceOpacity.value = 1;
+    nextTick(() => { initCanvas(); });
+  }, 300);
 });
 
 onBeforeUnmount(() => {
@@ -349,74 +377,82 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointermove", onPointerMove);
   window.removeEventListener("pointerup", onPointerUp);
   if (animId) cancelAnimationFrame(animId);
-  if (snowAnimId) cancelAnimationFrame(snowAnimId);
+  if (cleanupCanvas) cleanupCanvas();
   document.body.style.overflow = "";
 });
 </script>
 
 <template>
   <div class="gallery-root" :class="{ 'is-ready': isReady }">
-    <!-- Snow canvas -->
-    <canvas ref="snowCanvasRef" class="snow-canvas"></canvas>
+    <!-- Dreamy canvas -->
+    <canvas ref="canvasRef" class="dream-canvas"></canvas>
 
     <!-- Cursor glow -->
     <div
       class="cursor-glow"
-      :style="{ transform: `translate(${cursorX - 150}px, ${cursorY - 150}px)` }"
+      :style="{ transform: `translate(${cursorX - 200}px, ${cursorY - 200}px)` }"
     ></div>
 
-    <!-- Background -->
-    <div class="bg-canvas">
-      <div class="bg-mesh"></div>
-      <div class="bg-soft"></div>
-    </div>
+    <!-- Background layers -->
+    <div class="bg-deep"></div>
 
     <!-- Back button -->
     <button class="back-btn" type="button" @click="router.push('/workspace')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
       <span>返回</span>
     </button>
 
-    <!-- 3D Wall container -->
-    <div
-      ref="wallRef"
-      class="wall-viewport"
-      @pointerdown="onPointerDown"
-    >
+    <!-- 3D Viewport -->
+    <div ref="wallRef" class="wall-viewport" @pointerdown="onPointerDown" @wheel.prevent="onWheel">
       <div
         class="wall-scene"
         :style="{
-          transform: `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`
+          transform: `scale(${sceneScale}) rotateX(${rotationX}deg) rotateY(${rotationY}deg)`,
+          opacity: entranceOpacity
         }"
       >
+        <!-- Central trunk — two perpendicular planes for 3D illusion -->
+        <div class="tree-halo tree-halo--upper"></div>
+        <div class="tree-halo tree-halo--lower"></div>
+
+        <div class="trunk">
+          <div class="trunk__column trunk__column--front"></div>
+          <div class="trunk__column trunk__column--side"></div>
+          <div class="trunk__crown-line trunk__crown-line--one"></div>
+          <div class="trunk__crown-line trunk__crown-line--two"></div>
+          <div class="trunk__crown-line trunk__crown-line--three"></div>
+          <div class="trunk__glow"></div>
+        </div>
+
+        <!-- Photo rings forming the canopy -->
         <div
-          v-for="(ring, ri) in rings"
-          :key="ri"
-          class="ring"
-          :style="{ transform: `translateY(${ring.yOffset}px)` }"
+          v-for="(layer, layerIndex) in hangingLayers"
+          :key="layerIndex"
+          class="hanging-layer"
+          :style="{ transform: `translateY(${layer.yOffset}px)` }"
         >
           <div
-            v-for="item in ring.items"
+            v-for="item in layer.items"
             :key="item.filename"
-            class="photo-card"
+            class="photo-leaf"
             :style="{
-              transform: `rotateY(${item.angle}deg) translateZ(${ring.radius}px)`
+              '--vine-height': `${item.vine}px`,
+              transform: `rotateY(${item.angle}deg) translateZ(${item.radius}px) translateY(${item.y}px) rotateX(${item.tilt}deg) rotateZ(${item.sway}deg) scale(${item.scale})`
             }"
             @click="openLightbox(item.globalIndex)"
           >
-            <div class="photo-card__inner">
+            <div class="photo-leaf__vine"></div>
+            <div class="photo-leaf__inner">
               <img
                 :src="getGalleryImageUrl(item.filename)"
                 :alt="item.filename"
                 loading="lazy"
                 @error="handleImgError"
               />
-              <div class="photo-card__label">
-                <span>{{ String(item.globalIndex + 1).padStart(2, '0') }}</span>
-              </div>
             </div>
+            <div class="photo-leaf__glint"></div>
           </div>
         </div>
       </div>
@@ -439,13 +475,13 @@ onBeforeUnmount(() => {
           </div>
 
           <button class="lightbox__close" @click="closeLightbox" aria-label="关闭">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M18 6L6 18M6 6l12 12"/>
             </svg>
           </button>
 
           <button class="lightbox__arrow lightbox__arrow--left" @click="prevImage" aria-label="上一张">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M15 18l-6-6 6-6"/>
             </svg>
           </button>
@@ -455,8 +491,8 @@ onBeforeUnmount(() => {
               class="lightbox__card"
               type="button"
               :disabled="!activeGalleryDetail.sourceUrl"
-              :title="activeGalleryDetail.sourceUrl ? '打开官方 X 具体推文' : '暂未匹配到具体 X 推文'"
-              @click="openCurrentTweet"
+              :title="activeGalleryDetail.sourceUrl ? '打开来源链接' : '暂未匹配到来源'"
+              @click="openSourceLink"
             >
               <img
                 :src="getGalleryImageUrl(activeFilename)"
@@ -465,7 +501,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <aside class="lightbox__info" aria-label="图片来源信息">
+          <aside class="lightbox__info">
             <p class="lightbox__eyebrow">{{ activeGalleryDetail.collection }}</p>
             <h2>{{ activeGalleryDetail.title }}</h2>
             <p class="lightbox__original">{{ activeGalleryDetail.originalTitle }}</p>
@@ -482,7 +518,7 @@ onBeforeUnmount(() => {
               @click="openSourceLink"
             >
               <span>{{ activeGalleryDetail.sourceLabel }}</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M7 17L17 7"/>
                 <path d="M9 7h8v8"/>
               </svg>
@@ -492,7 +528,7 @@ onBeforeUnmount(() => {
           </aside>
 
           <button class="lightbox__arrow lightbox__arrow--right" @click="nextImage" aria-label="下一张">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 18l6-6-6-6"/>
             </svg>
           </button>
@@ -504,70 +540,52 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* ═══════════════════════════════════════════
-   ROOT
+   ROOT — Deep celestial night
    ═══════════════════════════════════════════ */
 .gallery-root {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: linear-gradient(160deg, #f0eaf8 0%, #e8f0fa 30%, #faf5f0 60%, #f5eef8 100%);
-  font-family: "Inter", "SF Pro Display", -apple-system, "Noto Sans SC", sans-serif;
-  color: #3a3545;
+  background: #050510;
+  font-family: "Noto Serif SC", "EB Garamond", Georgia, "Times New Roman", serif;
+  color: rgba(220, 225, 240, 0.85);
   user-select: none;
   cursor: grab;
 }
 
-.gallery-root:active {
-  cursor: grabbing;
-}
+.gallery-root:active { cursor: grabbing; }
 
-.snow-canvas {
+.gallery-root * { box-sizing: border-box; }
+
+.bg-deep {
   position: fixed;
   inset: 0;
-  z-index: 2;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 100%, rgba(10, 30, 60, 0.6) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 50% at 30% 20%, rgba(40, 20, 80, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 75% 30%, rgba(20, 60, 80, 0.2) 0%, transparent 45%),
+    linear-gradient(180deg, #050510 0%, #0a0a24 40%, #0d0820 70%, #080812 100%);
+  pointer-events: none;
+}
+
+.dream-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
 }
 
 .cursor-glow {
   position: fixed;
-  width: 300px;
-  height: 300px;
+  width: 400px;
+  height: 400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(200, 170, 230, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(61, 216, 176, 0.04) 0%, transparent 65%);
   pointer-events: none;
   z-index: 9998;
-  transition: transform 0.12s ease-out;
+  transition: transform 0.15s ease-out;
   will-change: transform;
-}
-
-/* Background */
-.bg-canvas {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.bg-mesh {
-  position: absolute;
-  inset: -20%;
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 30%, rgba(200, 180, 240, 0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 80% at 80% 20%, rgba(180, 200, 240, 0.1) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(240, 200, 220, 0.08) 0%, transparent 50%);
-  animation: meshDrift 30s ease-in-out infinite alternate;
-}
-
-@keyframes meshDrift {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(2%, -1%) scale(1.01); }
-  100% { transform: translate(-1%, 2%) scale(0.99); }
-}
-
-.bg-soft {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 70% at 50% 40%, transparent 20%, rgba(240, 235, 250, 0.4) 100%);
 }
 
 /* ═══════════════════════════════════════════
@@ -575,41 +593,42 @@ onBeforeUnmount(() => {
    ═══════════════════════════════════════════ */
 .back-btn {
   position: fixed;
-  top: 24px;
-  left: 28px;
+  top: 28px;
+  left: 32px;
   z-index: 100;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 18px 10px 14px;
-  border: 1px solid rgba(120, 100, 160, 0.12);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.55);
-  color: rgba(80, 60, 120, 0.6);
+  gap: 7px;
+  padding: 10px 20px 10px 14px;
+  border: 1px solid rgba(61, 216, 176, 0.1);
+  border-radius: 10px;
+  background: rgba(10, 15, 30, 0.5);
+  color: rgba(180, 210, 200, 0.5);
   cursor: pointer;
   font-size: 13px;
-  letter-spacing: 0.04em;
-  transition: all 0.3s ease;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  transition: all 0.35s ease;
   backdrop-filter: blur(12px);
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.8);
-  color: #5a3d80;
-  border-color: rgba(120, 100, 160, 0.25);
+  background: rgba(15, 25, 50, 0.7);
+  color: rgba(61, 216, 176, 0.8);
+  border-color: rgba(61, 216, 176, 0.25);
   transform: translateX(-2px);
-  box-shadow: 0 4px 20px rgba(160, 140, 200, 0.12);
+  box-shadow: 0 0 20px rgba(61, 216, 176, 0.08);
 }
 
 /* ═══════════════════════════════════════════
-   3D WALL VIEWPORT
+   3D VIEWPORT
    ═══════════════════════════════════════════ */
 .wall-viewport {
   position: fixed;
   inset: 0;
-  z-index: 1;
-  perspective: 1600px;
-  perspective-origin: 50% 45%;
+  z-index: 2;
+  perspective: 1800px;
+  perspective-origin: 50% 42%;
   overflow: hidden;
 }
 
@@ -620,117 +639,120 @@ onBeforeUnmount(() => {
   width: 0;
   height: 0;
   transform-style: preserve-3d;
-  transition: transform 0.05s linear;
+  transition: transform 0.04s linear, opacity 1.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ═══════════════════════════════════════════
+   TRUNK — Central glowing tree trunk
+   ═══════════════════════════════════════════ */
+.trunk {
+  position: absolute;
+  transform-style: preserve-3d;
+  left: 0;
+  top: 0;
+}
+
+.trunk__glow {
+  position: absolute;
+  width: 80px;
+  height: 500px;
+  left: -40px;
+  top: -250px;
+  background: linear-gradient(
+    to bottom,
+    rgba(61, 216, 176, 0.0) 0%,
+    rgba(61, 216, 176, 0.06) 30%,
+    rgba(100, 180, 140, 0.04) 60%,
+    rgba(196, 154, 58, 0.0) 100%
+  );
+  border-radius: 40px;
+  filter: blur(20px);
 }
 
 /* ═══════════════════════════════════════════
    RING
    ═══════════════════════════════════════════ */
-.ring {
-  position: absolute;
-  transform-style: preserve-3d;
-}
-
 /* ═══════════════════════════════════════════
-   PHOTO CARD
+   PHOTO LEAF — Each hanging photo
    ═══════════════════════════════════════════ */
-.photo-card {
+.photo-leaf {
   position: absolute;
-  width: 160px;
-  height: 220px;
-  left: -80px;
-  top: -110px;
+  width: 130px;
+  height: 180px;
+  left: -65px;
+  top: -90px;
   transform-style: preserve-3d;
   cursor: pointer;
-  transition: transform 0.3s ease;
 }
 
-.photo-card__inner {
+.photo-leaf__vine {
+  position: absolute;
+  top: -35px;
+  left: 50%;
+  width: 1px;
+  height: 35px;
+  background: linear-gradient(to bottom, transparent, rgba(61, 216, 176, 0.18));
+  pointer-events: none;
+}
+
+.photo-leaf__inner {
   width: 100%;
   height: 100%;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(180, 160, 220, 0.15);
+  background: rgba(8, 12, 25, 0.4);
+  border: 1px solid rgba(61, 216, 176, 0.08);
   box-shadow:
-    0 8px 32px rgba(100, 80, 140, 0.1),
-    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
-  transition: all 0.35s ease;
-  backdrop-filter: blur(6px);
+    0 0 25px rgba(61, 216, 176, 0.05),
+    0 8px 30px rgba(0, 0, 0, 0.35);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   position: relative;
 }
 
-.photo-card:hover .photo-card__inner {
-  transform: scale(1.12);
+.photo-leaf:hover .photo-leaf__inner {
+  transform: scale(1.15);
+  border-color: rgba(61, 216, 176, 0.3);
   box-shadow:
-    0 16px 50px rgba(100, 80, 140, 0.2),
-    0 0 30px rgba(200, 180, 240, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-  border-color: rgba(180, 160, 220, 0.3);
+    0 0 50px rgba(61, 216, 176, 0.12),
+    0 0 120px rgba(61, 216, 176, 0.06),
+    0 16px 50px rgba(0, 0, 0, 0.5);
 }
 
-.photo-card__inner img {
+.photo-leaf__inner img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.4s ease, filter 0.4s ease;
-  filter: brightness(0.95) saturate(0.9);
+  transition: transform 0.5s ease, filter 0.5s ease;
+  filter: brightness(0.82) saturate(0.85);
 }
 
-.photo-card:hover .photo-card__inner img {
-  transform: scale(1.08);
-  filter: brightness(1.03) saturate(1.05);
-}
-
-.photo-card__label {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 20px 10px 8px;
-  background: linear-gradient(to top, rgba(50, 30, 70, 0.4) 0%, transparent 100%);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: all 0.3s ease;
-}
-
-.photo-card:hover .photo-card__label {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.photo-card__label span {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.75);
-  font-variant-numeric: tabular-nums;
+.photo-leaf:hover .photo-leaf__inner img {
+  transform: scale(1.06);
+  filter: brightness(1.0) saturate(1.05);
 }
 
 /* ═══════════════════════════════════════════
-   LIGHTBOX
+   LIGHTBOX — Dark ethereal theme
    ═══════════════════════════════════════════ */
 .lightbox {
   position: fixed;
   inset: 0;
   z-index: 10000;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: clamp(28px, 4vw, 76px);
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: clamp(24px, 4vw, 70px);
   align-items: center;
   justify-content: center;
-  padding: clamp(32px, 5vw, 78px) clamp(26px, 6vw, 116px);
-  color: #2b241f;
+  padding: clamp(28px, 5vw, 70px) clamp(24px, 6vw, 100px);
+  color: rgba(220, 225, 240, 0.9);
 }
 
 .lightbox__backdrop {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 76% 24%, rgba(245, 196, 116, 0.22), transparent 32%),
-    linear-gradient(135deg, rgba(247, 241, 232, 0.96), rgba(221, 210, 194, 0.94));
+  background: rgba(5, 5, 16, 0.94);
+  backdrop-filter: blur(60px);
 }
 
 .lightbox__backdrop::before {
@@ -738,23 +760,20 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.62), transparent 24%),
-    linear-gradient(90deg, rgba(43, 36, 31, 0.06) 1px, transparent 1px),
-    linear-gradient(rgba(43, 36, 31, 0.045) 1px, transparent 1px);
-  background-size: auto, 72px 72px, 72px 72px;
+    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(61, 216, 176, 0.03) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 20% 30%, rgba(100, 80, 200, 0.04) 0%, transparent 50%);
   pointer-events: none;
 }
 
 .lightbox__backdrop-img {
   position: absolute;
-  right: -5vw;
-  top: 7vh;
-  width: min(44vw, 720px);
-  height: 78vh;
+  left: -5vw;
+  top: 5vh;
+  width: min(50vw, 800px);
+  height: 80vh;
   object-fit: cover;
-  filter: blur(22px) saturate(0.78);
-  opacity: 0.14;
-  transform: rotate(2deg);
+  filter: blur(80px) saturate(0.5) brightness(0.3);
+  opacity: 0.15;
 }
 
 .lightbox__close {
@@ -762,26 +781,26 @@ onBeforeUnmount(() => {
   top: 28px;
   right: 32px;
   z-index: 20;
-  width: 48px;
-  height: 48px;
-  border: 1px solid rgba(43, 36, 31, 0.12);
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(61, 216, 176, 0.1);
   border-radius: 50%;
-  background: rgba(255, 251, 246, 0.72);
-  color: rgba(43, 36, 31, 0.62);
+  background: rgba(10, 15, 30, 0.5);
+  color: rgba(180, 210, 200, 0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(12px);
 }
 
 .lightbox__close:hover {
-  background: rgba(255, 251, 246, 0.94);
-  color: #2b241f;
-  border-color: rgba(43, 36, 31, 0.22);
-  transform: rotate(90deg) scale(1.1);
-  box-shadow: 0 18px 40px rgba(108, 84, 56, 0.16);
+  background: rgba(15, 25, 50, 0.7);
+  color: rgba(61, 216, 176, 0.9);
+  border-color: rgba(61, 216, 176, 0.3);
+  transform: rotate(90deg) scale(1.08);
+  box-shadow: 0 0 30px rgba(61, 216, 176, 0.1);
 }
 
 .lightbox__arrow {
@@ -789,29 +808,29 @@ onBeforeUnmount(() => {
   top: 50%;
   transform: translateY(-50%);
   z-index: 20;
-  width: 56px;
-  height: 56px;
-  border: 1px solid rgba(43, 36, 31, 0.12);
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(61, 216, 176, 0.08);
   border-radius: 50%;
-  background: rgba(255, 251, 246, 0.68);
-  color: rgba(43, 36, 31, 0.62);
+  background: rgba(10, 15, 30, 0.4);
+  color: rgba(180, 210, 200, 0.4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(12px);
 }
 
 .lightbox__arrow:hover {
-  background: rgba(255, 251, 246, 0.94);
-  color: #2b241f;
-  border-color: rgba(43, 36, 31, 0.22);
-  box-shadow: 0 18px 44px rgba(108, 84, 56, 0.14);
+  background: rgba(15, 25, 50, 0.6);
+  color: rgba(61, 216, 176, 0.85);
+  border-color: rgba(61, 216, 176, 0.25);
+  box-shadow: 0 0 30px rgba(61, 216, 176, 0.08);
 }
 
-.lightbox__arrow--left { left: 34px; }
-.lightbox__arrow--right { right: 34px; }
+.lightbox__arrow--left { left: 32px; }
+.lightbox__arrow--right { right: 32px; }
 .lightbox__arrow--left:hover { transform: translateY(-50%) translateX(-3px); }
 .lightbox__arrow--right:hover { transform: translateY(-50%) translateX(3px); }
 
@@ -822,43 +841,41 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-self: end;
-  width: min(58vw, 820px);
+  width: min(56vw, 800px);
 }
 
 .lightbox__card {
   position: relative;
   display: block;
-  padding: clamp(16px, 2vw, 28px);
+  padding: clamp(14px, 1.8vw, 24px);
   border: 0;
-  border-radius: 18px;
-  background: #fffaf2;
+  border-radius: 16px;
+  background: rgba(12, 16, 32, 0.8);
   cursor: pointer;
   box-shadow:
-    0 38px 84px rgba(108, 84, 56, 0.24),
-    0 2px 8px rgba(255, 255, 255, 0.56),
-    inset 0 0 0 1px rgba(43, 36, 31, 0.06);
+    0 0 0 1px rgba(61, 216, 176, 0.06),
+    0 40px 80px rgba(0, 0, 0, 0.5),
+    0 0 60px rgba(61, 216, 176, 0.04);
   transform: scale(0.88) translateY(20px);
   opacity: 0;
   transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.lightbox__card:disabled {
-  cursor: default;
-}
+.lightbox__card:disabled { cursor: default; }
 
 .lightbox__card:not(:disabled):hover {
-  transform: scale(1.015) translateY(-4px);
+  transform: scale(1.012) translateY(-3px);
   box-shadow:
-    0 46px 96px rgba(108, 84, 56, 0.28),
-    0 2px 8px rgba(255, 255, 255, 0.56),
-    inset 0 0 0 1px rgba(43, 36, 31, 0.06);
+    0 0 0 1px rgba(61, 216, 176, 0.12),
+    0 48px 90px rgba(0, 0, 0, 0.55),
+    0 0 80px rgba(61, 216, 176, 0.06);
 }
 
 .lightbox__card::before {
   content: "";
   position: absolute;
-  inset: clamp(16px, 2vw, 28px);
-  border: 1px solid rgba(43, 36, 31, 0.14);
+  inset: clamp(14px, 1.8vw, 24px);
+  border: 1px solid rgba(61, 216, 176, 0.08);
   border-radius: 8px;
   pointer-events: none;
   z-index: 2;
@@ -870,13 +887,13 @@ onBeforeUnmount(() => {
 }
 
 .lightbox.is-visible .lightbox__card:not(:disabled):hover {
-  transform: scale(1.015) translateY(-4px);
+  transform: scale(1.012) translateY(-3px);
 }
 
 .lightbox__card img {
   display: block;
-  max-width: min(52vw, 740px);
-  max-height: 78vh;
+  max-width: min(50vw, 720px);
+  max-height: 76vh;
   border-radius: 8px;
   object-fit: contain;
 }
@@ -885,13 +902,12 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 6;
   align-self: center;
-  min-height: min(70vh, 650px);
-  padding-left: clamp(24px, 3vw, 48px);
-  border-left: 1px solid rgba(43, 36, 31, 0.16);
-  color: #2b241f;
-  transform: translateX(24px);
+  min-height: min(65vh, 600px);
+  padding-left: clamp(20px, 3vw, 44px);
+  border-left: 1px solid rgba(61, 216, 176, 0.1);
+  transform: translateX(20px);
   opacity: 0;
-  transition: all 0.65s cubic-bezier(0.23, 1, 0.32, 1) 0.08s;
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1) 0.08s;
 }
 
 .lightbox.is-visible .lightbox__info {
@@ -900,84 +916,90 @@ onBeforeUnmount(() => {
 }
 
 .lightbox__eyebrow {
-  margin: 0 0 28px;
-  color: rgba(43, 36, 31, 0.56);
-  font-size: 12px;
+  margin: 0 0 24px;
+  color: rgba(61, 216, 176, 0.45);
+  font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
+  font-family: "EB Garamond", Georgia, serif;
 }
 
 .lightbox__info h2 {
   margin: 0;
-  color: #2b241f;
-  font-size: clamp(26px, 2.8vw, 42px);
-  font-weight: 700;
+  color: rgba(230, 235, 245, 0.92);
+  font-size: clamp(22px, 2.5vw, 36px);
+  font-weight: 400;
   letter-spacing: 0.02em;
+  font-family: "Noto Serif SC", Georgia, serif;
 }
 
 .lightbox__original {
-  margin: 12px 0 34px;
-  color: rgba(43, 36, 31, 0.52);
+  margin: 10px 0 28px;
+  color: rgba(180, 190, 210, 0.4);
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 15px;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  letter-spacing: 0.06em;
 }
 
 .lightbox__desc {
-  max-width: 330px;
-  margin: 0 0 28px;
-  color: rgba(43, 36, 31, 0.72);
-  font-size: 14px;
+  max-width: 310px;
+  margin: 0 0 24px;
+  color: rgba(200, 210, 225, 0.6);
+  font-size: 13px;
   line-height: 1.9;
 }
 
 .lightbox__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 32px;
+  gap: 8px;
+  margin-bottom: 28px;
 }
 
 .lightbox__tags span {
-  padding: 8px 13px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(43, 36, 31, 0.07);
-  color: rgba(43, 36, 31, 0.68);
-  font-size: 12px;
+  background: rgba(61, 216, 176, 0.06);
+  border: 1px solid rgba(61, 216, 176, 0.08);
+  color: rgba(61, 216, 176, 0.5);
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .lightbox__source {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: 100%;
-  padding: 13px 16px;
-  border: 1px solid rgba(43, 36, 31, 0.14);
+  padding: 11px 16px;
+  border: 1px solid rgba(61, 216, 176, 0.12);
   border-radius: 999px;
-  background: rgba(255, 251, 246, 0.72);
-  color: #2b241f;
+  background: rgba(10, 15, 30, 0.4);
+  color: rgba(61, 216, 176, 0.65);
   cursor: pointer;
-  font-size: 13px;
-  transition: all 0.28s ease;
+  font-size: 12px;
+  font-family: inherit;
+  transition: all 0.3s ease;
 }
 
 .lightbox__source:hover:not(:disabled) {
   transform: translateY(-2px);
-  background: #2b241f;
-  color: #fffaf2;
-  box-shadow: 0 16px 34px rgba(108, 84, 56, 0.18);
+  background: rgba(61, 216, 176, 0.1);
+  color: rgba(61, 216, 176, 0.95);
+  border-color: rgba(61, 216, 176, 0.3);
+  box-shadow: 0 12px 30px rgba(61, 216, 176, 0.08);
 }
 
 .lightbox__source:disabled {
   cursor: not-allowed;
-  opacity: 0.52;
+  opacity: 0.35;
 }
 
 .lightbox__note {
-  max-width: 330px;
-  margin: 22px 0 0;
-  color: rgba(43, 36, 31, 0.46);
-  font-size: 12px;
+  max-width: 310px;
+  margin: 18px 0 0;
+  color: rgba(160, 170, 190, 0.35);
+  font-size: 11px;
   line-height: 1.7;
 }
 
@@ -989,15 +1011,330 @@ onBeforeUnmount(() => {
    RESPONSIVE
    ═══════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .photo-card {
-    width: 110px;
-    height: 150px;
-    left: -55px;
-    top: -75px;
+  .photo-leaf {
+    width: 90px;
+    height: 125px;
+    left: -45px;
+    top: -62px;
   }
 
-  .lightbox__arrow--left { left: 10px; }
-  .lightbox__arrow--right { right: 10px; }
+  .photo-leaf__vine { height: 20px; top: -20px; }
+
+  .lightbox { grid-template-columns: 1fr; }
+  .lightbox__info { display: none; }
+  .lightbox__arrow--left { left: 8px; }
+  .lightbox__arrow--right { right: 8px; }
   .lightbox__arrow { width: 40px; height: 40px; }
+}
+.gallery-root {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 246, 0.94) 0 16%, rgba(243, 250, 237, 0.75) 17% 34%, transparent 58%),
+    linear-gradient(180deg, #f9f4e7 0%, #edf7ef 44%, #f4f0df 100%);
+  color: rgba(67, 89, 73, 0.86);
+}
+
+.gallery-root::before,
+.gallery-root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.gallery-root::before {
+  background:
+    radial-gradient(ellipse 54% 32% at 50% 30%, rgba(255, 246, 196, 0.5), transparent 70%),
+    radial-gradient(ellipse 34% 28% at 18% 28%, rgba(186, 219, 198, 0.34), transparent 72%),
+    radial-gradient(ellipse 36% 30% at 80% 18%, rgba(231, 192, 163, 0.28), transparent 72%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.58), transparent 55%);
+}
+
+.gallery-root::after {
+  opacity: 0.2;
+  background-image:
+    linear-gradient(rgba(136, 160, 131, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(136, 160, 131, 0.12) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: radial-gradient(circle at 50% 42%, #000 0, transparent 68%);
+}
+
+.bg-deep {
+  background:
+    radial-gradient(ellipse 80% 36% at 50% 101%, rgba(104, 145, 100, 0.2), transparent 64%),
+    radial-gradient(ellipse 58% 44% at 52% 48%, rgba(255, 247, 195, 0.36), transparent 70%),
+    linear-gradient(180deg, rgba(255, 252, 239, 0.78), rgba(234, 247, 235, 0.72));
+}
+
+.dream-canvas {
+  mix-blend-mode: screen;
+  opacity: 0.72;
+}
+
+.cursor-glow {
+  background:
+    radial-gradient(circle, rgba(255, 239, 164, 0.28) 0%, rgba(183, 224, 198, 0.18) 28%, transparent 68%);
+}
+
+.back-btn {
+  border-color: rgba(142, 167, 112, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 252, 240, 0.62);
+  color: rgba(77, 99, 72, 0.78);
+  box-shadow: 0 12px 36px rgba(113, 133, 105, 0.14);
+}
+
+.back-btn span {
+  font-size: 0;
+}
+
+.back-btn span::after {
+  content: "返回";
+  font-size: 13px;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 248, 0.88);
+  border-color: rgba(199, 168, 83, 0.45);
+  color: rgba(96, 118, 78, 0.95);
+  box-shadow: 0 18px 46px rgba(116, 137, 92, 0.18), 0 0 34px rgba(255, 226, 139, 0.18);
+}
+
+.wall-viewport {
+  perspective: 2100px;
+  perspective-origin: 50% 43%;
+}
+
+.wall-scene {
+  top: 54%;
+  transition: transform 0.08s ease-out, opacity 1.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tree-halo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  border-radius: 50%;
+}
+
+.tree-halo--upper {
+  width: 880px;
+  height: 360px;
+  margin-left: -440px;
+  margin-top: -560px;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 248, 194, 0.42), rgba(203, 233, 198, 0.2) 45%, transparent 72%);
+  filter: blur(18px);
+  transform: rotateX(72deg);
+}
+
+.tree-halo--lower {
+  width: 1280px;
+  height: 420px;
+  margin-left: -640px;
+  margin-top: -150px;
+  background: radial-gradient(ellipse at center, rgba(182, 220, 181, 0.18), transparent 70%);
+  filter: blur(26px);
+  transform: rotateX(78deg);
+}
+
+.trunk {
+  top: 20px;
+}
+
+.trunk__column {
+  position: absolute;
+  width: 74px;
+  height: 720px;
+  left: -37px;
+  top: -360px;
+  border-radius: 999px 999px 44px 44px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 251, 218, 0.72) 34%, rgba(157, 181, 132, 0.32) 64%, transparent),
+    linear-gradient(180deg, rgba(247, 230, 168, 0.02), rgba(194, 172, 101, 0.28) 48%, rgba(105, 126, 84, 0.26));
+  box-shadow:
+    inset 0 0 22px rgba(255, 255, 228, 0.62),
+    0 0 60px rgba(255, 236, 151, 0.26),
+    0 36px 80px rgba(101, 116, 86, 0.18);
+}
+
+.trunk__column--side {
+  transform: rotateY(90deg);
+  opacity: 0.82;
+}
+
+.trunk__glow {
+  width: 230px;
+  height: 820px;
+  left: -115px;
+  top: -430px;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(255, 247, 183, 0.64), transparent 38%),
+    linear-gradient(180deg, rgba(255, 245, 177, 0.42), rgba(189, 222, 181, 0.22) 54%, rgba(151, 135, 77, 0));
+  filter: blur(24px);
+}
+
+.trunk__crown-line {
+  position: absolute;
+  left: -4px;
+  top: -354px;
+  width: 8px;
+  height: 430px;
+  border-radius: 999px;
+  transform-origin: 50% 100%;
+  background: linear-gradient(180deg, rgba(255, 240, 157, 0), rgba(186, 209, 160, 0.5), rgba(122, 146, 104, 0.06));
+  filter: blur(0.2px);
+}
+
+.trunk__crown-line--one { transform: rotateZ(-34deg) translateY(-20px); }
+.trunk__crown-line--two { transform: rotateZ(32deg) translateY(-10px); }
+.trunk__crown-line--three { transform: rotateZ(0deg) translateY(-54px) scaleY(1.12); }
+
+.hanging-layer {
+  position: absolute;
+  transform-style: preserve-3d;
+}
+
+.photo-leaf {
+  width: 106px;
+  height: 150px;
+  left: -53px;
+  top: -75px;
+}
+
+.photo-leaf__vine {
+  top: calc(var(--vine-height) * -1);
+  height: var(--vine-height);
+  width: 1px;
+  background:
+    linear-gradient(to bottom, rgba(206, 175, 94, 0), rgba(206, 175, 94, 0.32), rgba(125, 166, 113, 0.42));
+  box-shadow: 0 0 8px rgba(255, 233, 154, 0.36);
+}
+
+.photo-leaf__vine::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 239, 167, 0.9);
+  box-shadow: 0 0 14px rgba(255, 226, 127, 0.68);
+}
+
+.photo-leaf__inner {
+  border-radius: 13px 13px 22px 22px;
+  background: rgba(255, 252, 236, 0.78);
+  border: 1px solid rgba(255, 250, 214, 0.86);
+  box-shadow:
+    inset 0 0 0 1px rgba(133, 167, 112, 0.12),
+    0 12px 24px rgba(91, 115, 87, 0.16),
+    0 0 28px rgba(255, 231, 151, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+.photo-leaf__inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 36%),
+    radial-gradient(circle at 50% 100%, rgba(255, 232, 153, 0.18), transparent 52%);
+  pointer-events: none;
+}
+
+.photo-leaf__inner img {
+  filter: brightness(1.06) saturate(0.92) contrast(0.96);
+}
+
+.photo-leaf:hover .photo-leaf__inner {
+  transform: scale(1.18) translateY(-7px);
+  border-color: rgba(255, 225, 132, 0.9);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 235, 0.72),
+    0 22px 44px rgba(92, 116, 88, 0.22),
+    0 0 54px rgba(255, 225, 132, 0.42);
+}
+
+.photo-leaf:hover .photo-leaf__inner img {
+  filter: brightness(1.12) saturate(1.05) contrast(0.98);
+}
+
+.photo-leaf__glint {
+  position: absolute;
+  inset: -24px -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 243, 185, 0.18), transparent 62%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.photo-leaf:hover .photo-leaf__glint {
+  opacity: 1;
+}
+
+.lightbox {
+  color: rgba(60, 82, 65, 0.92);
+}
+
+.lightbox__backdrop {
+  background: rgba(250, 247, 231, 0.9);
+}
+
+.lightbox__backdrop::before {
+  background:
+    radial-gradient(ellipse 54% 42% at 50% 48%, rgba(255, 238, 167, 0.28), transparent 66%),
+    radial-gradient(ellipse 34% 34% at 22% 26%, rgba(160, 205, 176, 0.2), transparent 58%);
+}
+
+.lightbox__card {
+  background: rgba(255, 252, 240, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(172, 148, 80, 0.12),
+    0 38px 86px rgba(103, 118, 89, 0.2),
+    0 0 70px rgba(255, 231, 151, 0.16);
+}
+
+.lightbox__info {
+  border-left-color: rgba(142, 167, 112, 0.22);
+}
+
+.lightbox__eyebrow,
+.lightbox__tags span,
+.lightbox__source {
+  color: rgba(113, 135, 81, 0.78);
+}
+
+.lightbox__info h2 {
+  color: rgba(58, 76, 57, 0.94);
+}
+
+.lightbox__desc,
+.lightbox__original,
+.lightbox__note {
+  color: rgba(74, 92, 72, 0.58);
+}
+
+@media (max-width: 768px) {
+  .wall-scene {
+    top: 56%;
+  }
+
+  .photo-leaf {
+    width: 78px;
+    height: 110px;
+    left: -39px;
+    top: -55px;
+  }
+
+  .trunk__column {
+    height: 600px;
+    top: -300px;
+  }
 }
 </style>
