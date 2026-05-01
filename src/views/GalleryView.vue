@@ -343,12 +343,6 @@ onBeforeUnmount(() => {
       <span>返回</span>
     </button>
 
-    <!-- Title -->
-    <div class="title-bar">
-      <h1 class="title">美图鉴赏</h1>
-      <p class="subtitle">高木同学 · {{ galleryImages.length }} 张壁纸收藏 · 拖拽旋转</p>
-    </div>
-
     <!-- 3D Wall container -->
     <div
       ref="wallRef"
@@ -420,11 +414,6 @@ onBeforeUnmount(() => {
                 :src="resolvePublicAssetUrl(`gallery/${galleryImages[lightboxIndex]}`)"
                 :alt="galleryImages[lightboxIndex]"
               />
-            </div>
-            <div class="lightbox__caption">
-              <span class="lightbox__index">{{ lightboxIndex + 1 }} / {{ galleryImages.length }}</span>
-              <span class="lightbox__sep">·</span>
-              <span class="lightbox__fname">{{ galleryImages[lightboxIndex] }}</span>
             </div>
           </div>
 
@@ -536,38 +525,6 @@ onBeforeUnmount(() => {
   border-color: rgba(120, 100, 160, 0.25);
   transform: translateX(-2px);
   box-shadow: 0 4px 20px rgba(160, 140, 200, 0.12);
-}
-
-/* ═══════════════════════════════════════════
-   TITLE
-   ═══════════════════════════════════════════ */
-.title-bar {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  text-align: center;
-  pointer-events: none;
-}
-
-.title {
-  margin: 0;
-  font-size: clamp(24px, 4vw, 40px);
-  font-weight: 200;
-  letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #8b6aae 0%, #b088c8 30%, #7ea8d0 60%, #a88cc0 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.subtitle {
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  color: rgba(100, 80, 140, 0.4);
 }
 
 /* ═══════════════════════════════════════════
@@ -692,34 +649,35 @@ onBeforeUnmount(() => {
 .lightbox__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(240, 235, 250, 0.92);
-  backdrop-filter: blur(40px) saturate(0.8);
-  -webkit-backdrop-filter: blur(40px) saturate(0.8);
+  background: rgba(15, 10, 25, 0.88);
+  backdrop-filter: blur(60px) saturate(1.2);
+  -webkit-backdrop-filter: blur(60px) saturate(1.2);
 }
 
 .lightbox__close {
   position: absolute;
-  top: 24px;
-  right: 28px;
+  top: 28px;
+  right: 32px;
   z-index: 10;
-  width: 48px;
-  height: 48px;
-  border: 1px solid rgba(120, 100, 160, 0.15);
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
-  color: rgba(80, 60, 120, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .lightbox__close:hover {
-  background: rgba(255, 255, 255, 0.85);
-  color: #5a3d80;
-  transform: rotate(90deg);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: rotate(90deg) scale(1.1);
+  box-shadow: 0 0 30px rgba(200, 170, 255, 0.15);
 }
 
 .lightbox__arrow {
@@ -727,30 +685,30 @@ onBeforeUnmount(() => {
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  width: 52px;
-  height: 52px;
-  border: 1px solid rgba(120, 100, 160, 0.12);
+  width: 56px;
+  height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  color: rgba(80, 60, 120, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .lightbox__arrow:hover {
-  background: rgba(255, 255, 255, 0.8);
-  color: #5a3d80;
-  border-color: rgba(120, 100, 160, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 40px rgba(200, 170, 255, 0.1);
 }
 
-.lightbox__arrow--left { left: 28px; }
-.lightbox__arrow--right { right: 28px; }
-.lightbox__arrow--left:hover { transform: translateY(-50%) translateX(-2px); }
-.lightbox__arrow--right:hover { transform: translateY(-50%) translateX(2px); }
+.lightbox__arrow--left { left: 32px; }
+.lightbox__arrow--right { right: 32px; }
+.lightbox__arrow--left:hover { transform: translateY(-50%) translateX(-3px); }
+.lightbox__arrow--right:hover { transform: translateY(-50%) translateX(3px); }
 
 .lightbox__stage {
   position: relative;
@@ -758,52 +716,31 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 88vw;
-  max-height: 85vh;
 }
 
 .lightbox__card {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
   box-shadow:
-    0 30px 100px rgba(100, 80, 140, 0.12),
-    0 0 0 1px rgba(180, 160, 220, 0.1);
-  transform: scale(0.92);
+    0 40px 120px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 80px rgba(160, 130, 220, 0.08);
+  transform: scale(0.88) translateY(20px);
   opacity: 0;
-  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .lightbox.is-visible .lightbox__card {
-  transform: scale(1);
+  transform: scale(1) translateY(0);
   opacity: 1;
 }
 
 .lightbox__card img {
   display: block;
-  max-width: 85vw;
-  max-height: 78vh;
+  max-width: 88vw;
+  max-height: 82vh;
   object-fit: contain;
 }
-
-.lightbox__caption {
-  margin-top: 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: rgba(100, 80, 140, 0.45);
-  letter-spacing: 0.05em;
-  opacity: 0;
-  transform: translateY(10px);
-  transition: all 0.4s ease 0.2s;
-}
-
-.lightbox.is-visible .lightbox__caption {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.lightbox__sep { opacity: 0.3; }
 
 .lb-enter-active { transition: opacity 0.4s ease; }
 .lb-leave-active { transition: opacity 0.3s ease; }
@@ -819,9 +756,6 @@ onBeforeUnmount(() => {
     left: -55px;
     top: -75px;
   }
-
-  .title { font-size: 24px; }
-  .subtitle { font-size: 10px; }
 
   .lightbox__arrow--left { left: 10px; }
   .lightbox__arrow--right { right: 10px; }
