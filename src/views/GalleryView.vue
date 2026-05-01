@@ -175,6 +175,18 @@ function formatTitle(title) {
   return `${match[1]}年${match[2]}月${match[3]}日 ${match[4]}:${match[5]}`;
 }
 
+function formatDateLabel(value) {
+  if (!value) return "";
+  const dateOnly = value.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (dateOnly) return `${dateOnly[1]}年${dateOnly[2]}月${dateOnly[3]}日`;
+  return formatTitle(value);
+}
+
+function getTaggedDate(tags) {
+  if (!Array.isArray(tags)) return "";
+  return formatDateLabel(tags.find((tag) => /^\d{4}\/\d{2}\/\d{2}$/.test(tag)));
+}
+
 function localizeTag(tag) {
   const map = {
     Official: "官方",
@@ -329,13 +341,97 @@ function localizeDescription(description) {
   }
 
   return translateOfficialTweet(description)
+    .replace(/【本日発売！】/g, "【今日发售】")
+    .replace(/\(金\)/g, "（周五）")
+    .replace(/\(水\)/g, "（周三）")
+    .replace(/商品详情🔽/g, "商品详情：")
+    .replace(/🔽详情：/g, "详情：")
     .replace(/Matched to the original X post by Soichiro Yamamoto\./g, "已匹配到山本崇一朗发布的原始 X 动态。");
+}
+
+function stripTweetLabel(text) {
+  return text.replace(/^【[^】]+】\s*/, "").trim();
+}
+
+function cleanTitleSnippet(text) {
+  return text
+    .replace(/#\S+/g, "")
+    .replace(/[。！？!?.]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstSentence(text) {
+  const body = cleanTitleSnippet(stripTweetLabel(text));
+  return body.split(/[。！？!?]/)[0]?.trim() || "";
+}
+
+function buildOfficialTitle(description, translatedDescription) {
+  const text = cleanupTweetText(description || "");
+  const episode = text.match(/第(\d+)話/)?.[1];
+  const season = text.match(/第(\d+)期/)?.[1];
+  const quote = translatedDescription.match(/“([^”]+)”/)?.[1];
+
+  if (description?.includes("#いっしょに高木さん") || text.includes("#一起看高木同学") || translatedDescription.startsWith("【一起看高木同学】")) {
+    if (quote) return `一起看高木同学：${cleanTitleSnippet(quote)}`;
+    return `一起看高木同学：${firstSentence(translatedDescription)}`;
+  }
+  if (text.includes("本日放送") && episode) {
+    return season ? `第 ${season} 季第 ${episode} 集播出提醒` : `第 ${episode} 集播出提醒`;
+  }
+  if (text.includes("ご視聴ありがとうございました") && episode) {
+    return `第 ${episode} 集播出回顾`;
+  }
+  if (text.includes("POP UP SHOP")) return "圣诞 POP UP SHOP 开催";
+  if ((text.includes("Blu-ray") || text.includes("BD&DVD") || text.includes("DVD")) && text.includes("発売")) {
+    return text.includes("劇場版") ? "剧场版 Blu-ray / DVD 发售" : "Blu-ray / DVD 情报";
+  }
+  if (text.includes("上映劇場情報")) return "剧场版上映影院更新";
+  if (text.includes("劇場版")) return "剧场版官方情报";
+  if (text.includes("猫の日")) return "猫之日官方回顾";
+  if (text.includes("ハナの日")) return "小花之日官方回顾";
+  if (text.includes("キスの日")) return "吻之日名场面回顾";
+  if (text.includes("高木神社") || text.includes("御朱印")) return "高木神社联动情报";
+  if (text.includes("サブタイトル") || text.includes("先行カット")) return "官方先行画面公开";
+  if (text.includes("EDテーマ") || text.includes("挿入歌") || text.includes("主題歌")) return "官方音乐情报";
+  if (text.includes("小豆島")) return "小豆岛舞台巡礼";
+
+  const label = translatedDescription.match(/^【([^】]+)】/)?.[1];
+  if (label) return label;
+  return firstSentence(translatedDescription) || "官方推文";
+}
+
+function buildAuthorTitle(detail) {
+  const date = getTaggedDate(detail?.tags);
+  return date ? `山本崇一朗插画 · ${date}` : "山本崇一朗插画";
+}
+
+function buildAuthorDescription(detail) {
+  if (detail?.description?.includes("Matched to the original X post by Soichiro Yamamoto")) {
+    return "山本崇一朗在 X 发布的《擅长捉弄的高木同学》相关插画，当前图片已匹配到原始来源链接。";
+  }
+  return localizeDescription(detail?.description);
+}
+
+function buildOfficialMatchedDescription() {
+  return "《擅长捉弄的高木同学》动画官方账号发布的图片，当前图片已匹配到原始 X 推文来源。";
 }
 
 function localizeGalleryDetail(filename, detail) {
   const sourceUrl = detail?.sourceUrl || "";
-  const isOfficial = filename.includes("official/") || sourceUrl.includes("takagi3_anime");
-  const isAuthor = sourceUrl.includes("udon0531");
+  const isOfficial = filename.includes("official/")
+    || sourceUrl.includes("takagi3_anime")
+    || detail?.title === "Official Anime Artwork"
+    || detail?.description?.includes("anime official account");
+  const isAuthor = sourceUrl.includes("udon0531")
+    || detail?.title === "Author X Illustration"
+    || detail?.description?.includes("Soichiro Yamamoto");
+  const isMatchedOfficial = detail?.description?.includes("anime official account");
+  const description = isMatchedOfficial ? buildOfficialMatchedDescription() : isAuthor ? buildAuthorDescription(detail) : localizeDescription(detail?.description);
+  const publishedAt = isAuthor || isMatchedOfficial ? getTaggedDate(detail?.tags) : formatTitle(detail?.title);
+  const workTitle = detail?.originalTitle === "Karakai Jozu no Takagi-san"
+    ? "擅长捉弄的高木同学"
+    : detail?.originalTitle || "美图鉴赏";
   const sourceLabel = sourceUrl
     ? isOfficial
       ? "查看官方来源"
@@ -347,11 +443,11 @@ function localizeGalleryDetail(filename, detail) {
   return {
     ...detail,
     collection: isOfficial ? "官方 X 图集" : isAuthor ? "作者 X 插画" : "私人收藏图集",
-    title: formatTitle(detail?.title),
-    originalTitle: detail?.originalTitle === "Karakai Jozu no Takagi-san"
-      ? "擅长捉弄的高木同学"
-      : detail?.originalTitle || "美图鉴赏",
-    description: localizeDescription(detail?.description),
+    title: isMatchedOfficial ? `动画官方图 · ${publishedAt || "来源已匹配"}` : isOfficial ? buildOfficialTitle(detail?.description, description) : isAuthor ? buildAuthorTitle(detail) : formatTitle(detail?.title),
+    originalTitle: isOfficial || isAuthor
+      ? `《${workTitle}》${publishedAt ? ` · 发布于 ${publishedAt}` : ""}`
+      : workTitle,
+    description,
     sourceLabel,
     note: sourceUrl
       ? "点击图片或来源按钮，可以打开这张图对应的原始页面。"
@@ -718,6 +814,11 @@ onBeforeUnmount(() => {
         <!-- Central trunk — two perpendicular planes for 3D illusion -->
         <div class="tree-halo tree-halo--upper"></div>
         <div class="tree-halo tree-halo--lower"></div>
+        <div class="canopy-mist canopy-mist--left"></div>
+        <div class="canopy-mist canopy-mist--right"></div>
+        <div class="canopy-mist canopy-mist--crown"></div>
+        <div class="leaf-veil leaf-veil--front"></div>
+        <div class="leaf-veil leaf-veil--back"></div>
 
         <div class="trunk">
           <div class="trunk__column trunk__column--front"></div>
@@ -725,6 +826,16 @@ onBeforeUnmount(() => {
           <div class="trunk__crown-line trunk__crown-line--one"></div>
           <div class="trunk__crown-line trunk__crown-line--two"></div>
           <div class="trunk__crown-line trunk__crown-line--three"></div>
+          <div class="branch branch--left branch--left-a"></div>
+          <div class="branch branch--left branch--left-b"></div>
+          <div class="branch branch--left branch--left-c"></div>
+          <div class="branch branch--right branch--right-a"></div>
+          <div class="branch branch--right branch--right-b"></div>
+          <div class="branch branch--right branch--right-c"></div>
+          <div class="root root--left-a"></div>
+          <div class="root root--left-b"></div>
+          <div class="root root--right-a"></div>
+          <div class="root root--right-b"></div>
           <div class="trunk__glow"></div>
         </div>
 
@@ -1485,57 +1596,250 @@ onBeforeUnmount(() => {
   transform: rotateX(78deg);
 }
 
+.canopy-mist {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  mix-blend-mode: multiply;
+}
+
+.canopy-mist--left {
+  width: 720px;
+  height: 380px;
+  margin-left: -680px;
+  margin-top: -430px;
+  transform: rotateZ(-8deg) rotateX(62deg) translateZ(-60px);
+  background:
+    radial-gradient(ellipse at 54% 48%, rgba(169, 202, 142, 0.2), transparent 58%),
+    radial-gradient(ellipse at 26% 42%, rgba(216, 206, 126, 0.18), transparent 52%);
+  filter: blur(18px);
+}
+
+.canopy-mist--right {
+  width: 760px;
+  height: 390px;
+  margin-left: -70px;
+  margin-top: -440px;
+  transform: rotateZ(9deg) rotateX(62deg) translateZ(-70px);
+  background:
+    radial-gradient(ellipse at 42% 50%, rgba(155, 196, 142, 0.2), transparent 60%),
+    radial-gradient(ellipse at 68% 38%, rgba(238, 217, 139, 0.16), transparent 54%);
+  filter: blur(18px);
+}
+
+.canopy-mist--crown {
+  width: 620px;
+  height: 360px;
+  margin-left: -310px;
+  margin-top: -650px;
+  transform: rotateX(56deg) translateZ(36px);
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(255, 246, 183, 0.26), transparent 48%),
+    radial-gradient(ellipse at 52% 72%, rgba(146, 190, 134, 0.2), transparent 66%);
+  filter: blur(16px);
+}
+
+.leaf-veil {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1220px;
+  height: 640px;
+  margin-left: -610px;
+  margin-top: -570px;
+  pointer-events: none;
+  border-radius: 48% 52% 46% 54%;
+  opacity: 0.54;
+  transform-style: preserve-3d;
+  background:
+    radial-gradient(ellipse 8% 5% at 15% 58%, rgba(112, 157, 95, 0.3), transparent 72%),
+    radial-gradient(ellipse 9% 6% at 28% 34%, rgba(181, 199, 112, 0.25), transparent 72%),
+    radial-gradient(ellipse 7% 5% at 40% 22%, rgba(119, 166, 102, 0.22), transparent 72%),
+    radial-gradient(ellipse 10% 6% at 56% 30%, rgba(199, 191, 106, 0.24), transparent 72%),
+    radial-gradient(ellipse 8% 5% at 72% 40%, rgba(112, 157, 95, 0.28), transparent 72%),
+    radial-gradient(ellipse 7% 5% at 84% 62%, rgba(190, 207, 123, 0.24), transparent 72%),
+    radial-gradient(ellipse 9% 6% at 48% 62%, rgba(130, 172, 103, 0.2), transparent 72%);
+  filter: blur(0.4px);
+  mask-image: radial-gradient(ellipse at 50% 48%, #000 0 42%, transparent 74%);
+}
+
+.leaf-veil--front {
+  transform: translateZ(120px) rotateX(62deg);
+}
+
+.leaf-veil--back {
+  transform: translateZ(-160px) rotateX(64deg) rotateZ(180deg);
+  opacity: 0.34;
+}
+
 .trunk {
   top: 20px;
 }
 
 .trunk__column {
   position: absolute;
-  width: 74px;
-  height: 720px;
-  left: -37px;
-  top: -360px;
-  border-radius: 999px 999px 44px 44px;
+  width: 118px;
+  height: 760px;
+  left: -59px;
+  top: -374px;
+  border-radius: 58% 42% 34% 38% / 18% 24% 12% 12%;
   background:
-    linear-gradient(90deg, transparent, rgba(255, 251, 218, 0.72) 34%, rgba(157, 181, 132, 0.32) 64%, transparent),
-    linear-gradient(180deg, rgba(247, 230, 168, 0.02), rgba(194, 172, 101, 0.28) 48%, rgba(105, 126, 84, 0.26));
+    radial-gradient(ellipse at 58% 16%, rgba(255, 247, 191, 0.7), transparent 22%),
+    linear-gradient(90deg, rgba(80, 98, 64, 0.02), rgba(255, 248, 210, 0.76) 28%, rgba(171, 153, 91, 0.44) 54%, rgba(82, 116, 75, 0.22) 82%, rgba(70, 94, 62, 0.05)),
+    repeating-linear-gradient(96deg, rgba(110, 124, 74, 0.14) 0 2px, transparent 2px 14px),
+    linear-gradient(180deg, rgba(255, 237, 161, 0.12), rgba(184, 161, 93, 0.34) 54%, rgba(94, 119, 78, 0.32));
   box-shadow:
-    inset 0 0 22px rgba(255, 255, 228, 0.62),
-    0 0 60px rgba(255, 236, 151, 0.26),
-    0 36px 80px rgba(101, 116, 86, 0.18);
+    inset 16px 0 28px rgba(255, 255, 224, 0.48),
+    inset -24px 0 32px rgba(91, 115, 72, 0.18),
+    0 0 70px rgba(255, 236, 151, 0.28),
+    0 40px 90px rgba(94, 113, 74, 0.2);
 }
 
 .trunk__column--side {
-  transform: rotateY(90deg);
-  opacity: 0.82;
+  transform: rotateY(82deg) scaleX(0.78);
+  opacity: 0.74;
 }
 
 .trunk__glow {
-  width: 230px;
-  height: 820px;
-  left: -115px;
-  top: -430px;
+  width: 360px;
+  height: 880px;
+  left: -180px;
+  top: -470px;
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(255, 247, 183, 0.64), transparent 38%),
-    linear-gradient(180deg, rgba(255, 245, 177, 0.42), rgba(189, 222, 181, 0.22) 54%, rgba(151, 135, 77, 0));
-  filter: blur(24px);
+    radial-gradient(ellipse at 50% 17%, rgba(255, 247, 183, 0.74), transparent 35%),
+    radial-gradient(ellipse at 50% 54%, rgba(186, 222, 172, 0.28), transparent 52%),
+    linear-gradient(180deg, rgba(255, 245, 177, 0.36), rgba(189, 222, 181, 0.2) 54%, rgba(151, 135, 77, 0));
+  filter: blur(28px);
 }
 
 .trunk__crown-line {
   position: absolute;
-  left: -4px;
-  top: -354px;
-  width: 8px;
-  height: 430px;
+  left: -5px;
+  top: -390px;
+  width: 10px;
+  height: 520px;
   border-radius: 999px;
   transform-origin: 50% 100%;
-  background: linear-gradient(180deg, rgba(255, 240, 157, 0), rgba(186, 209, 160, 0.5), rgba(122, 146, 104, 0.06));
-  filter: blur(0.2px);
+  background: linear-gradient(180deg, rgba(255, 240, 157, 0), rgba(206, 219, 154, 0.52), rgba(118, 143, 89, 0.12));
+  filter: blur(0.3px);
+  box-shadow: 0 0 18px rgba(255, 237, 155, 0.18);
 }
 
-.trunk__crown-line--one { transform: rotateZ(-34deg) translateY(-20px); }
-.trunk__crown-line--two { transform: rotateZ(32deg) translateY(-10px); }
-.trunk__crown-line--three { transform: rotateZ(0deg) translateY(-54px) scaleY(1.12); }
+.trunk__crown-line--one { transform: rotateZ(-42deg) translateY(-12px) scaleY(1.05); }
+.trunk__crown-line--two { transform: rotateZ(40deg) translateY(-10px) scaleY(1.03); }
+.trunk__crown-line--three { transform: rotateZ(2deg) translateY(-78px) scaleY(1.18); }
+
+.branch,
+.root {
+  position: absolute;
+  pointer-events: none;
+  transform-origin: 0 50%;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(255, 246, 196, 0.66), rgba(162, 155, 88, 0.42) 42%, rgba(95, 126, 78, 0.08) 100%);
+  box-shadow:
+    inset 0 4px 8px rgba(255, 252, 215, 0.38),
+    0 0 20px rgba(255, 235, 154, 0.14);
+}
+
+.branch::after,
+.root::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: 42%;
+  width: 34%;
+  height: 30%;
+  border-radius: 999px;
+  background: rgba(109, 145, 88, 0.18);
+  filter: blur(3px);
+}
+
+.branch--left {
+  left: -18px;
+}
+
+.branch--right {
+  left: 18px;
+}
+
+.branch--left-a {
+  top: -318px;
+  width: 420px;
+  height: 32px;
+  transform: rotateZ(206deg) rotateY(-20deg) translateZ(32px);
+}
+
+.branch--left-b {
+  top: -238px;
+  width: 520px;
+  height: 24px;
+  transform: rotateZ(190deg) rotateY(-32deg) translateZ(-24px);
+}
+
+.branch--left-c {
+  top: -140px;
+  width: 360px;
+  height: 20px;
+  transform: rotateZ(218deg) rotateY(-10deg) translateZ(66px);
+}
+
+.branch--right-a {
+  top: -330px;
+  width: 430px;
+  height: 32px;
+  transform: rotateZ(-26deg) rotateY(22deg) translateZ(24px);
+}
+
+.branch--right-b {
+  top: -244px;
+  width: 540px;
+  height: 24px;
+  transform: rotateZ(-12deg) rotateY(34deg) translateZ(-38px);
+}
+
+.branch--right-c {
+  top: -132px;
+  width: 380px;
+  height: 20px;
+  transform: rotateZ(-42deg) rotateY(12deg) translateZ(70px);
+}
+
+.root {
+  top: 332px;
+  height: 28px;
+  background:
+    linear-gradient(90deg, rgba(132, 148, 91, 0.42), rgba(255, 244, 191, 0.48) 48%, rgba(95, 126, 78, 0.04) 100%);
+}
+
+.root--left-a {
+  left: -28px;
+  width: 260px;
+  transform: rotateZ(162deg) rotateX(16deg) translateZ(20px);
+}
+
+.root--left-b {
+  left: -20px;
+  width: 190px;
+  height: 18px;
+  transform: rotateZ(202deg) rotateX(24deg) translateZ(-26px);
+}
+
+.root--right-a {
+  left: 24px;
+  width: 270px;
+  transform: rotateZ(18deg) rotateX(16deg) translateZ(18px);
+}
+
+.root--right-b {
+  left: 20px;
+  width: 200px;
+  height: 18px;
+  transform: rotateZ(-28deg) rotateX(24deg) translateZ(-26px);
+}
 
 .hanging-layer {
   position: absolute;
@@ -1543,10 +1847,11 @@ onBeforeUnmount(() => {
 }
 
 .photo-leaf {
-  width: 106px;
-  height: 150px;
-  left: -53px;
-  top: -75px;
+  width: 96px;
+  height: 136px;
+  left: -48px;
+  top: -68px;
+  z-index: 3;
 }
 
 .photo-leaf__vine {
@@ -1571,12 +1876,12 @@ onBeforeUnmount(() => {
 }
 
 .photo-leaf__inner {
-  border-radius: 13px 13px 22px 22px;
-  background: rgba(255, 252, 236, 0.78);
+  border-radius: 16px 16px 24px 24px;
+  background: rgba(255, 252, 236, 0.7);
   border: 1px solid rgba(255, 250, 214, 0.86);
   box-shadow:
     inset 0 0 0 1px rgba(133, 167, 112, 0.12),
-    0 12px 24px rgba(91, 115, 87, 0.16),
+    0 10px 20px rgba(91, 115, 87, 0.13),
     0 0 28px rgba(255, 231, 151, 0.2);
   backdrop-filter: blur(4px);
 }
