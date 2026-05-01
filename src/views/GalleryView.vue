@@ -1,11 +1,13 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, computed } from "vue";
 import { useRouter } from "vue-router";
+import { defaultGalleryDetail, galleryDetails } from "../data/gallerySources";
+import { officialGalleryDetails, officialGalleryImages } from "../data/officialGallerySources";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
 const router = useRouter();
 
-const galleryImages = [
+const localGalleryImages = [
   "1648137658919.jpg","1648137770487.jpg","1648137785223.jpg","1648137830647.png",
   "1648137860154.jpg","1648137894790.jpg","1648138153799.jpg","1648138193841.jpg",
   "1648138372413.jpg","1648138386361.jpg","1648138415955.jpg","1648138507557.png",
@@ -58,6 +60,16 @@ const galleryImages = [
   "top-main.jpg"
 ];
 
+const galleryImages = [
+  ...localGalleryImages,
+  ...officialGalleryImages
+];
+
+const allGalleryDetails = {
+  ...galleryDetails,
+  ...officialGalleryDetails
+};
+
 /* ── Config ── */
 const RING_COUNT = 20; // photos per ring
 const RING_RADIUS = 560; // px from center (increased to avoid clipping)
@@ -81,13 +93,26 @@ let lastMouseY = 0;
 let animId = null;
 let snowAnimId = null;
 
+const activeFilename = computed(() => {
+  if (lightboxIndex.value < 0) return "";
+  return galleryImages[lightboxIndex.value];
+});
+
+const activeGalleryDetail = computed(() => {
+  return allGalleryDetails[activeFilename.value] || defaultGalleryDetail;
+});
+
+function getGalleryImageUrl(filename) {
+  return resolvePublicAssetUrl(`gallery/${filename}`);
+}
+
 /* ── Split images into rings ── */
 const rings = computed(() => {
   const r = [];
   let idx = 0;
-  const perRing = [RING_COUNT, RING_COUNT, RING_COUNT];
-  for (let ring = 0; ring < 3; ring++) {
-    const count = Math.min(perRing[ring], galleryImages.length - idx);
+  const ringCount = Math.ceil(galleryImages.length / RING_COUNT);
+  for (let ring = 0; ring < ringCount; ring++) {
+    const count = Math.min(RING_COUNT, galleryImages.length - idx);
     const items = [];
     for (let i = 0; i < count; i++) {
       items.push({
@@ -96,10 +121,11 @@ const rings = computed(() => {
         angle: (360 / count) * i
       });
     }
+    const radius = ring === 0 ? RING_RADIUS : ring === 1 ? RING2_RADIUS : RING3_RADIUS + (ring - 2) * 260;
     r.push({
-      radius: ring === 0 ? RING_RADIUS : ring === 1 ? RING2_RADIUS : RING3_RADIUS,
+      radius,
       items,
-      yOffset: ring === 0 ? -60 : ring === 1 ? 40 : 140
+      yOffset: -120 + ring * 55
     });
     idx += count;
   }
@@ -131,6 +157,16 @@ function prevImage() {
 function nextImage() {
   if (lightboxIndex.value < galleryImages.length - 1) lightboxIndex.value++;
   else lightboxIndex.value = 0;
+}
+
+function openSourceLink() {
+  const url = activeGalleryDetail.value.sourceUrl;
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function openCurrentTweet() {
+  openSourceLink();
 }
 
 /* ── Mouse drag rotation ── */
@@ -372,7 +408,7 @@ onBeforeUnmount(() => {
           >
             <div class="photo-card__inner">
               <img
-                :src="resolvePublicAssetUrl(`gallery/${item.filename}`)"
+                :src="getGalleryImageUrl(item.filename)"
                 :alt="item.filename"
                 loading="lazy"
                 @error="handleImgError"
@@ -394,7 +430,13 @@ onBeforeUnmount(() => {
           class="lightbox"
           :class="{ 'is-visible': lightboxVisible }"
         >
-          <div class="lightbox__backdrop" @click="closeLightbox"></div>
+          <div class="lightbox__backdrop" @click="closeLightbox">
+            <img
+              class="lightbox__backdrop-img"
+              :src="getGalleryImageUrl(activeFilename)"
+              alt=""
+            />
+          </div>
 
           <button class="lightbox__close" @click="closeLightbox" aria-label="关闭">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -409,13 +451,45 @@ onBeforeUnmount(() => {
           </button>
 
           <div class="lightbox__stage">
-            <div class="lightbox__card">
+            <button
+              class="lightbox__card"
+              type="button"
+              :disabled="!activeGalleryDetail.sourceUrl"
+              :title="activeGalleryDetail.sourceUrl ? '打开官方 X 具体推文' : '暂未匹配到具体 X 推文'"
+              @click="openCurrentTweet"
+            >
               <img
-                :src="resolvePublicAssetUrl(`gallery/${galleryImages[lightboxIndex]}`)"
-                :alt="galleryImages[lightboxIndex]"
+                :src="getGalleryImageUrl(activeFilename)"
+                :alt="activeGalleryDetail.title"
               />
-            </div>
+            </button>
           </div>
+
+          <aside class="lightbox__info" aria-label="图片来源信息">
+            <p class="lightbox__eyebrow">{{ activeGalleryDetail.collection }}</p>
+            <h2>{{ activeGalleryDetail.title }}</h2>
+            <p class="lightbox__original">{{ activeGalleryDetail.originalTitle }}</p>
+            <p class="lightbox__desc">{{ activeGalleryDetail.description }}</p>
+
+            <div class="lightbox__tags">
+              <span v-for="tag in activeGalleryDetail.tags" :key="tag">{{ tag }}</span>
+            </div>
+
+            <button
+              class="lightbox__source"
+              type="button"
+              :disabled="!activeGalleryDetail.sourceUrl"
+              @click="openSourceLink"
+            >
+              <span>{{ activeGalleryDetail.sourceLabel }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17L17 7"/>
+                <path d="M9 7h8v8"/>
+              </svg>
+            </button>
+
+            <p class="lightbox__note">{{ activeGalleryDetail.note }}</p>
+          </aside>
 
           <button class="lightbox__arrow lightbox__arrow--right" @click="nextImage" aria-label="下一张">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -641,72 +715,103 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: clamp(28px, 4vw, 76px);
   align-items: center;
   justify-content: center;
+  padding: clamp(32px, 5vw, 78px) clamp(26px, 6vw, 116px);
+  color: #2b241f;
 }
 
 .lightbox__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 10, 25, 0.88);
-  backdrop-filter: blur(60px) saturate(1.2);
-  -webkit-backdrop-filter: blur(60px) saturate(1.2);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 76% 24%, rgba(245, 196, 116, 0.22), transparent 32%),
+    linear-gradient(135deg, rgba(247, 241, 232, 0.96), rgba(221, 210, 194, 0.94));
+}
+
+.lightbox__backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.62), transparent 24%),
+    linear-gradient(90deg, rgba(43, 36, 31, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(43, 36, 31, 0.045) 1px, transparent 1px);
+  background-size: auto, 72px 72px, 72px 72px;
+  pointer-events: none;
+}
+
+.lightbox__backdrop-img {
+  position: absolute;
+  right: -5vw;
+  top: 7vh;
+  width: min(44vw, 720px);
+  height: 78vh;
+  object-fit: cover;
+  filter: blur(22px) saturate(0.78);
+  opacity: 0.14;
+  transform: rotate(2deg);
 }
 
 .lightbox__close {
   position: absolute;
   top: 28px;
   right: 32px;
-  z-index: 10;
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 20;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(43, 36, 31, 0.12);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 251, 246, 0.72);
+  color: rgba(43, 36, 31, 0.62);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  backdrop-filter: blur(16px);
 }
 
 .lightbox__close:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 251, 246, 0.94);
+  color: #2b241f;
+  border-color: rgba(43, 36, 31, 0.22);
   transform: rotate(90deg) scale(1.1);
-  box-shadow: 0 0 30px rgba(200, 170, 255, 0.15);
+  box-shadow: 0 18px 40px rgba(108, 84, 56, 0.16);
 }
 
 .lightbox__arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 10;
+  z-index: 20;
   width: 56px;
   height: 56px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(43, 36, 31, 0.12);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 251, 246, 0.68);
+  color: rgba(43, 36, 31, 0.62);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  backdrop-filter: blur(16px);
 }
 
 .lightbox__arrow:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 0 40px rgba(200, 170, 255, 0.1);
+  background: rgba(255, 251, 246, 0.94);
+  color: #2b241f;
+  border-color: rgba(43, 36, 31, 0.22);
+  box-shadow: 0 18px 44px rgba(108, 84, 56, 0.14);
 }
 
-.lightbox__arrow--left { left: 32px; }
-.lightbox__arrow--right { right: 32px; }
+.lightbox__arrow--left { left: 34px; }
+.lightbox__arrow--right { right: 34px; }
 .lightbox__arrow--left:hover { transform: translateY(-50%) translateX(-3px); }
 .lightbox__arrow--right:hover { transform: translateY(-50%) translateX(3px); }
 
@@ -716,18 +821,47 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-self: end;
+  width: min(58vw, 820px);
 }
 
 .lightbox__card {
-  border-radius: 20px;
-  overflow: hidden;
+  position: relative;
+  display: block;
+  padding: clamp(16px, 2vw, 28px);
+  border: 0;
+  border-radius: 18px;
+  background: #fffaf2;
+  cursor: pointer;
   box-shadow:
-    0 40px 120px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 80px rgba(160, 130, 220, 0.08);
+    0 38px 84px rgba(108, 84, 56, 0.24),
+    0 2px 8px rgba(255, 255, 255, 0.56),
+    inset 0 0 0 1px rgba(43, 36, 31, 0.06);
   transform: scale(0.88) translateY(20px);
   opacity: 0;
   transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.lightbox__card:disabled {
+  cursor: default;
+}
+
+.lightbox__card:not(:disabled):hover {
+  transform: scale(1.015) translateY(-4px);
+  box-shadow:
+    0 46px 96px rgba(108, 84, 56, 0.28),
+    0 2px 8px rgba(255, 255, 255, 0.56),
+    inset 0 0 0 1px rgba(43, 36, 31, 0.06);
+}
+
+.lightbox__card::before {
+  content: "";
+  position: absolute;
+  inset: clamp(16px, 2vw, 28px);
+  border: 1px solid rgba(43, 36, 31, 0.14);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .lightbox.is-visible .lightbox__card {
@@ -735,11 +869,116 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
+.lightbox.is-visible .lightbox__card:not(:disabled):hover {
+  transform: scale(1.015) translateY(-4px);
+}
+
 .lightbox__card img {
   display: block;
-  max-width: 88vw;
-  max-height: 82vh;
+  max-width: min(52vw, 740px);
+  max-height: 78vh;
+  border-radius: 8px;
   object-fit: contain;
+}
+
+.lightbox__info {
+  position: relative;
+  z-index: 6;
+  align-self: center;
+  min-height: min(70vh, 650px);
+  padding-left: clamp(24px, 3vw, 48px);
+  border-left: 1px solid rgba(43, 36, 31, 0.16);
+  color: #2b241f;
+  transform: translateX(24px);
+  opacity: 0;
+  transition: all 0.65s cubic-bezier(0.23, 1, 0.32, 1) 0.08s;
+}
+
+.lightbox.is-visible .lightbox__info {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.lightbox__eyebrow {
+  margin: 0 0 28px;
+  color: rgba(43, 36, 31, 0.56);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.lightbox__info h2 {
+  margin: 0;
+  color: #2b241f;
+  font-size: clamp(26px, 2.8vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.lightbox__original {
+  margin: 12px 0 34px;
+  color: rgba(43, 36, 31, 0.52);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+.lightbox__desc {
+  max-width: 330px;
+  margin: 0 0 28px;
+  color: rgba(43, 36, 31, 0.72);
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.lightbox__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.lightbox__tags span {
+  padding: 8px 13px;
+  border-radius: 999px;
+  background: rgba(43, 36, 31, 0.07);
+  color: rgba(43, 36, 31, 0.68);
+  font-size: 12px;
+}
+
+.lightbox__source {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 13px 16px;
+  border: 1px solid rgba(43, 36, 31, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 251, 246, 0.72);
+  color: #2b241f;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.28s ease;
+}
+
+.lightbox__source:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #2b241f;
+  color: #fffaf2;
+  box-shadow: 0 16px 34px rgba(108, 84, 56, 0.18);
+}
+
+.lightbox__source:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.lightbox__note {
+  max-width: 330px;
+  margin: 22px 0 0;
+  color: rgba(43, 36, 31, 0.46);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .lb-enter-active { transition: opacity 0.4s ease; }

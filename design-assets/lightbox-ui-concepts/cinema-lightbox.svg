@@ -1,0 +1,88 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(970 490) rotate(90) scale(760 1080)">
+      <stop stop-color="#362A42"/>
+      <stop offset="0.48" stop-color="#16131E"/>
+      <stop offset="1" stop-color="#08070C"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1206 238) rotate(117) scale(622 782)">
+      <stop stop-color="#EFCB9A" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#EFCB9A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="522" y1="91" x2="1378" y2="971" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.3"/>
+      <stop offset="0.44" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.18"/>
+    </linearGradient>
+    <filter id="blurBg" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="28"/>
+      <feColorMatrix type="saturate" values="1.25"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="42" stdDeviation="46" flood-color="#000000" flood-opacity="0.58"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="28" flood-color="#D9B07F" flood-opacity="0.2"/>
+    </filter>
+    <filter id="buttonGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#E8C596" flood-opacity="0.18"/>
+    </filter>
+    <clipPath id="mainClip">
+      <rect x="637" y="106" width="646" height="828" rx="30"/>
+    </clipPath>
+    <clipPath id="thumbClip">
+      <rect x="0" y="0" width="64" height="86" rx="12"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bgA)"/>
+  <image href="../../public/gallery/1648137894790.jpg" x="0" y="-260" width="1920" height="1600" preserveAspectRatio="xMidYMid slice" opacity="0.22" filter="url(#blurBg)"/>
+  <rect width="1920" height="1080" fill="#07060B" opacity="0.55"/>
+  <rect width="1920" height="1080" fill="url(#ember)"/>
+  <path d="M245 130C512 52 695 70 867 114C1068 166 1222 164 1467 91" stroke="#F4D7A9" stroke-opacity="0.13" stroke-width="1.2"/>
+  <path d="M118 912C368 802 609 807 846 877C1100 951 1294 986 1714 837" stroke="#A9D8FF" stroke-opacity="0.1" stroke-width="1.2"/>
+
+  <g opacity="0.95">
+    <text x="74" y="84" fill="#F9EAD8" font-family="Georgia, 'Times New Roman', serif" font-size="26" letter-spacing="0.12em">VIEWING ROOM</text>
+    <text x="74" y="123" fill="#FFFFFF" fill-opacity="0.44" font-family="'Microsoft YaHei', sans-serif" font-size="14" letter-spacing="0.18em">沉浸式图片灯箱 / Cinema mode</text>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="620" y="89" width="680" height="862" rx="44" fill="url(#glass)" stroke="#FFFFFF" stroke-opacity="0.18"/>
+    <rect x="637" y="106" width="646" height="828" rx="30" fill="#151019"/>
+    <image href="../../public/gallery/1648137894790.jpg" x="637" y="106" width="646" height="828" preserveAspectRatio="xMidYMid slice" clip-path="url(#mainClip)"/>
+    <rect x="637" y="106" width="646" height="828" rx="30" stroke="#F5DAB4" stroke-opacity="0.32" stroke-width="1.4"/>
+    <rect x="637" y="106" width="646" height="828" rx="30" fill="url(#glass)" opacity="0.08"/>
+  </g>
+
+  <g transform="translate(1380 181)">
+    <rect width="318" height="164" rx="28" fill="#FFFFFF" fill-opacity="0.055" stroke="#FFFFFF" stroke-opacity="0.13"/>
+    <text x="28" y="42" fill="#FBE8C9" font-family="Georgia, 'Times New Roman', serif" font-size="21" letter-spacing="0.1em">Scene 03</text>
+    <text x="28" y="77" fill="#FFFFFF" fill-opacity="0.72" font-family="'Microsoft YaHei', sans-serif" font-size="16">课室、四月、青绿色黑板</text>
+    <text x="28" y="111" fill="#FFFFFF" fill-opacity="0.36" font-family="'Microsoft YaHei', sans-serif" font-size="13">用小块信息替代空荡荡的背景，灯箱会更像作品展示。</text>
+  </g>
+
+  <g transform="translate(1426 696)">
+    <text x="0" y="0" fill="#FFFFFF" fill-opacity="0.34" font-family="'Microsoft YaHei', sans-serif" font-size="13" letter-spacing="0.2em">COLLECTION</text>
+    <text x="0" y="47" fill="#FDE5BE" font-family="Georgia, 'Times New Roman', serif" font-size="52">03</text>
+    <text x="74" y="45" fill="#FFFFFF" fill-opacity="0.42" font-family="Georgia, 'Times New Roman', serif" font-size="28">/ 128</text>
+  </g>
+
+  <g transform="translate(708 980)">
+    <rect x="-18" y="-18" width="504" height="72" rx="24" fill="#05050A" fill-opacity="0.44" stroke="#FFFFFF" stroke-opacity="0.09"/>
+    <g transform="translate(0 0)" clip-path="url(#thumbClip)"><image href="../../public/gallery/1648137658919.jpg" width="64" height="86" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(82 0)" clip-path="url(#thumbClip)"><image href="../../public/gallery/1648137770487.jpg" width="64" height="86" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(164 0)" clip-path="url(#thumbClip)"><image href="../../public/gallery/1648137894790.jpg" width="64" height="86" preserveAspectRatio="xMidYMid slice"/></g>
+    <rect x="160" y="-4" width="72" height="94" rx="16" stroke="#F7D19C" stroke-width="2"/>
+    <g transform="translate(246 0)" clip-path="url(#thumbClip)"><image href="../../public/gallery/1648138153799.jpg" width="64" height="86" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(328 0)" clip-path="url(#thumbClip)"><image href="../../public/gallery/1648138372413.jpg" width="64" height="86" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(410 0)" clip-path="url(#thumbClip)"><image href="../../public/gallery/1648138507557.png" width="64" height="86" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+
+  <g filter="url(#buttonGlow)">
+    <circle cx="76" cy="540" r="34" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.16"/>
+    <path d="M84 520L64 540L84 560" stroke="#FBE5C5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1844" cy="540" r="34" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.16"/>
+    <path d="M1836 520L1856 540L1836 560" stroke="#FBE5C5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1854" cy="58" r="28" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.16"/>
+    <path d="M1844 48L1864 68M1864 48L1844 68" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,90 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="night" x1="243" y1="16" x2="1561" y2="1112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#182231"/>
+      <stop offset="0.48" stop-color="#0E111B"/>
+      <stop offset="1" stop-color="#05060B"/>
+    </linearGradient>
+    <radialGradient id="cyanGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(536 250) rotate(58) scale(560 766)">
+      <stop stop-color="#7CE3FF" stop-opacity="0.23"/>
+      <stop offset="1" stop-color="#7CE3FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="roseGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1356 814) rotate(146) scale(616 588)">
+      <stop stop-color="#FFAB8A" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFAB8A" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="dreamBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="24"/>
+      <feColorMatrix type="saturate" values="1.2"/>
+    </filter>
+    <filter id="photoShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="42" stdDeviation="36" flood-color="#000000" flood-opacity="0.55"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="25" flood-color="#6DEBFF" flood-opacity="0.12"/>
+    </filter>
+    <clipPath id="photoClip">
+      <rect x="634" y="119" width="650" height="820" rx="18"/>
+    </clipPath>
+    <clipPath id="stripClip">
+      <rect x="0" y="0" width="96" height="128" rx="10"/>
+    </clipPath>
+    <pattern id="dots" width="42" height="42" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1" fill="#FFFFFF" opacity="0.08"/>
+    </pattern>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#night)"/>
+  <image href="../../public/gallery/1648138507557.png" x="-130" y="-220" width="2160" height="1510" preserveAspectRatio="xMidYMid slice" opacity="0.18" filter="url(#dreamBlur)"/>
+  <rect width="1920" height="1080" fill="#06070D" opacity="0.52"/>
+  <rect width="1920" height="1080" fill="url(#cyanGlow)"/>
+  <rect width="1920" height="1080" fill="url(#roseGlow)"/>
+  <rect width="1920" height="1080" fill="url(#dots)"/>
+
+  <g transform="translate(88 86)">
+    <text x="0" y="0" fill="#DDF8FF" font-family="Georgia, 'Times New Roman', serif" font-size="30" letter-spacing="0.16em">MEMORY FRAME</text>
+    <text x="0" y="38" fill="#FFFFFF" fill-opacity="0.48" font-family="'Microsoft YaHei', sans-serif" font-size="14" letter-spacing="0.18em">胶片记忆式预览 / Emotional film lightbox</text>
+  </g>
+
+  <g transform="translate(186 228) rotate(-5)" opacity="0.9">
+    <rect x="-20" y="-42" width="142" height="568" rx="24" fill="#0A0C12" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <g transform="translate(3 0)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648137658919.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(3 148)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648137770487.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(3 296)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648138507557.png" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(3 444)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648138372413.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+
+  <g transform="translate(1518 233) rotate(5)" opacity="0.72">
+    <rect x="-20" y="-42" width="142" height="568" rx="24" fill="#0A0C12" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <g transform="translate(3 0)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648138153799.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(3 148)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648138782891.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(3 296)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648139287731.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+    <g transform="translate(3 444)" clip-path="url(#stripClip)"><image href="../../public/gallery/1648273449357.jpg" width="96" height="128" preserveAspectRatio="xMidYMid slice"/></g>
+  </g>
+
+  <g filter="url(#photoShadow)">
+    <rect x="598" y="82" width="724" height="906" rx="34" fill="#F8F1E7"/>
+    <rect x="616" y="100" width="688" height="870" rx="24" fill="#11151D"/>
+    <image href="../../public/gallery/1648138507557.png" x="634" y="119" width="650" height="820" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>
+    <rect x="634" y="119" width="650" height="820" rx="18" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
+  </g>
+
+  <g transform="translate(1340 650)">
+    <rect width="330" height="168" rx="28" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <text x="30" y="46" fill="#DDF8FF" font-family="Georgia, 'Times New Roman', serif" font-size="22" letter-spacing="0.12em">Frame 03</text>
+    <text x="30" y="84" fill="#FFFFFF" fill-opacity="0.68" font-family="'Microsoft YaHei', sans-serif" font-size="16">更适合个人博客：像翻相册，而不是弹广告。</text>
+    <text x="30" y="122" fill="#FFFFFF" fill-opacity="0.34" font-family="'Microsoft YaHei', sans-serif" font-size="13">可加键盘提示、下载、喜欢、原图按钮。</text>
+  </g>
+
+  <g transform="translate(760 1004)">
+    <rect width="400" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.14"/>
+    <rect width="146" height="6" rx="3" fill="#8EEBFF"/>
+  </g>
+
+  <g>
+    <circle cx="76" cy="540" r="34" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.13"/>
+    <path d="M84 520L64 540L84 560" stroke="#CFF7FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1844" cy="540" r="34" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.13"/>
+    <path d="M1836 520L1856 540L1836 560" stroke="#CFF7FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1854" cy="58" r="28" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.13"/>
+    <path d="M1844 48L1864 68M1864 48L1844 68" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+</svg>
