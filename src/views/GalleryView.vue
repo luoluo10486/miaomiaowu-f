@@ -65,7 +65,7 @@ const allGalleryImages = [
   ...officialGalleryImages
 ];
 
-const DISPLAY_IMAGE_COUNT = 220;
+const DISPLAY_IMAGE_COUNT = 160;
 const GALLERY_SAMPLE_STORAGE_KEY = "gallery_bodhi_sample_v1";
 const GALLERY_REFRESH_MODE_STORAGE_KEY = "gallery_bodhi_refresh_mode";
 
@@ -128,6 +128,12 @@ const allGalleryDetails = {
 /* ── State ── */
 const isReady = ref(false);
 const entranceOpacity = ref(0);
+const galleryPhase = ref("loading");
+const galleryLoadProgress = ref(0);
+const revealRunId = ref(0);
+const sceneImagesMounted = ref(false);
+const loaderVariantKey = ref("rose-orbit");
+const loaderElapsedMs = ref(0);
 const lightboxIndex = ref(-1);
 const lightboxVisible = ref(false);
 const cursorX = ref(-999);
@@ -143,6 +149,7 @@ const lightboxCardRef = ref(null);
 const lightboxSettled = ref(false);
 const lightboxMeasureMode = ref(false);
 const lightboxFlight = ref(null);
+const imageAspects = ref({});
 let lastMouseX = 0;
 let lastMouseY = 0;
 let animId = null;
@@ -153,14 +160,149 @@ let lightboxRevealTimer = 0;
 let lightboxFlightCleanupTimer = 0;
 let lightboxFlightFrameA = 0;
 let lightboxFlightFrameB = 0;
+let galleryRevealTimer = 0;
+let loaderAnimId = 0;
+let gallerySequenceToken = 0;
 
 const LIGHTBOX_CLOSE_DURATION = 420;
-const LIGHTBOX_FLIGHT_DURATION = 920;
-const LIGHTBOX_REVEAL_DELAY = 360;
+const LIGHTBOX_FLIGHT_DURATION = 640;
+const LIGHTBOX_REVEAL_DELAY = 110;
+const GALLERY_LOADER_MIN_DURATION = 920;
+
+const GALLERY_LOADER_VARIANTS = [
+  {
+    key: "rose-orbit",
+    label: "Rose Orbit",
+    rotate: true,
+    particleCount: 52,
+    trailSpan: 0.36,
+    durationMs: 4200,
+    rotationMs: 24000,
+    strokeWidth: 3.2,
+    point(progress, breath) {
+      const t = progress * Math.PI * 2;
+      const petals = 5;
+      const r = 14 + Math.cos(petals * t) * (8 + breath * 4);
+      return {
+        x: 50 + Math.cos(t) * r,
+        y: 50 + Math.sin(t) * r
+      };
+    }
+  },
+  {
+    key: "lissajous-drift",
+    label: "Lissajous Drift",
+    rotate: false,
+    particleCount: 46,
+    trailSpan: 0.34,
+    durationMs: 5200,
+    rotationMs: 26000,
+    strokeWidth: 3,
+    point(progress, breath) {
+      const t = progress * Math.PI * 2;
+      const amp = 18 + breath * 6;
+      return {
+        x: 50 + Math.sin(3 * t + Math.PI / 2) * amp,
+        y: 50 + Math.sin(4 * t) * amp * 0.82
+      };
+    }
+  },
+  {
+    key: "hypotrochoid-bloom",
+    label: "Hypotrochoid Bloom",
+    rotate: true,
+    particleCount: 56,
+    trailSpan: 0.38,
+    durationMs: 4800,
+    rotationMs: 30000,
+    strokeWidth: 3.1,
+    point(progress, breath) {
+      const t = progress * Math.PI * 2;
+      const R = 18 + breath * 2.4;
+      const r = 6;
+      const d = 11 + breath * 4.8;
+      const k = (R - r) / r;
+      const x = (R - r) * Math.cos(t) + d * Math.cos(k * t);
+      const y = (R - r) * Math.sin(t) - d * Math.sin(k * t);
+      return {
+        x: 50 + x * 0.9,
+        y: 50 + y * 0.9
+      };
+    }
+  },
+  {
+    key: "cardioid-wave",
+    label: "Cardioid Wave",
+    rotate: true,
+    particleCount: 48,
+    trailSpan: 0.32,
+    durationMs: 4400,
+    rotationMs: 22000,
+    strokeWidth: 3.15,
+    point(progress, breath) {
+      const t = progress * Math.PI * 2;
+      const a = 10 + breath * 3.5;
+      const r = a * (1 - Math.cos(t));
+      return {
+        x: 50 + Math.cos(t) * r * 1.16,
+        y: 50 + Math.sin(t) * r * 1.16
+      };
+    }
+  }
+];
 
 const activeFilename = computed(() => {
   if (lightboxIndex.value < 0) return "";
   return galleryImages.value[lightboxIndex.value];
+});
+
+const activeLoaderVariant = computed(() => {
+  return GALLERY_LOADER_VARIANTS.find((variant) => variant.key === loaderVariantKey.value) || GALLERY_LOADER_VARIANTS[0];
+});
+
+const galleryLoadPercent = computed(() => {
+  return Math.round(galleryLoadProgress.value * 100);
+});
+
+const galleryPhaseClasses = computed(() => ({
+  "is-loading": galleryPhase.value === "loading",
+  "is-revealing": galleryPhase.value === "revealing",
+  "is-ready": galleryPhase.value === "ready"
+}));
+
+const loaderPathData = computed(() => {
+  const variant = activeLoaderVariant.value;
+  const breath = getLoaderBreath(loaderElapsedMs.value, variant.durationMs);
+  return buildLoaderPath(variant, breath);
+});
+
+const loaderParticles = computed(() => {
+  const variant = activeLoaderVariant.value;
+  const progress = normalizeUnitProgress(loaderElapsedMs.value / variant.durationMs);
+  const breath = getLoaderBreath(loaderElapsedMs.value, variant.durationMs);
+
+  return Array.from({ length: variant.particleCount }, (_, index) => {
+    const trailOffset = index / Math.max(variant.particleCount - 1, 1);
+    const point = variant.point(
+      normalizeUnitProgress(progress - trailOffset * variant.trailSpan),
+      breath
+    );
+    const fade = Math.pow(1 - trailOffset, 0.58);
+
+    return {
+      cx: point.x.toFixed(2),
+      cy: point.y.toFixed(2),
+      r: (1 + fade * 2.6).toFixed(2),
+      opacity: (0.08 + fade * 0.92).toFixed(3)
+    };
+  });
+});
+
+const loaderGroupTransform = computed(() => {
+  const variant = activeLoaderVariant.value;
+  if (!variant.rotate) return "";
+  const rotation = -normalizeUnitProgress(loaderElapsedMs.value / variant.rotationMs) * 360;
+  return `rotate(${rotation.toFixed(2)} 50 50)`;
 });
 
 const activeGalleryDetail = computed(() => {
@@ -490,18 +632,93 @@ function seededUnit(seed) {
   return value - Math.floor(value);
 }
 
+function normalizeUnitProgress(progress) {
+  return ((progress % 1) + 1) % 1;
+}
+
+function getLoaderBreath(elapsed, durationMs) {
+  const angle = normalizeUnitProgress(elapsed / Math.max(durationMs, 1)) * Math.PI * 2;
+  return 0.5 + (Math.sin(angle * 1.6 - 0.45) + 1) * 0.25;
+}
+
+function buildLoaderPath(variant, breath, steps = 320) {
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    const point = variant.point(index / steps, breath);
+    return `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+  }).join(" ");
+}
+
+function getStoredImageAspect(filename, fallbackSeed) {
+  const measuredAspect = imageAspects.value[filename];
+  if (measuredAspect) return measuredAspect;
+
+  const r = seededUnit(fallbackSeed);
+  if (r > 0.76) return 16 / 10;
+  if (r > 0.54) return 4 / 3;
+  if (r > 0.3) return 1;
+  return 3 / 4;
+}
+
+const basePaperItems = computed(() => {
+  const width = viewportWidth.value || 1600;
+  const height = viewportHeight.value || 900;
+  const isCompact = width < 760;
+  const base = isCompact
+    ? clampNumber(width / 2.8, 122, 170)
+    : clampNumber(width / 7.4, 230, 292);
+  const bleed = base * 1.85;
+  const stepX = base * 0.42;
+  const stepY = base * 0.34;
+  const columnCount = Math.ceil((width + bleed * 2) / stepX) + 1;
+  const rowCount = Math.ceil((height + bleed * 2) / stepY) + 1;
+  const papers = [];
+
+  for (let layer = 0; layer < 2; layer++) {
+    for (let row = 0; row < rowCount; row++) {
+      for (let column = 0; column < columnCount; column++) {
+        const index = layer * rowCount * columnCount + row * columnCount + column;
+        const r1 = seededUnit(index + 101.11);
+        const r2 = seededUnit(index + 137.43);
+        const r3 = seededUnit(index + 173.89);
+        const layerOffsetX = layer ? stepX * 0.5 : 0;
+        const layerOffsetY = layer ? stepY * 0.52 : 0;
+        const x = -width / 2 - bleed + column * stepX + layerOffsetX + (r2 - 0.5) * base * 0.2;
+        const y = -height / 2 - bleed + row * stepY + layerOffsetY + (r3 - 0.5) * base * 0.18;
+        papers.push({
+          id: `base-${layer}-${row}-${column}`,
+          x,
+          y,
+          width: base * (0.96 + r1 * 0.22),
+          height: base * (0.88 + r2 * 0.26),
+          rotate: (r3 - 0.5) * 8,
+          zIndex: index
+        });
+      }
+    }
+  }
+
+  return papers;
+});
+
 const photoWallItems = computed(() => {
   const width = viewportWidth.value || 1600;
   const height = viewportHeight.value || 900;
   const isCompact = width < 760;
   const paperBase = isCompact
-    ? clampNumber(width / 4.1, 82, 122)
-    : clampNumber(width / 11.4, 132, 184);
-  const stepX = paperBase * 0.72;
-  const stepY = paperBase * 0.56;
+    ? clampNumber(width / 3.35, 98, 148)
+    : clampNumber(width / 9.6, 168, 224);
   const bleed = paperBase * 1.35;
-  const columnCount = Math.ceil((width + bleed * 2) / stepX) + 1;
-  const rowCount = Math.ceil((height + bleed * 2) / stepY) + 1;
+  const targetCount = isCompact
+    ? clampNumber(Math.round((width * height) / 6200), 104, 168)
+    : clampNumber(Math.round((width * height) / 6200), 210, 320);
+  const columnCount = clampNumber(
+    Math.round(Math.sqrt(targetCount * (width / height))),
+    isCompact ? 9 : 16,
+    isCompact ? 14 : 30
+  );
+  const rowCount = Math.ceil(targetCount / columnCount);
+  const stepX = (width + bleed * 2) / Math.max(columnCount - 1, 1);
+  const stepY = (height + bleed * 2) / Math.max(rowCount - 1, 1);
   const slots = [];
 
   for (let row = 0; row < rowCount; row++) {
@@ -526,27 +743,20 @@ const photoWallItems = computed(() => {
     const r5 = seededUnit(index + 6.21);
     const r6 = seededUnit(index + 8.67);
     const r7 = seededUnit(index + 11.23);
-    const variant = r1 > 0.82 ? "wide" : r2 > 0.7 ? "tall" : r3 > 0.46 ? "square" : "paper";
-    const cardWidth = variant === "wide"
-      ? paperBase * (1.26 + r4 * 0.22)
-      : variant === "tall"
-        ? paperBase * (0.84 + r4 * 0.14)
-        : variant === "square"
-          ? paperBase * (0.9 + r4 * 0.14)
-          : paperBase * (0.96 + r4 * 0.18);
-    const cardHeight = variant === "wide"
-      ? paperBase * (0.82 + r5 * 0.16)
-      : variant === "tall"
-        ? paperBase * (1.3 + r5 * 0.3)
-        : variant === "square"
-          ? cardWidth * (0.92 + r5 * 0.12)
-          : paperBase * (1.08 + r5 * 0.2);
+    const imageAspect = clampNumber(getStoredImageAspect(filename, index + 37.9), 0.52, 1.95);
+    const matte = clampNumber(paperBase * (0.052 + r5 * 0.016), 7, 13);
+    const mediaLongSide = paperBase * (0.92 + r4 * 0.26);
+    const mediaWidth = imageAspect >= 1 ? mediaLongSide : mediaLongSide * imageAspect;
+    const mediaHeight = imageAspect >= 1 ? mediaLongSide / imageAspect : mediaLongSide;
+    const cardWidth = mediaWidth + matte * 2;
+    const cardHeight = mediaHeight + matte * 2;
     const gridX = -width / 2 - bleed + slot.column * stepX;
     const gridY = -height / 2 - bleed + slot.row * stepY;
-    const x = gridX + (r2 - 0.5) * paperBase * 0.58;
-    const y = gridY + (r3 - 0.5) * paperBase * 0.48;
+    const x = gridX + (r2 - 0.5) * paperBase * 0.78;
+    const y = gridY + (r3 - 0.5) * paperBase * 0.66;
     const pasteX = (seededUnit(index + 19.17) - 0.5) * width * 0.44;
     const pasteY = (seededUnit(index + 23.41) - 0.5) * height * 0.44;
+    const pasteRotate = (r2 - 0.5) * 22;
 
     return {
       filename,
@@ -557,12 +767,17 @@ const photoWallItems = computed(() => {
       width: cardWidth,
       height: cardHeight,
       rotate: (r1 - 0.5) * 10,
-      matte: clampNumber(cardWidth * (0.055 + r5 * 0.018), 7, 13),
+      matte,
       glow: 0.08 + r1 * 0.14,
-      zIndex: 10 + index,
+      zIndex: 1000 + index,
       pasteX,
       pasteY,
-      pasteRotate: (r2 - 0.5) * 22,
+      pasteRotate,
+      driftStartX: pasteX * 0.74,
+      driftStartY: pasteY - 220,
+      driftStartRotate: pasteRotate * 0.86,
+      driftMidX: pasteX * 0.22,
+      driftMidRotate: pasteRotate * 0.22,
       pasteDelay: index * 0.012 + r7 * 0.28,
       pasteDuration: 0.28 + r6 * 0.14,
       angle: (r1 - 0.5) * 8,
@@ -600,15 +815,29 @@ function cancelLightboxMotion() {
   }
 }
 
+function cancelGalleryMotion() {
+  if (galleryRevealTimer) {
+    window.clearTimeout(galleryRevealTimer);
+    galleryRevealTimer = 0;
+  }
+  if (loaderAnimId) {
+    cancelAnimationFrame(loaderAnimId);
+    loaderAnimId = 0;
+  }
+}
+
 function createLightboxFlightStyle(sourceRect, targetRect, item) {
   const sourceCenterX = sourceRect.left + sourceRect.width / 2;
   const sourceCenterY = sourceRect.top + sourceRect.height / 2;
   const offsetX = sourceCenterX / window.innerWidth - 0.5;
   const offsetY = sourceCenterY / window.innerHeight - 0.5;
   const rotateZ = clampNumber((item?.sway || 0) * 0.9 + offsetX * 6 - offsetY * 3, -10, 10);
-  const startRadius = clampNumber(sourceRect.width * 0.16, 12, 28);
-  const endRadius = clampNumber(targetRect.width * 0.03, 16, 26);
-  const frameInset = clampNumber(targetRect.width * 0.028, 10, 24);
+  const rotateX = clampNumber(10 + Math.abs(offsetY) * 18 + Math.abs(item?.tilt || 0) * 0.7, 10, 24);
+  const rotateY = clampNumber(offsetX * 22 + (item?.angle || 0) * 0.5, -18, 18);
+  const startRadius = clampNumber(sourceRect.width * 0.012, 2, 5);
+  const endRadius = clampNumber(targetRect.width * 0.012, 6, 12);
+  const frameInset = clampNumber(targetRect.width * 0.018, 10, 18);
+  const flightPadding = clampNumber(sourceRect.width * 0.055, 8, 18);
 
   return {
     left: `${sourceRect.left}px`,
@@ -619,10 +848,13 @@ function createLightboxFlightStyle(sourceRect, targetRect, item) {
     "--flight-dy": `${targetRect.top - sourceRect.top}px`,
     "--flight-scale-x": `${targetRect.width / sourceRect.width}`,
     "--flight-scale-y": `${targetRect.height / sourceRect.height}`,
+    "--flight-rotate-x": `${rotateX.toFixed(2)}deg`,
+    "--flight-rotate-y": `${rotateY.toFixed(2)}deg`,
     "--flight-rotate-z": `${rotateZ.toFixed(2)}deg`,
     "--flight-radius-start": `${startRadius.toFixed(2)}px`,
     "--flight-radius-end": `${endRadius.toFixed(2)}px`,
-    "--flight-frame-inset": `${frameInset.toFixed(2)}px`
+    "--flight-frame-inset": `${frameInset.toFixed(2)}px`,
+    "--flight-padding": `${flightPadding.toFixed(2)}px`
   };
 }
 
@@ -714,6 +946,7 @@ function toggleRefreshMode() {
   if (refreshOnReload.value) {
     galleryImages.value = createGallerySample();
     if (lightboxIndex.value >= galleryImages.value.length) lightboxIndex.value = galleryImages.value.length - 1;
+    beginGallerySequence();
   }
 }
 
@@ -854,7 +1087,142 @@ function handleKeydown(e) {
   }
 }
 
+function handleImgLoad(filename, e) {
+  const image = e.target;
+  const width = image?.naturalWidth || 0;
+  const height = image?.naturalHeight || 0;
+  if (!width || !height) return;
+
+  const aspect = clampNumber(width / height, 0.52, 1.95);
+  if (Math.abs((imageAspects.value[filename] || 0) - aspect) < 0.01) return;
+  imageAspects.value = {
+    ...imageAspects.value,
+    [filename]: aspect
+  };
+}
+
 function handleImgError(e) { e.target.style.display = "none"; }
+
+async function preloadGalleryImages(filenames, sequenceId) {
+  let loaded = 0;
+  const total = Math.max(filenames.length, 1);
+
+  const tasks = filenames.map((filename) => new Promise((resolve) => {
+    const image = new Image();
+    const src = getGalleryImageUrl(filename);
+    image.decoding = "async";
+    image.loading = "eager";
+
+    const finalize = () => {
+      loaded += 1;
+      if (sequenceId === gallerySequenceToken) {
+        galleryLoadProgress.value = loaded / total;
+      }
+      resolve();
+    };
+
+    image.onload = async () => {
+      const width = image.naturalWidth || 0;
+      const height = image.naturalHeight || 0;
+      if (width && height) {
+        const aspect = clampNumber(width / height, 0.52, 1.95);
+        imageAspects.value = {
+          ...imageAspects.value,
+          [filename]: aspect
+        };
+      }
+
+      try {
+        if (typeof image.decode === "function") {
+          await image.decode();
+        }
+      } catch {
+        // Ignore decode failures and continue to reveal after load.
+      }
+
+      finalize();
+    };
+
+    image.onerror = finalize;
+    image.src = src;
+
+    if (image.complete) {
+      image.onload?.();
+    }
+  }));
+
+  await Promise.all(tasks);
+}
+
+function animateGalleryLoader(startedAt, sequenceId) {
+  const tick = (now) => {
+    if (sequenceId !== gallerySequenceToken || galleryPhase.value !== "loading") {
+      loaderAnimId = 0;
+      return;
+    }
+
+    loaderElapsedMs.value = now - startedAt;
+    loaderAnimId = requestAnimationFrame(tick);
+  };
+
+  cancelGalleryMotion();
+  loaderAnimId = requestAnimationFrame(tick);
+}
+
+async function startGalleryReveal(sequenceId) {
+  if (sequenceId !== gallerySequenceToken) return;
+
+  cancelGalleryMotion();
+  galleryPhase.value = "revealing";
+  loaderElapsedMs.value = 0;
+  entranceOpacity.value = 0;
+  isReady.value = false;
+  revealRunId.value += 1;
+  sceneImagesMounted.value = false;
+
+  await nextTick();
+  sceneImagesMounted.value = true;
+  await nextTick();
+
+  entranceOpacity.value = 1;
+  isReady.value = true;
+
+  const revealDuration = photoWallItems.value.reduce((maxDelay, item) => {
+    return Math.max(maxDelay, item.pasteDelay + item.pasteDuration);
+  }, 0);
+
+  galleryRevealTimer = window.setTimeout(() => {
+    if (sequenceId !== gallerySequenceToken) return;
+    galleryPhase.value = "ready";
+  }, Math.ceil(revealDuration * 1000) + 180);
+}
+
+async function beginGallerySequence() {
+  const sequenceId = ++gallerySequenceToken;
+  const startedAt = performance.now();
+
+  cancelGalleryMotion();
+  galleryPhase.value = "loading";
+  galleryLoadProgress.value = 0;
+  entranceOpacity.value = 0;
+  isReady.value = false;
+  sceneImagesMounted.value = false;
+  loaderVariantKey.value = GALLERY_LOADER_VARIANTS[Math.floor(Math.random() * GALLERY_LOADER_VARIANTS.length)].key;
+  loaderElapsedMs.value = 0;
+
+  animateGalleryLoader(startedAt, sequenceId);
+
+  await preloadGalleryImages(galleryImages.value, sequenceId);
+  const elapsed = performance.now() - startedAt;
+  const waitMs = Math.max(0, GALLERY_LOADER_MIN_DURATION - elapsed);
+  if (waitMs) {
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, waitMs);
+    });
+  }
+
+  await startGalleryReveal(sequenceId);
+}
 
 /* ── Dreamy Canvas: stars + aurora + fireflies ── */
 function initCanvas() {
@@ -982,11 +1350,8 @@ onMounted(() => {
   window.addEventListener("keydown", handleKeydown);
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("resize", updateViewportSize);
-  setTimeout(() => {
-    isReady.value = true;
-    entranceOpacity.value = 1;
-    nextTick(() => { initCanvas(); });
-  }, 300);
+  initCanvas();
+  beginGallerySequence();
 });
 
 onBeforeUnmount(() => {
@@ -994,6 +1359,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointermove", onPointerMove);
   window.removeEventListener("resize", updateViewportSize);
   cancelLightboxMotion();
+  cancelGalleryMotion();
   if (animId) cancelAnimationFrame(animId);
   if (cleanupCanvas) cleanupCanvas();
   document.body.style.overflow = "";
@@ -1001,7 +1367,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="gallery-root" :class="{ 'is-ready': isReady }">
+  <div class="gallery-root" :class="galleryPhaseClasses">
     <!-- Dreamy canvas -->
     <canvas ref="canvasRef" class="dream-canvas"></canvas>
 
@@ -1013,6 +1379,41 @@ onBeforeUnmount(() => {
 
     <!-- Background layers -->
     <div class="bg-deep"></div>
+
+    <Transition name="gallery-loader-fade">
+      <div v-if="galleryPhase === 'loading'" class="gallery-loader">
+        <div class="gallery-loader__panel">
+          <p class="gallery-loader__eyebrow">Math Curve Loader</p>
+          <div class="gallery-loader__orbit">
+            <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
+              <g :transform="loaderGroupTransform">
+                <path
+                  class="gallery-loader__path"
+                  :d="loaderPathData"
+                />
+                <circle
+                  v-for="(particle, index) in loaderParticles"
+                  :key="`${loaderVariantKey}-${index}`"
+                  class="gallery-loader__particle"
+                  :cx="particle.cx"
+                  :cy="particle.cy"
+                  :r="particle.r"
+                  :opacity="particle.opacity"
+                />
+              </g>
+            </svg>
+          </div>
+          <div class="gallery-loader__meta">
+            <span>{{ activeLoaderVariant.label }}</span>
+            <span>{{ galleryLoadPercent }}%</span>
+          </div>
+          <div class="gallery-loader__progress">
+            <span :style="{ transform: `scaleX(${galleryLoadProgress})` }"></span>
+          </div>
+          <p class="gallery-loader__hint">正在整理图像与版式，准备一次完整贴墙。</p>
+        </div>
+      </div>
+    </Transition>
 
     <button
       class="sample-toggle"
@@ -1042,39 +1443,61 @@ onBeforeUnmount(() => {
         }"
       >
         <div class="photo-wall">
-          <div
-            v-for="item in photoWallItems"
-            :key="`${item.filename}-${item.instanceIndex}`"
-            class="photo-leaf"
-            :style="{
-              '--matte-padding': `${item.matte}px`,
-              '--glow-strength': item.glow,
-              '--x': `${item.x}px`,
-              '--y': `${item.y}px`,
-              '--rotate': `${item.rotate}deg`,
-              '--paste-x': `${item.pasteX}px`,
-              '--paste-y': `${item.pasteY}px`,
-              '--paste-rotate': `${item.pasteRotate}deg`,
-              '--paste-delay': `${item.pasteDelay}s`,
-              '--paste-duration': `${item.pasteDuration}s`,
-              width: `${item.width}px`,
-              height: `${item.height}px`,
-              zIndex: item.zIndex
-            }"
-            @click="openLightbox(item.globalIndex, $event, item)"
-          >
-            <div class="photo-leaf__paper">
-              <div class="photo-leaf__inner">
-                <img
-                  :src="getGalleryImageUrl(item.filename)"
-                  :alt="item.filename"
-                  loading="lazy"
-                  @error="handleImgError"
-                />
+          <template v-if="sceneImagesMounted">
+            <div
+              v-for="paper in basePaperItems"
+              :key="`${paper.id}-${revealRunId}`"
+              class="base-paper"
+              :style="{
+                '--x': `${paper.x}px`,
+                '--y': `${paper.y}px`,
+                '--rotate': `${paper.rotate}deg`,
+                width: `${paper.width}px`,
+                height: `${paper.height}px`,
+                zIndex: paper.zIndex
+              }"
+              aria-hidden="true"
+            ></div>
+            <div
+              v-for="item in photoWallItems"
+              :key="`${item.filename}-${item.instanceIndex}-${revealRunId}`"
+              class="photo-leaf"
+              :style="{
+                '--matte-padding': `${item.matte}px`,
+                '--glow-strength': item.glow,
+                '--x': `${item.x}px`,
+                '--y': `${item.y}px`,
+                '--rotate': `${item.rotate}deg`,
+                '--paste-x': `${item.pasteX}px`,
+                '--paste-y': `${item.pasteY}px`,
+                '--paste-rotate': `${item.pasteRotate}deg`,
+                '--drift-start-x': `${item.driftStartX}px`,
+                '--drift-start-y': `${item.driftStartY}px`,
+                '--drift-start-rotate': `${item.driftStartRotate}deg`,
+                '--drift-mid-x': `${item.driftMidX}px`,
+                '--drift-mid-rotate': `${item.driftMidRotate}deg`,
+                '--paste-delay': `${item.pasteDelay}s`,
+                '--paste-duration': `${item.pasteDuration}s`,
+                width: `${item.width}px`,
+                height: `${item.height}px`,
+                zIndex: item.zIndex
+              }"
+              @click="openLightbox(item.globalIndex, $event, item)"
+            >
+              <div class="photo-leaf__paper">
+                <div class="photo-leaf__inner">
+                  <img
+                    :src="getGalleryImageUrl(item.filename)"
+                    :alt="item.filename"
+                    loading="eager"
+                    @load="handleImgLoad(item.filename, $event)"
+                    @error="handleImgError"
+                  />
+                </div>
               </div>
+              <div class="photo-leaf__glint"></div>
             </div>
-            <div class="photo-leaf__glint"></div>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -1112,6 +1535,7 @@ onBeforeUnmount(() => {
           </button>
 
           <div class="lightbox__stage">
+            <div class="lightbox__halo" aria-hidden="true"></div>
             <button
               ref="lightboxCardRef"
               class="lightbox__card"
@@ -1125,6 +1549,7 @@ onBeforeUnmount(() => {
                 :alt="localizedGalleryDetail.title"
               />
             </button>
+            <div class="lightbox__shadow" aria-hidden="true"></div>
           </div>
 
           <aside class="lightbox__info">
@@ -2612,6 +3037,13 @@ onBeforeUnmount(() => {
   color: #596057;
 }
 
+.gallery-root.is-loading .sample-toggle,
+.gallery-root.is-loading .back-btn {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+
 .gallery-root::before,
 .gallery-root::after,
 .bg-deep,
@@ -2639,27 +3071,160 @@ onBeforeUnmount(() => {
   left: 50%;
   top: 50%;
   transform: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .photo-wall {
   transform: none;
 }
 
+.gallery-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 250, 232, 0.92), rgba(246, 243, 232, 0.94) 34%, rgba(232, 228, 213, 0.98) 100%);
+  backdrop-filter: blur(8px);
+}
+
+.gallery-loader__panel {
+  width: min(460px, calc(100vw - 40px));
+  padding: 34px 32px 30px;
+  border: 1px solid rgba(206, 199, 179, 0.88);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 252, 0.96), rgba(243, 238, 223, 0.94));
+  box-shadow:
+    0 28px 80px rgba(112, 103, 78, 0.16),
+    0 10px 24px rgba(112, 103, 78, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.gallery-loader__eyebrow {
+  margin: 0 0 12px;
+  color: rgba(144, 132, 96, 0.78);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.gallery-loader__orbit {
+  display: grid;
+  place-items: center;
+  width: min(240px, 52vw);
+  margin: 0 auto 18px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 248, 221, 0.84), rgba(247, 242, 224, 0.4) 42%, transparent 72%);
+}
+
+.gallery-loader__orbit svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: rgba(143, 156, 111, 0.92);
+}
+
+.gallery-loader__path {
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  opacity: 0.14;
+}
+
+.gallery-loader__particle {
+  fill: currentColor;
+}
+
+.gallery-loader__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 10px;
+  color: rgba(97, 101, 83, 0.82);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.gallery-loader__progress {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(199, 193, 175, 0.5);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+.gallery-loader__progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(154, 176, 117, 0.82), rgba(227, 198, 118, 0.92));
+  transform-origin: 0 50%;
+  transition: transform 0.22s ease;
+}
+
+.gallery-loader__hint {
+  margin: 14px 0 0;
+  color: rgba(108, 108, 96, 0.7);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.gallery-loader-fade-enter-active,
+.gallery-loader-fade-leave-active {
+  transition: opacity 0.65s ease, transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gallery-loader-fade-enter-from,
+.gallery-loader-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.base-paper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #fbfbfa, #eeeeec);
+  border: 1px solid rgba(206, 206, 202, 0.74);
+  box-shadow:
+    0 8px 14px rgba(70, 70, 64, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translate(var(--x), var(--y)) rotate(var(--rotate));
+  opacity: 0;
+  animation: basePaperFadeIn 0.9s ease calc(var(--paper-delay, 0s) + 0.12s) both;
+  pointer-events: none;
+}
+
 .photo-leaf {
   opacity: 0;
   transform: translate(var(--x), var(--y)) rotate(var(--rotate));
-  animation: photoPasteIn var(--paste-duration) cubic-bezier(0.19, 0.92, 0.22, 1) var(--paste-delay) both;
+  animation: photoDriftPasteIn var(--paste-duration) cubic-bezier(0.16, 1, 0.3, 1) var(--paste-delay) both;
 }
 
 .photo-leaf__paper {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: var(--matte-padding);
+  overflow: hidden;
   border-radius: 2px;
-  background: #f7f7f7;
-  border: 1px solid rgba(200, 200, 200, 0.95);
+  background: #f8f8f5;
+  border: 1px solid rgba(206, 206, 202, 0.9);
   box-shadow:
-    0 10px 16px rgba(80, 80, 80, 0.18),
-    0 2px 4px rgba(80, 80, 80, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+    0 9px 14px rgba(64, 64, 58, 0.18),
+    0 2px 3px rgba(64, 64, 58, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.82);
   backdrop-filter: none;
   transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
@@ -2671,31 +3236,35 @@ onBeforeUnmount(() => {
 }
 
 .photo-leaf__inner {
-  inset: var(--matte-padding);
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
   border-radius: 1px;
-  background: #ececec;
-  box-shadow: inset 0 0 0 1px rgba(210, 210, 210, 0.72);
+  background: #e9e9e6;
+  box-shadow: 0 0 0 1px rgba(216, 216, 211, 0.76);
 }
 
 .photo-leaf__inner::after {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 42%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 44%);
 }
 
 .photo-leaf__inner img {
+  display: block;
   filter: grayscale(0.06) brightness(1.03) saturate(0.9) contrast(0.96);
   transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 .photo-leaf:hover .photo-leaf__paper {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow:
-    0 14px 22px rgba(70, 70, 70, 0.22),
-    0 3px 6px rgba(70, 70, 70, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+    0 12px 19px rgba(64, 64, 58, 0.22),
+    0 2px 4px rgba(64, 64, 58, 0.13),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.86);
 }
 
 .photo-leaf:hover .photo-leaf__inner img {
-  transform: scale(1.025);
+  transform: none;
   filter: grayscale(0) brightness(1.05) saturate(0.96) contrast(0.98);
 }
 
@@ -2751,9 +3320,67 @@ onBeforeUnmount(() => {
   }
 }
 
+@keyframes basePaperFadeIn {
+  0% {
+    opacity: 0;
+    transform: translate(var(--x), calc(var(--y) + 16px)) rotate(var(--rotate)) scale(0.98);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes photoDriftPasteIn {
+  0% {
+    opacity: 0;
+    transform:
+      translate(calc(var(--x) + var(--drift-start-x)), calc(var(--y) + var(--drift-start-y)))
+      rotate(calc(var(--rotate) + var(--drift-start-rotate)))
+      scale(0.72);
+    filter: blur(12px) brightness(1.08) saturate(0.84);
+  }
+  38% {
+    opacity: 0.92;
+    transform:
+      translate(calc(var(--x) + var(--drift-mid-x)), calc(var(--y) - 26px))
+      rotate(calc(var(--rotate) + var(--drift-mid-rotate)))
+      scale(0.94);
+    filter: blur(4px) brightness(1.03) saturate(0.9);
+  }
+  74% {
+    opacity: 1;
+    transform:
+      translate(calc(var(--x) + 4px), calc(var(--y) - 6px))
+      rotate(calc(var(--rotate) + 0.8deg))
+      scale(1.012);
+    filter: blur(0) brightness(1.01) saturate(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1);
+    filter: blur(0) brightness(1) saturate(1);
+  }
+}
+
 @media (max-width: 768px) {
   .gallery-root {
     background-size: 30px 30px;
+  }
+
+  .gallery-loader {
+    padding: 16px;
+  }
+
+  .gallery-loader__panel {
+    padding: 26px 22px 22px;
+    border-radius: 22px;
+  }
+
+  .gallery-loader__orbit {
+    width: min(220px, 62vw);
   }
 
   .back-btn {
@@ -2768,5 +3395,291 @@ onBeforeUnmount(() => {
     min-width: 104px;
     padding: 10px 13px;
   }
+}
+
+/* Lightbox motion polish: expand as a paper card instead of a glowing rounded poster. */
+.lightbox {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 246, 205, 0.28), transparent 20%),
+    radial-gradient(circle at 18% 18%, rgba(169, 194, 143, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(242, 239, 226, 0.72), rgba(229, 224, 206, 0.86));
+}
+
+.lightbox__stage {
+  isolation: isolate;
+  transform: translateY(10px);
+  transition:
+    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.42s ease;
+}
+
+.lightbox.is-settled .lightbox__stage {
+  transform: translateY(0);
+}
+
+.lightbox__halo {
+  position: absolute;
+  inset: auto 10% 5% 10%;
+  height: clamp(140px, 24vw, 260px);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 240, 186, 0.5) 0%, rgba(255, 240, 186, 0.18) 34%, transparent 72%);
+  filter: blur(30px);
+  opacity: 0;
+  transform: translateY(28px) scale(0.72);
+  transition:
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.06s,
+    opacity 0.8s ease 0.06s;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.lightbox.is-settled .lightbox__halo {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.lightbox__card {
+  border-radius: 10px;
+  padding: clamp(14px, 1.55vw, 22px);
+  background:
+    linear-gradient(180deg, rgba(253, 251, 244, 0.98), rgba(241, 235, 217, 0.94));
+  border: 1px solid rgba(201, 191, 162, 0.84);
+  box-shadow:
+    0 26px 50px rgba(104, 96, 73, 0.22),
+    0 8px 18px rgba(104, 96, 73, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform:
+    perspective(1800px)
+    translateY(30px)
+    scale(0.94)
+    rotateX(11deg)
+    rotateZ(-1.35deg);
+  transform-origin: 50% 78%;
+  filter: blur(8px) saturate(0.92);
+  transition:
+    transform 0.88s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.42s ease,
+    filter 0.64s ease,
+    box-shadow 0.62s cubic-bezier(0.2, 1, 0.3, 1),
+    border-color 0.42s ease;
+}
+
+.lightbox.is-settled .lightbox__card {
+  transform:
+    perspective(1800px)
+    translateY(0)
+    scale(1)
+    rotateX(0deg)
+    rotateZ(0deg);
+  filter: blur(0) saturate(1);
+}
+
+.lightbox__card::before,
+.lightbox__card::after {
+  display: block;
+}
+
+.lightbox__card::before {
+  content: "";
+  position: absolute;
+  inset: clamp(12px, 1.35vw, 18px);
+  border: 1px solid rgba(207, 194, 160, 0.78);
+  border-radius: 4px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.lightbox__card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.56), transparent 24%),
+    linear-gradient(180deg, transparent 58%, rgba(173, 151, 87, 0.09) 100%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.lightbox__card img {
+  border-radius: 4px;
+  background: rgba(228, 223, 207, 0.9);
+  box-shadow: 0 10px 22px rgba(95, 87, 67, 0.12);
+  transform: scale(1.045);
+  transform-origin: 50% 50%;
+  opacity: 0.72;
+  filter: saturate(0.94) contrast(0.98);
+  transition:
+    transform 0.96s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.5s ease,
+    filter 0.7s ease;
+}
+
+.lightbox.is-settled .lightbox__card img {
+  transform: scale(1);
+  opacity: 1;
+  filter: saturate(1) contrast(1);
+}
+
+.lightbox__shadow {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -5%;
+  height: clamp(28px, 6vw, 54px);
+  background: radial-gradient(circle, rgba(85, 74, 46, 0.28) 0%, rgba(85, 74, 46, 0.08) 42%, transparent 75%);
+  filter: blur(20px);
+  opacity: 0;
+  transform: translateY(20px) scaleX(0.74);
+  transform-origin: 50% 50%;
+  transition:
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.02s,
+    opacity 0.8s ease 0.02s;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.lightbox.is-settled .lightbox__shadow {
+  opacity: 0.92;
+  transform: translateY(0) scaleX(1);
+}
+
+.lightbox__info {
+  position: relative;
+  padding: clamp(24px, 2.4vw, 34px) 0;
+  transform: translateX(28px) translateY(12px);
+  filter: blur(10px);
+  opacity: 0;
+  transition:
+    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1) 0.12s,
+    opacity 0.42s ease 0.12s,
+    filter 0.58s ease 0.12s;
+}
+
+.lightbox__info::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 10%;
+  width: 1px;
+  height: 72%;
+  background: linear-gradient(180deg, transparent, rgba(170, 155, 112, 0.68), transparent);
+  transform: scaleY(0.72);
+  transform-origin: 50% 0;
+  opacity: 0.32;
+  transition:
+    transform 0.76s cubic-bezier(0.16, 1, 0.3, 1) 0.18s,
+    opacity 0.46s ease 0.18s;
+}
+
+.lightbox.is-settled .lightbox__info::before {
+  transform: scaleY(1);
+  opacity: 0.7;
+}
+
+.lightbox__info > * {
+  transform: translateY(16px);
+  opacity: 0;
+  transition:
+    transform 0.62s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.38s ease;
+}
+
+.lightbox__info > *:nth-child(1) { transition-delay: 0.16s; }
+.lightbox__info > *:nth-child(2) { transition-delay: 0.22s; }
+.lightbox__info > *:nth-child(3) { transition-delay: 0.28s; }
+.lightbox__info > *:nth-child(4) { transition-delay: 0.34s; }
+.lightbox__info > *:nth-child(5) { transition-delay: 0.4s; }
+.lightbox__info > *:nth-child(6) { transition-delay: 0.46s; }
+
+.lightbox.is-settled .lightbox__info > * {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.lightbox-flight {
+  box-sizing: border-box;
+  padding: var(--flight-padding);
+  border-radius: var(--flight-radius-start);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(241, 235, 219, 0.92));
+  border: 1px solid rgba(212, 202, 172, 0.9);
+  box-shadow:
+    0 22px 42px rgba(98, 90, 69, 0.24),
+    0 8px 16px rgba(98, 90, 69, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  filter: saturate(0.96) brightness(1.02);
+  opacity: 0.98;
+  transition:
+    transform 0.82s cubic-bezier(0.18, 1, 0.24, 1),
+    border-radius 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.56s ease,
+    filter 0.56s ease,
+    opacity 0.34s ease;
+}
+
+.lightbox-flight.is-active {
+  border-radius: var(--flight-radius-end);
+  box-shadow:
+    0 42px 86px rgba(98, 90, 69, 0.18),
+    0 14px 34px rgba(98, 90, 69, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  filter: saturate(1.03) brightness(1.05);
+}
+
+.lightbox-flight img {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  object-fit: contain;
+  background: #ebe5d3;
+  box-shadow: 0 8px 18px rgba(95, 87, 67, 0.1);
+  transform: scale(1.018);
+}
+
+.lightbox-flight__veil,
+.lightbox-flight__frame,
+.lightbox-flight__dust {
+  display: block;
+}
+
+.lightbox-flight__veil {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.5), transparent 22%),
+    radial-gradient(circle at 50% 12%, rgba(255, 244, 198, 0.48), transparent 34%);
+  opacity: 0.78;
+  mix-blend-mode: screen;
+}
+
+.lightbox-flight__frame {
+  inset: var(--flight-frame-inset);
+  border: 1px solid rgba(205, 193, 160, 0.72);
+  border-radius: calc(var(--flight-radius-start) * 0.78);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  transition:
+    inset 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lightbox-flight.is-active .lightbox-flight__frame {
+  border-radius: calc(var(--flight-radius-end) - 6px);
+}
+
+.lightbox-flight__dust {
+  inset: -18%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 233, 164, 0.3) 0%, rgba(255, 233, 164, 0.08) 28%, transparent 60%),
+    radial-gradient(circle at 50% 60%, rgba(165, 184, 129, 0.16) 0%, transparent 56%);
+  filter: blur(18px);
+  opacity: 0.6;
+  transform: scale(0.86);
+  transition:
+    transform 0.82s cubic-bezier(0.18, 1, 0.24, 1),
+    opacity 0.66s ease;
+}
+
+.lightbox-flight.is-active .lightbox-flight__dust {
+  opacity: 0.3;
+  transform: scale(1.16);
 }
 </style>
