@@ -65,7 +65,7 @@ const allGalleryImages = [
   ...officialGalleryImages
 ];
 
-const DISPLAY_IMAGE_COUNT = 64;
+const DISPLAY_IMAGE_COUNT = 220;
 const GALLERY_SAMPLE_STORAGE_KEY = "gallery_bodhi_sample_v1";
 const GALLERY_REFRESH_MODE_STORAGE_KEY = "gallery_bodhi_refresh_mode";
 
@@ -134,9 +134,8 @@ const cursorX = ref(-999);
 const cursorY = ref(-999);
 const canvasRef = ref(null);
 const wallRef = ref(null);
-const rotationY = ref(-18);
-const rotationX = ref(12);
-const sceneScale = ref(0.84);
+const viewportWidth = ref(typeof window !== "undefined" ? window.innerWidth : 1600);
+const viewportHeight = ref(typeof window !== "undefined" ? window.innerHeight : 900);
 const isDragging = ref(false);
 const refreshOnReload = ref(readStorage(GALLERY_REFRESH_MODE_STORAGE_KEY) === "refresh");
 const activeTweetMeta = ref(null);
@@ -486,85 +485,91 @@ function localizeGalleryDetail(filename, detail) {
   };
 }
 
-const TREE_LAYER_DEFS = [
-  { radius: 110, y: -520, weight: 0.34, vine: 22, size: 0.7 },
-  { radius: 205, y: -470, weight: 0.48, vine: 28, size: 0.74 },
-  { radius: 315, y: -410, weight: 0.66, vine: 36, size: 0.78 },
-  { radius: 455, y: -342, weight: 0.88, vine: 45, size: 0.82 },
-  { radius: 610, y: -270, weight: 1.07, vine: 56, size: 0.88 },
-  { radius: 750, y: -190, weight: 1.19, vine: 70, size: 0.94 },
-  { radius: 865, y: -104, weight: 1.22, vine: 84, size: 1 },
-  { radius: 930, y: -14, weight: 1.14, vine: 98, size: 1.02 },
-  { radius: 900, y: 76, weight: 1.02, vine: 112, size: 0.98 },
-  { radius: 805, y: 160, weight: 0.84, vine: 126, size: 0.92 },
-  { radius: 655, y: 232, weight: 0.65, vine: 136, size: 0.86 },
-  { radius: 475, y: 290, weight: 0.46, vine: 126, size: 0.8 },
-  { radius: 300, y: 330, weight: 0.3, vine: 106, size: 0.74 },
-];
+function seededUnit(seed) {
+  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
+  return value - Math.floor(value);
+}
 
-const hangingLayers = computed(() => {
-  const total = galleryImages.value.length;
-  const result = [];
-  let idx = 0;
-  const layerCount = Math.min(TREE_LAYER_DEFS.length, Math.max(6, Math.ceil(total / 8)));
-  const start = Math.max(0, Math.floor((TREE_LAYER_DEFS.length - layerCount) / 2));
-  const layerDefs = TREE_LAYER_DEFS.slice(start, start + layerCount);
-  const totalWeight = layerDefs.reduce((sum, layer) => sum + layer.weight, 0);
+const photoWallItems = computed(() => {
+  const width = viewportWidth.value || 1600;
+  const height = viewportHeight.value || 900;
+  const isCompact = width < 760;
+  const paperBase = isCompact
+    ? clampNumber(width / 4.1, 82, 122)
+    : clampNumber(width / 11.4, 132, 184);
+  const stepX = paperBase * 0.72;
+  const stepY = paperBase * 0.56;
+  const bleed = paperBase * 1.35;
+  const columnCount = Math.ceil((width + bleed * 2) / stepX) + 1;
+  const rowCount = Math.ceil((height + bleed * 2) / stepY) + 1;
+  const slots = [];
 
-  for (let i = 0; i < layerDefs.length; i++) {
-    const layer = layerDefs[i];
-    const remainingLayers = layerDefs.length - i - 1;
-    const remainingImages = total - idx;
-    const expected = Math.round(total * (layer.weight / totalWeight));
-    const count = i === layerDefs.length - 1
-      ? remainingImages
-      : Math.min(Math.max(4, expected), Math.max(0, remainingImages - remainingLayers * 4));
-    if (count <= 0) break;
-    const items = [];
-    for (let j = 0; j < count; j++) {
-      const imageIndex = idx + j;
-      const seed = imageIndex * 12.9898 + i * 78.233;
-      const organic = Math.sin(seed) * 43758.5453;
-      const jitter = organic - Math.floor(organic);
-      const angle = (360 / count) * j + i * 19 + (j % 2) * 4 + (jitter - 0.5) * 9;
-      const verticalDrift = Math.sin(j * 1.61 + i * 0.73) * (12 + i * 1.5);
-      const depthDrift = Math.cos(j * 1.27 + i) * 28;
-      items.push({
-        filename: galleryImages.value[imageIndex],
-        globalIndex: imageIndex,
-        angle,
-        radius: layer.radius + depthDrift,
-        y: verticalDrift,
-        vine: layer.vine + (jitter - 0.5) * 28,
-        sway: Math.sin(j * 0.93 + i * 1.7) * 7,
-        tilt: -4 + Math.cos(j * 0.57 + i) * 8,
-        scale: layer.size * (0.9 + jitter * 0.22)
-      });
-    }
-    result.push({ radius: layer.radius, yOffset: layer.y, items });
-    idx += count;
-  }
-
-  if (idx < total && result.length) {
-    const lastLayer = result[result.length - 1];
-    const remaining = total - idx;
-    for (let offset = 0; offset < remaining; offset++) {
-      const imageIndex = idx + offset;
-      lastLayer.items.push({
-        filename: galleryImages.value[imageIndex],
-        globalIndex: imageIndex,
-        angle: (360 / remaining) * offset + 11,
-        radius: 260 + Math.sin(offset) * 24,
-        y: Math.cos(offset * 1.4) * 18,
-        vine: 102 + Math.sin(offset * 0.6) * 18,
-        sway: Math.sin(offset * 0.8) * 7,
-        tilt: Math.cos(offset * 0.4) * 7,
-        scale: 0.72
+  for (let row = 0; row < rowCount; row++) {
+    for (let column = 0; column < columnCount; column++) {
+      slots.push({
+        row,
+        column,
+        order: seededUnit(row * 97.13 + column * 31.71 + width * 0.003 + height * 0.005)
       });
     }
   }
 
-  return result;
+  slots.sort((a, b) => a.order - b.order);
+
+  return slots.map((slot, index) => {
+    const imageIndex = index % galleryImages.value.length;
+    const filename = galleryImages.value[imageIndex];
+    const r1 = seededUnit(index + 0.31);
+    const r2 = seededUnit(index + 1.17);
+    const r3 = seededUnit(index + 2.73);
+    const r4 = seededUnit(index + 4.11);
+    const r5 = seededUnit(index + 6.21);
+    const r6 = seededUnit(index + 8.67);
+    const r7 = seededUnit(index + 11.23);
+    const variant = r1 > 0.82 ? "wide" : r2 > 0.7 ? "tall" : r3 > 0.46 ? "square" : "paper";
+    const cardWidth = variant === "wide"
+      ? paperBase * (1.26 + r4 * 0.22)
+      : variant === "tall"
+        ? paperBase * (0.84 + r4 * 0.14)
+        : variant === "square"
+          ? paperBase * (0.9 + r4 * 0.14)
+          : paperBase * (0.96 + r4 * 0.18);
+    const cardHeight = variant === "wide"
+      ? paperBase * (0.82 + r5 * 0.16)
+      : variant === "tall"
+        ? paperBase * (1.3 + r5 * 0.3)
+        : variant === "square"
+          ? cardWidth * (0.92 + r5 * 0.12)
+          : paperBase * (1.08 + r5 * 0.2);
+    const gridX = -width / 2 - bleed + slot.column * stepX;
+    const gridY = -height / 2 - bleed + slot.row * stepY;
+    const x = gridX + (r2 - 0.5) * paperBase * 0.58;
+    const y = gridY + (r3 - 0.5) * paperBase * 0.48;
+    const pasteX = (seededUnit(index + 19.17) - 0.5) * width * 0.44;
+    const pasteY = (seededUnit(index + 23.41) - 0.5) * height * 0.44;
+
+    return {
+      filename,
+      globalIndex: imageIndex,
+      instanceIndex: index,
+      x,
+      y,
+      width: cardWidth,
+      height: cardHeight,
+      rotate: (r1 - 0.5) * 10,
+      matte: clampNumber(cardWidth * (0.055 + r5 * 0.018), 7, 13),
+      glow: 0.08 + r1 * 0.14,
+      zIndex: 10 + index,
+      pasteX,
+      pasteY,
+      pasteRotate: (r2 - 0.5) * 22,
+      pasteDelay: index * 0.012 + r7 * 0.28,
+      pasteDuration: 0.28 + r6 * 0.14,
+      angle: (r1 - 0.5) * 8,
+      sway: (r1 - 0.5) * 10,
+      tilt: (r4 - 0.5) * 6
+    };
+  });
 });
 
 /* ── Lightbox ── */
@@ -600,9 +605,7 @@ function createLightboxFlightStyle(sourceRect, targetRect, item) {
   const sourceCenterY = sourceRect.top + sourceRect.height / 2;
   const offsetX = sourceCenterX / window.innerWidth - 0.5;
   const offsetY = sourceCenterY / window.innerHeight - 0.5;
-  const rotateX = clampNumber(-offsetY * 24 - 8 + (item?.tilt || 0) * 0.45, -18, 18);
-  const rotateY = clampNumber(offsetX * -26 + Math.sin(((item?.angle || 0) * Math.PI) / 180) * 10, -20, 20);
-  const rotateZ = clampNumber((item?.sway || 0) * 1.3, -14, 14);
+  const rotateZ = clampNumber((item?.sway || 0) * 0.9 + offsetX * 6 - offsetY * 3, -10, 10);
   const startRadius = clampNumber(sourceRect.width * 0.16, 12, 28);
   const endRadius = clampNumber(targetRect.width * 0.03, 16, 26);
   const frameInset = clampNumber(targetRect.width * 0.028, 10, 24);
@@ -616,8 +619,6 @@ function createLightboxFlightStyle(sourceRect, targetRect, item) {
     "--flight-dy": `${targetRect.top - sourceRect.top}px`,
     "--flight-scale-x": `${targetRect.width / sourceRect.width}`,
     "--flight-scale-y": `${targetRect.height / sourceRect.height}`,
-    "--flight-rotate-x": `${rotateX.toFixed(2)}deg`,
-    "--flight-rotate-y": `${rotateY.toFixed(2)}deg`,
     "--flight-rotate-z": `${rotateZ.toFixed(2)}deg`,
     "--flight-radius-start": `${startRadius.toFixed(2)}px`,
     "--flight-radius-end": `${endRadius.toFixed(2)}px`,
@@ -661,7 +662,7 @@ async function runLightboxOpenFlight(sourceRect, item) {
 
 async function openLightbox(index, event, item) {
   cancelLightboxMotion();
-  const sourceNode = event?.currentTarget?.querySelector(".photo-leaf__inner") || event?.currentTarget;
+  const sourceNode = event?.currentTarget?.querySelector(".photo-leaf__paper") || event?.currentTarget;
   const sourceRect = sourceNode?.getBoundingClientRect?.();
 
   lightboxVisible.value = false;
@@ -835,28 +836,14 @@ function openAuthorLink() {
 }
 
 /* ── Drag rotation (no auto-rotate) ── */
-function onPointerDown(e) {
-  if (e.target.closest('.lightbox') || e.target.closest('.back-btn')) return;
-  isDragging.value = true;
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
-  e.preventDefault();
-}
-
 function onPointerMove(e) {
   cursorX.value = e.clientX;
   cursorY.value = e.clientY;
-  if (!isDragging.value) return;
-  rotationY.value += (e.clientX - lastMouseX) * 0.22;
-  rotationX.value = Math.max(-24, Math.min(34, rotationX.value - (e.clientY - lastMouseY) * 0.1));
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
 }
 
-function onPointerUp() { isDragging.value = false; }
-
-function onWheel(e) {
-  sceneScale.value = Math.max(0.58, Math.min(1.18, sceneScale.value - e.deltaY * 0.00055));
+function updateViewportSize() {
+  viewportWidth.value = window.innerWidth;
+  viewportHeight.value = window.innerHeight;
 }
 
 function handleKeydown(e) {
@@ -991,9 +978,10 @@ watch(activeFilename, () => {
 });
 
 onMounted(() => {
+  updateViewportSize();
   window.addEventListener("keydown", handleKeydown);
   window.addEventListener("pointermove", onPointerMove);
-  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("resize", updateViewportSize);
   setTimeout(() => {
     isReady.value = true;
     entranceOpacity.value = 1;
@@ -1004,7 +992,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
   window.removeEventListener("pointermove", onPointerMove);
-  window.removeEventListener("pointerup", onPointerUp);
+  window.removeEventListener("resize", updateViewportSize);
   cancelLightboxMotion();
   if (animId) cancelAnimationFrame(animId);
   if (cleanupCanvas) cleanupCanvas();
@@ -1045,52 +1033,45 @@ onBeforeUnmount(() => {
       <span>返回</span>
     </button>
 
-    <!-- 3D Viewport -->
-    <div ref="wallRef" class="wall-viewport" @pointerdown="onPointerDown" @wheel.prevent="onWheel">
+    <!-- Photo wall -->
+    <div ref="wallRef" class="wall-viewport">
       <div
         class="wall-scene"
         :style="{
-          transform: `scale(${sceneScale}) rotateX(${rotationX}deg) rotateY(${rotationY}deg)`,
           opacity: entranceOpacity
         }"
       >
-        <div class="tree-halo tree-halo--upper"></div>
-        <div class="tree-halo tree-halo--lower"></div>
-
-        <div class="trunk">
-          <div class="trunk__column trunk__column--front"></div>
-          <div class="trunk__column trunk__column--side"></div>
-          <div class="trunk__crown-line trunk__crown-line--one"></div>
-          <div class="trunk__crown-line trunk__crown-line--two"></div>
-          <div class="trunk__crown-line trunk__crown-line--three"></div>
-          <div class="trunk__glow"></div>
-        </div>
-
-        <!-- Photo rings forming the canopy -->
-        <div
-          v-for="(layer, layerIndex) in hangingLayers"
-          :key="layerIndex"
-          class="hanging-layer"
-          :style="{ transform: `translateY(${layer.yOffset}px)` }"
-        >
+        <div class="photo-wall">
           <div
-            v-for="item in layer.items"
-            :key="item.filename"
+            v-for="item in photoWallItems"
+            :key="`${item.filename}-${item.instanceIndex}`"
             class="photo-leaf"
             :style="{
-              '--vine-height': `${item.vine}px`,
-              transform: `rotateY(${item.angle}deg) translateZ(${item.radius}px) translateY(${item.y}px) rotateX(${item.tilt}deg) rotateZ(${item.sway}deg) scale(${item.scale})`
+              '--matte-padding': `${item.matte}px`,
+              '--glow-strength': item.glow,
+              '--x': `${item.x}px`,
+              '--y': `${item.y}px`,
+              '--rotate': `${item.rotate}deg`,
+              '--paste-x': `${item.pasteX}px`,
+              '--paste-y': `${item.pasteY}px`,
+              '--paste-rotate': `${item.pasteRotate}deg`,
+              '--paste-delay': `${item.pasteDelay}s`,
+              '--paste-duration': `${item.pasteDuration}s`,
+              width: `${item.width}px`,
+              height: `${item.height}px`,
+              zIndex: item.zIndex
             }"
             @click="openLightbox(item.globalIndex, $event, item)"
           >
-            <div class="photo-leaf__vine"></div>
-            <div class="photo-leaf__inner">
-              <img
-                :src="getGalleryImageUrl(item.filename)"
-                :alt="item.filename"
-                loading="lazy"
-                @error="handleImgError"
-              />
+            <div class="photo-leaf__paper">
+              <div class="photo-leaf__inner">
+                <img
+                  :src="getGalleryImageUrl(item.filename)"
+                  :alt="item.filename"
+                  loading="lazy"
+                  @error="handleImgError"
+                />
+              </div>
             </div>
             <div class="photo-leaf__glint"></div>
           </div>
@@ -2260,6 +2241,532 @@ onBeforeUnmount(() => {
   .trunk__column {
     height: 600px;
     top: -300px;
+  }
+}
+
+.wall-viewport {
+  perspective: 1780px;
+  perspective-origin: 50% 50%;
+}
+
+.wall-scene {
+  top: 52%;
+  transition: transform 0.12s ease-out, opacity 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.photo-wall {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+.photo-wall::before,
+.photo-wall::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.photo-wall::before {
+  left: -800px;
+  top: -560px;
+  width: 1600px;
+  height: 1120px;
+  border-radius: 44px;
+  background:
+    linear-gradient(180deg, rgba(255, 254, 247, 0.42), rgba(244, 238, 221, 0.16)),
+    radial-gradient(circle at 50% 48%, rgba(255, 246, 197, 0.32), transparent 48%);
+  box-shadow:
+    inset 0 0 0 1px rgba(223, 212, 185, 0.18),
+    0 44px 120px rgba(154, 173, 126, 0.1),
+    0 0 120px rgba(255, 234, 156, 0.14);
+  opacity: 0.75;
+  transform: translateZ(-80px);
+}
+
+.photo-wall::after {
+  left: -760px;
+  top: -520px;
+  width: 1520px;
+  height: 1040px;
+  border-radius: 36px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.28), transparent 18%),
+    radial-gradient(circle at 82% 28%, rgba(238, 248, 236, 0.18), transparent 24%),
+    radial-gradient(circle at 48% 68%, rgba(255, 239, 164, 0.16), transparent 22%);
+  filter: blur(24px);
+  opacity: 0.8;
+  transform: translateZ(-120px);
+}
+
+.photo-leaf {
+  position: absolute;
+  left: 0;
+  top: 0;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.photo-leaf__paper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  background: rgba(255, 254, 250, 0.96);
+  border: 1px solid rgba(231, 221, 196, 0.88);
+  box-shadow:
+    0 20px 34px rgba(109, 126, 92, 0.16),
+    0 2px 0 rgba(255, 255, 255, 0.75) inset,
+    0 0 0 1px rgba(255, 247, 230, 0.55);
+  backdrop-filter: blur(10px);
+  transform-style: preserve-3d;
+  isolation: isolate;
+  transition:
+    transform 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.48s ease;
+}
+
+.photo-leaf__paper::before,
+.photo-leaf__paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 254, 250, 0.98);
+  border: 1px solid rgba(231, 221, 196, 0.68);
+  z-index: -1;
+}
+
+.photo-leaf__paper::before {
+  transform: translate3d(calc(var(--stack-shift-x) * -0.72), calc(var(--stack-shift-y) * -0.72), -8px) rotateZ(-2.6deg);
+  box-shadow: 0 18px 30px rgba(109, 126, 92, 0.12);
+}
+
+.photo-leaf__paper::after {
+  transform: translate3d(var(--stack-shift-x), var(--stack-shift-y), -14px) rotateZ(2.3deg);
+  box-shadow: 0 22px 32px rgba(109, 126, 92, 0.14);
+  opacity: 0.92;
+}
+
+.photo-leaf__inner {
+  position: absolute;
+  inset: var(--matte-padding);
+  overflow: hidden;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(248, 244, 236, 0.94), rgba(240, 233, 219, 0.84));
+  box-shadow:
+    inset 0 0 0 1px rgba(222, 211, 184, 0.48),
+    inset 0 18px 24px rgba(255, 255, 255, 0.2);
+}
+
+.photo-leaf__inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent 36%),
+    radial-gradient(circle at 50% 100%, rgba(255, 236, 172, 0.12), transparent 48%);
+  pointer-events: none;
+}
+
+.photo-leaf__inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(1.03) saturate(0.94) contrast(0.98);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), filter 0.55s ease;
+}
+
+.photo-leaf__glint {
+  position: absolute;
+  inset: -28px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 244, 191, calc(var(--glow-strength) * 0.4)), transparent 56%);
+  opacity: 0;
+  transform: scale(0.82);
+  pointer-events: none;
+  transition: opacity 0.36s ease, transform 0.42s ease;
+}
+
+.photo-leaf:hover .photo-leaf__paper {
+  transform: translateY(-10px) scale(1.038);
+  box-shadow:
+    0 30px 54px rgba(109, 126, 92, 0.22),
+    0 2px 0 rgba(255, 255, 255, 0.78) inset,
+    0 0 0 1px rgba(255, 243, 211, 0.72);
+  filter: saturate(1.02);
+}
+
+.photo-leaf:hover .photo-leaf__inner {
+  transform: none;
+}
+
+.photo-leaf:hover .photo-leaf__inner img {
+  transform: scale(1.08);
+  filter: brightness(1.08) saturate(1.02) contrast(0.99);
+}
+
+.photo-leaf:hover .photo-leaf__glint {
+  opacity: 1;
+  transform: scale(1.06);
+}
+
+@media (max-width: 1100px) {
+  .photo-wall {
+    transform: scale(0.82);
+  }
+}
+
+@media (max-width: 768px) {
+  .wall-scene {
+    top: 50%;
+  }
+
+  .photo-wall {
+    transform: scale(0.58);
+  }
+
+  .photo-wall::before {
+    width: 1420px;
+    height: 1240px;
+    left: -710px;
+    top: -620px;
+  }
+
+  .photo-wall::after {
+    width: 1360px;
+    height: 1160px;
+    left: -680px;
+    top: -580px;
+  }
+}
+
+.gallery-root {
+  cursor: default;
+}
+
+.gallery-root:active {
+  cursor: default;
+}
+
+.dream-canvas {
+  opacity: 0.18;
+}
+
+.wall-viewport {
+  perspective: none;
+  perspective-origin: 50% 50%;
+}
+
+.wall-scene {
+  left: 50%;
+  top: 50%;
+  transform: none;
+  transform-style: flat;
+  transition: opacity 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.photo-wall {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform: none;
+  transform-style: flat;
+}
+
+.photo-wall::before,
+.photo-wall::after {
+  display: none;
+}
+
+.photo-leaf {
+  left: 0;
+  top: 0;
+  transform-style: flat;
+  opacity: 0;
+  transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1);
+  animation: photoPasteIn var(--paste-duration) cubic-bezier(0.18, 0.98, 0.22, 1) var(--paste-delay) both;
+}
+
+.photo-leaf__paper {
+  border-radius: 7px;
+  background: rgba(255, 255, 252, 0.98);
+  border: 1px solid rgba(214, 214, 214, 0.92);
+  box-shadow:
+    0 8px 15px rgba(118, 124, 112, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.82) inset;
+  transform-style: flat;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    filter 0.28s ease;
+}
+
+.photo-leaf__paper::before,
+.photo-leaf__paper::after {
+  display: none;
+}
+
+.photo-leaf__inner {
+  inset: var(--matte-padding);
+  border-radius: 5px;
+  background: rgba(245, 245, 242, 0.92);
+}
+
+.photo-leaf__inner::after {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(220, 220, 210, 0.05));
+}
+
+.photo-leaf__inner img {
+  filter: brightness(1.02) saturate(0.96) contrast(0.98);
+}
+
+.photo-leaf__glint {
+  display: none;
+}
+
+.photo-leaf:hover .photo-leaf__paper {
+  transform: translateY(-5px) scale(1.018);
+  box-shadow:
+    0 14px 26px rgba(96, 108, 92, 0.26),
+    0 1px 0 rgba(255, 255, 255, 0.88) inset;
+  filter: brightness(1.02);
+}
+
+.photo-leaf:hover .photo-leaf__inner img {
+  transform: scale(1.045);
+  filter: brightness(1.06) saturate(1.02) contrast(0.99);
+}
+
+.lightbox-flight,
+.lightbox-flight.is-active {
+  transform-origin: top left;
+}
+
+.lightbox-flight {
+  transform:
+    translate3d(0, 0, 0)
+    rotate(var(--flight-rotate-z))
+    scale3d(1, 1, 1);
+}
+
+.lightbox-flight.is-active {
+  transform:
+    translate3d(var(--flight-dx), var(--flight-dy), 0)
+    rotate(0deg)
+    scale3d(var(--flight-scale-x), var(--flight-scale-y), 1);
+}
+
+@keyframes photoPasteIn {
+  0% {
+    opacity: 0;
+    transform:
+      translate(calc(var(--x) + var(--paste-x)), calc(var(--y) + var(--paste-y)))
+      rotate(calc(var(--rotate) + var(--paste-rotate)))
+      scale(1.22);
+    filter: blur(7px) brightness(1.18);
+  }
+  62% {
+    opacity: 1;
+    transform:
+      translate(calc(var(--x) - 3px), calc(var(--y) + 2px))
+      rotate(calc(var(--rotate) - 0.6deg))
+      scale(0.985);
+    filter: blur(0) brightness(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1);
+    filter: blur(0) brightness(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .wall-scene {
+    top: 50%;
+  }
+
+  .photo-wall {
+    transform: none;
+  }
+}
+
+/* Final flat paper-wall treatment: close to the reference image, no 3D depth. */
+.gallery-root {
+  cursor: default;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 1px, transparent 1px),
+    #e6e6e6;
+  background-size: 38px 38px;
+  color: #596057;
+}
+
+.gallery-root::before,
+.gallery-root::after,
+.bg-deep,
+.dream-canvas,
+.cursor-glow {
+  display: none;
+}
+
+.wall-viewport {
+  z-index: 2;
+  perspective: none;
+  background:
+    radial-gradient(circle at 48% 42%, rgba(255, 255, 255, 0.32), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(214, 214, 214, 0.18));
+}
+
+.wall-scene,
+.photo-wall,
+.photo-leaf,
+.photo-leaf__paper {
+  transform-style: flat;
+}
+
+.wall-scene {
+  left: 50%;
+  top: 50%;
+  transform: none;
+  transition: opacity 0.3s ease;
+}
+
+.photo-wall {
+  transform: none;
+}
+
+.photo-leaf {
+  opacity: 0;
+  transform: translate(var(--x), var(--y)) rotate(var(--rotate));
+  animation: photoPasteIn var(--paste-duration) cubic-bezier(0.19, 0.92, 0.22, 1) var(--paste-delay) both;
+}
+
+.photo-leaf__paper {
+  border-radius: 2px;
+  background: #f7f7f7;
+  border: 1px solid rgba(200, 200, 200, 0.95);
+  box-shadow:
+    0 10px 16px rgba(80, 80, 80, 0.18),
+    0 2px 4px rgba(80, 80, 80, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  backdrop-filter: none;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.photo-leaf__paper::before,
+.photo-leaf__paper::after,
+.photo-leaf__glint {
+  display: none;
+}
+
+.photo-leaf__inner {
+  inset: var(--matte-padding);
+  border-radius: 1px;
+  background: #ececec;
+  box-shadow: inset 0 0 0 1px rgba(210, 210, 210, 0.72);
+}
+
+.photo-leaf__inner::after {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 42%);
+}
+
+.photo-leaf__inner img {
+  filter: grayscale(0.06) brightness(1.03) saturate(0.9) contrast(0.96);
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.photo-leaf:hover .photo-leaf__paper {
+  transform: translateY(-3px);
+  box-shadow:
+    0 14px 22px rgba(70, 70, 70, 0.22),
+    0 3px 6px rgba(70, 70, 70, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+.photo-leaf:hover .photo-leaf__inner img {
+  transform: scale(1.025);
+  filter: grayscale(0) brightness(1.05) saturate(0.96) contrast(0.98);
+}
+
+.back-btn,
+.sample-toggle {
+  z-index: 120;
+  border: 1px solid rgba(190, 190, 185, 0.82);
+  background: rgba(247, 247, 243, 0.86);
+  color: rgba(80, 86, 78, 0.82);
+  box-shadow:
+    0 10px 20px rgba(96, 96, 88, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+.back-btn:hover,
+.sample-toggle:hover {
+  background: rgba(255, 255, 252, 0.94);
+  border-color: rgba(170, 170, 165, 0.94);
+  color: rgba(62, 68, 60, 0.92);
+  box-shadow:
+    0 14px 28px rgba(96, 96, 88, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.sample-toggle__dot,
+.sample-toggle.is-refreshing .sample-toggle__dot {
+  background: rgba(174, 174, 166, 0.96);
+  box-shadow: 0 0 0 4px rgba(174, 174, 166, 0.18);
+}
+
+@keyframes photoPasteIn {
+  0% {
+    opacity: 0;
+    transform:
+      translate(calc(var(--x) + var(--paste-x)), calc(var(--y) + var(--paste-y)))
+      rotate(calc(var(--rotate) + var(--paste-rotate)))
+      scale(0.86);
+    filter: blur(4px);
+  }
+  72% {
+    opacity: 1;
+    transform:
+      translate(calc(var(--x) + 2px), calc(var(--y) - 2px))
+      rotate(calc(var(--rotate) + 0.4deg))
+      scale(1.012);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1);
+    filter: blur(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .gallery-root {
+    background-size: 30px 30px;
+  }
+
+  .back-btn {
+    top: 18px;
+    left: 18px;
+    padding: 9px 15px 9px 12px;
+  }
+
+  .sample-toggle {
+    right: 16px;
+    bottom: 16px;
+    min-width: 104px;
+    padding: 10px 13px;
   }
 }
 </style>

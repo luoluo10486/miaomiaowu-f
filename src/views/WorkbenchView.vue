@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import WorkbenchLive2DScene from "../components/WorkbenchLive2DScene.vue";
 import { clearStoredAuth, getStoredAuthUser } from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
@@ -18,7 +19,6 @@ const activeChapter = ref(0);
 let animationContext = null;
 
 const artworkUrls = {
-  home: resolvePublicAssetUrl("artwork/workbench-person-opening.png"),
   rag: resolvePublicAssetUrl("artwork/workbench-person-rag.png"),
   admin: resolvePublicAssetUrl("artwork/workbench-person-admin.png"),
   ideas: resolvePublicAssetUrl("artwork/workbench-person-idea.png"),
@@ -175,11 +175,7 @@ onBeforeUnmount(() => {
     <div ref="viewportRef" class="story-viewport">
       <div ref="trackRef" class="story-track">
         <section class="story-panel story-panel--home">
-          <img
-            class="person-asset person-asset--home"
-            :src="artworkUrls.home"
-            alt="首页人物主体"
-          />
+          <WorkbenchLive2DScene class="person-asset person-asset--home" />
         </section>
 
         <section class="story-panel story-panel--rag">
@@ -394,6 +390,14 @@ onBeforeUnmount(() => {
   width: min(620px, 44vw);
 }
 
+.person-asset--home.live2d-stage {
+  left: 33vw;
+  top: 4vh;
+  width: min(620px, 40vw);
+  height: min(760px, 82vh);
+  pointer-events: auto;
+}
+
 .person-asset--rag {
   left: 39vw;
   top: 16vh;
@@ -486,6 +490,14 @@ onBeforeUnmount(() => {
     top: 18vh;
     width: 66vw;
     max-height: 72vh;
+  }
+
+  .person-asset--home.live2d-stage {
+    left: 17vw;
+    top: 15vh;
+    width: 66vw;
+    height: min(62vh, 560px);
+    max-height: none;
   }
 
   .scene-label {
