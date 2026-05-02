@@ -140,11 +140,24 @@ const sceneScale = ref(0.84);
 const isDragging = ref(false);
 const refreshOnReload = ref(readStorage(GALLERY_REFRESH_MODE_STORAGE_KEY) === "refresh");
 const activeTweetMeta = ref(null);
+const lightboxCardRef = ref(null);
+const lightboxSettled = ref(false);
+const lightboxMeasureMode = ref(false);
+const lightboxFlight = ref(null);
 let lastMouseX = 0;
 let lastMouseY = 0;
 let animId = null;
 let cleanupCanvas = null;
 let activeTweetRequestId = 0;
+let lightboxCloseTimer = 0;
+let lightboxRevealTimer = 0;
+let lightboxFlightCleanupTimer = 0;
+let lightboxFlightFrameA = 0;
+let lightboxFlightFrameB = 0;
+
+const LIGHTBOX_CLOSE_DURATION = 420;
+const LIGHTBOX_FLIGHT_DURATION = 920;
+const LIGHTBOX_REVEAL_DELAY = 360;
 
 const activeFilename = computed(() => {
   if (lightboxIndex.value < 0) return "";
@@ -555,16 +568,131 @@ const hangingLayers = computed(() => {
 });
 
 /* ── Lightbox ── */
-function openLightbox(index) {
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function cancelLightboxMotion() {
+  if (lightboxCloseTimer) {
+    window.clearTimeout(lightboxCloseTimer);
+    lightboxCloseTimer = 0;
+  }
+  if (lightboxRevealTimer) {
+    window.clearTimeout(lightboxRevealTimer);
+    lightboxRevealTimer = 0;
+  }
+  if (lightboxFlightCleanupTimer) {
+    window.clearTimeout(lightboxFlightCleanupTimer);
+    lightboxFlightCleanupTimer = 0;
+  }
+  if (lightboxFlightFrameA) {
+    cancelAnimationFrame(lightboxFlightFrameA);
+    lightboxFlightFrameA = 0;
+  }
+  if (lightboxFlightFrameB) {
+    cancelAnimationFrame(lightboxFlightFrameB);
+    lightboxFlightFrameB = 0;
+  }
+}
+
+function createLightboxFlightStyle(sourceRect, targetRect, item) {
+  const sourceCenterX = sourceRect.left + sourceRect.width / 2;
+  const sourceCenterY = sourceRect.top + sourceRect.height / 2;
+  const offsetX = sourceCenterX / window.innerWidth - 0.5;
+  const offsetY = sourceCenterY / window.innerHeight - 0.5;
+  const rotateX = clampNumber(-offsetY * 24 - 8 + (item?.tilt || 0) * 0.45, -18, 18);
+  const rotateY = clampNumber(offsetX * -26 + Math.sin(((item?.angle || 0) * Math.PI) / 180) * 10, -20, 20);
+  const rotateZ = clampNumber((item?.sway || 0) * 1.3, -14, 14);
+  const startRadius = clampNumber(sourceRect.width * 0.16, 12, 28);
+  const endRadius = clampNumber(targetRect.width * 0.03, 16, 26);
+  const frameInset = clampNumber(targetRect.width * 0.028, 10, 24);
+
+  return {
+    left: `${sourceRect.left}px`,
+    top: `${sourceRect.top}px`,
+    width: `${sourceRect.width}px`,
+    height: `${sourceRect.height}px`,
+    "--flight-dx": `${targetRect.left - sourceRect.left}px`,
+    "--flight-dy": `${targetRect.top - sourceRect.top}px`,
+    "--flight-scale-x": `${targetRect.width / sourceRect.width}`,
+    "--flight-scale-y": `${targetRect.height / sourceRect.height}`,
+    "--flight-rotate-x": `${rotateX.toFixed(2)}deg`,
+    "--flight-rotate-y": `${rotateY.toFixed(2)}deg`,
+    "--flight-rotate-z": `${rotateZ.toFixed(2)}deg`,
+    "--flight-radius-start": `${startRadius.toFixed(2)}px`,
+    "--flight-radius-end": `${endRadius.toFixed(2)}px`,
+    "--flight-frame-inset": `${frameInset.toFixed(2)}px`
+  };
+}
+
+async function runLightboxOpenFlight(sourceRect, item) {
+  lightboxMeasureMode.value = true;
+  await nextTick();
+  const targetRect = lightboxCardRef.value?.getBoundingClientRect?.();
+  lightboxMeasureMode.value = false;
+
+  if (!targetRect?.width || !targetRect?.height) {
+    lightboxSettled.value = true;
+    return;
+  }
+
+  lightboxFlight.value = {
+    src: getGalleryImageUrl(activeFilename.value),
+    style: createLightboxFlightStyle(sourceRect, targetRect, item),
+    phase: "prepare"
+  };
+
+  lightboxFlightFrameA = requestAnimationFrame(() => {
+    lightboxFlightFrameB = requestAnimationFrame(() => {
+      if (!lightboxFlight.value) return;
+      lightboxFlight.value = {
+        ...lightboxFlight.value,
+        phase: "active"
+      };
+      lightboxRevealTimer = window.setTimeout(() => {
+        lightboxSettled.value = true;
+      }, LIGHTBOX_REVEAL_DELAY);
+      lightboxFlightCleanupTimer = window.setTimeout(() => {
+        lightboxFlight.value = null;
+      }, LIGHTBOX_FLIGHT_DURATION);
+    });
+  });
+}
+
+async function openLightbox(index, event, item) {
+  cancelLightboxMotion();
+  const sourceNode = event?.currentTarget?.querySelector(".photo-leaf__inner") || event?.currentTarget;
+  const sourceRect = sourceNode?.getBoundingClientRect?.();
+
+  lightboxVisible.value = false;
+  lightboxSettled.value = false;
+  lightboxMeasureMode.value = false;
+  lightboxFlight.value = null;
   lightboxIndex.value = index;
   document.body.style.overflow = "hidden";
-  nextTick(() => { lightboxVisible.value = true; });
+
+  await nextTick();
+  lightboxVisible.value = true;
+  await nextTick();
+
+  if (sourceRect?.width && sourceRect?.height) {
+    runLightboxOpenFlight(sourceRect, item);
+    return;
+  }
+
+  lightboxSettled.value = true;
 }
 
 function closeLightbox() {
+  cancelLightboxMotion();
   lightboxVisible.value = false;
+  lightboxSettled.value = false;
+  lightboxMeasureMode.value = false;
+  lightboxFlight.value = null;
   document.body.style.overflow = "";
-  setTimeout(() => { lightboxIndex.value = -1; }, 400);
+  lightboxCloseTimer = window.setTimeout(() => {
+    lightboxIndex.value = -1;
+  }, LIGHTBOX_CLOSE_DURATION);
 }
 
 function prevImage() {
@@ -877,6 +1005,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeydown);
   window.removeEventListener("pointermove", onPointerMove);
   window.removeEventListener("pointerup", onPointerUp);
+  cancelLightboxMotion();
   if (animId) cancelAnimationFrame(animId);
   if (cleanupCanvas) cleanupCanvas();
   document.body.style.overflow = "";
@@ -952,7 +1081,7 @@ onBeforeUnmount(() => {
               '--vine-height': `${item.vine}px`,
               transform: `rotateY(${item.angle}deg) translateZ(${item.radius}px) translateY(${item.y}px) rotateX(${item.tilt}deg) rotateZ(${item.sway}deg) scale(${item.scale})`
             }"
-            @click="openLightbox(item.globalIndex)"
+            @click="openLightbox(item.globalIndex, $event, item)"
           >
             <div class="photo-leaf__vine"></div>
             <div class="photo-leaf__inner">
@@ -975,7 +1104,11 @@ onBeforeUnmount(() => {
         <div
           v-if="lightboxIndex >= 0"
           class="lightbox"
-          :class="{ 'is-visible': lightboxVisible }"
+          :class="{
+            'is-visible': lightboxVisible,
+            'is-settled': lightboxSettled,
+            'is-measuring': lightboxMeasureMode
+          }"
         >
           <div class="lightbox__backdrop" @click="closeLightbox">
             <img
@@ -999,6 +1132,7 @@ onBeforeUnmount(() => {
 
           <div class="lightbox__stage">
             <button
+              ref="lightboxCardRef"
               class="lightbox__card"
               type="button"
               :disabled="!localizedGalleryDetail.sourceUrl"
@@ -1058,6 +1192,18 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </Transition>
+      <div
+        v-if="lightboxFlight"
+        class="lightbox-flight"
+        :class="{ 'is-active': lightboxFlight.phase === 'active' }"
+        :style="lightboxFlight.style"
+        aria-hidden="true"
+      >
+        <img :src="lightboxFlight.src" alt="" />
+        <div class="lightbox-flight__veil"></div>
+        <div class="lightbox-flight__frame"></div>
+        <div class="lightbox-flight__dust"></div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -1277,6 +1423,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: rgba(5, 5, 16, 0.94);
   backdrop-filter: blur(60px);
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lightbox__backdrop::before {
@@ -1289,6 +1437,22 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.lightbox__backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 239, 171, 0.26), transparent 24%),
+    radial-gradient(circle at 50% 50%, rgba(173, 214, 188, 0.2), transparent 46%);
+  filter: blur(18px);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.lightbox.is-visible .lightbox__backdrop {
+  opacity: 1;
+}
+
 .lightbox__backdrop-img {
   position: absolute;
   left: -5vw;
@@ -1297,7 +1461,16 @@ onBeforeUnmount(() => {
   height: 80vh;
   object-fit: cover;
   filter: blur(80px) saturate(0.5) brightness(0.3);
+  opacity: 0;
+  transform: scale(1.08);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lightbox.is-visible .lightbox__backdrop-img {
   opacity: 0.15;
+  transform: scale(1);
 }
 
 .lightbox__close {
@@ -1366,6 +1539,17 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-self: end;
   width: min(56vw, 800px);
+  perspective: 2200px;
+  transform: translateY(18px);
+  opacity: 0;
+  transition:
+    transform 0.82s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.55s ease;
+}
+
+.lightbox.is-settled .lightbox__stage {
+  transform: translateY(0);
+  opacity: 1;
 }
 
 .lightbox__card {
@@ -1380,15 +1564,23 @@ onBeforeUnmount(() => {
     0 0 0 1px rgba(61, 216, 176, 0.06),
     0 40px 80px rgba(0, 0, 0, 0.5),
     0 0 60px rgba(61, 216, 176, 0.04);
-  transform: scale(0.88) translateY(20px);
+  overflow: hidden;
+  transform: translateY(34px) scale(0.94) rotateX(10deg);
+  transform-origin: 50% 64%;
   opacity: 0;
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  filter: blur(10px);
+  will-change: transform, opacity, filter;
+  transition:
+    transform 0.82s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.55s ease,
+    filter 0.7s ease,
+    box-shadow 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lightbox__card:disabled { cursor: default; }
 
 .lightbox__card:not(:disabled):hover {
-  transform: scale(1.012) translateY(-3px);
+  transform: translateY(-4px) scale(1.01);
   box-shadow:
     0 0 0 1px rgba(61, 216, 176, 0.12),
     0 48px 90px rgba(0, 0, 0, 0.55),
@@ -1405,13 +1597,33 @@ onBeforeUnmount(() => {
   z-index: 2;
 }
 
-.lightbox.is-visible .lightbox__card {
-  transform: scale(1) translateY(0);
-  opacity: 1;
+.lightbox__card::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(255, 250, 224, 0.52), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(255, 225, 132, 0.16), transparent 36%);
+  filter: blur(18px);
+  opacity: 0.78;
+  pointer-events: none;
 }
 
-.lightbox.is-visible .lightbox__card:not(:disabled):hover {
-  transform: scale(1.012) translateY(-3px);
+.lightbox.is-settled .lightbox__card {
+  transform: translateY(0) scale(1) rotateX(0deg);
+  opacity: 1;
+  filter: blur(0);
+}
+
+.lightbox.is-settled .lightbox__card:not(:disabled):hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
+.lightbox.is-measuring .lightbox__card {
+  transform: none;
+  opacity: 0;
+  filter: none;
+  transition: none;
 }
 
 .lightbox__card img {
@@ -1420,6 +1632,19 @@ onBeforeUnmount(() => {
   max-height: 76vh;
   border-radius: 8px;
   object-fit: contain;
+  position: relative;
+  z-index: 1;
+  transform: scale(1.02);
+  opacity: 0.88;
+  transition:
+    transform 0.78s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.5s ease,
+    filter 0.5s ease;
+}
+
+.lightbox.is-settled .lightbox__card img {
+  transform: scale(1);
+  opacity: 1;
 }
 
 .lightbox__info {
@@ -1429,14 +1654,19 @@ onBeforeUnmount(() => {
   min-height: min(65vh, 600px);
   padding-left: clamp(20px, 3vw, 44px);
   border-left: 1px solid rgba(61, 216, 176, 0.1);
-  transform: translateX(20px);
+  transform: translateX(28px);
   opacity: 0;
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1) 0.08s;
+  filter: blur(12px);
+  transition:
+    transform 0.78s cubic-bezier(0.22, 1, 0.36, 1) 0.05s,
+    opacity 0.5s ease 0.05s,
+    filter 0.6s ease 0.05s;
 }
 
-.lightbox.is-visible .lightbox__info {
+.lightbox.is-settled .lightbox__info {
   transform: translateX(0);
   opacity: 1;
+  filter: blur(0);
 }
 
 .lightbox__eyebrow {
@@ -1553,6 +1783,106 @@ onBeforeUnmount(() => {
   color: rgba(160, 170, 190, 0.35);
   font-size: 11px;
   line-height: 1.7;
+}
+
+.lightbox-flight {
+  position: fixed;
+  z-index: 10030;
+  overflow: hidden;
+  pointer-events: none;
+  transform-origin: top left;
+  border-radius: var(--flight-radius-start);
+  background: rgba(255, 251, 237, 0.82);
+  box-shadow:
+    0 24px 48px rgba(96, 118, 89, 0.2),
+    0 0 36px rgba(255, 228, 141, 0.28);
+  opacity: 0.98;
+  filter: saturate(1.02) brightness(1.04);
+  will-change: transform, border-radius, filter, opacity, box-shadow;
+  transition:
+    transform 0.92s cubic-bezier(0.2, 1, 0.22, 1),
+    border-radius 0.82s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.82s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.82s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.62s ease;
+  transform:
+    perspective(1700px)
+    translate3d(0, 0, 0)
+    rotateX(var(--flight-rotate-x))
+    rotateY(var(--flight-rotate-y))
+    rotateZ(var(--flight-rotate-z))
+    scale3d(1, 1, 1);
+}
+
+.lightbox-flight.is-active {
+  border-radius: var(--flight-radius-end);
+  box-shadow:
+    0 52px 118px rgba(100, 118, 87, 0.26),
+    0 0 86px rgba(255, 227, 135, 0.18);
+  filter: saturate(1.05) brightness(1.06);
+  transform:
+    perspective(1700px)
+    translate3d(var(--flight-dx), var(--flight-dy), 0)
+    rotateX(0deg)
+    rotateY(0deg)
+    rotateZ(0deg)
+    scale3d(var(--flight-scale-x), var(--flight-scale-y), 1);
+}
+
+.lightbox-flight img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.02);
+}
+
+.lightbox-flight__veil,
+.lightbox-flight__frame,
+.lightbox-flight__dust {
+  position: absolute;
+  inset: 0;
+}
+
+.lightbox-flight__veil {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.28), transparent 34%),
+    radial-gradient(circle at 50% 14%, rgba(255, 248, 215, 0.42), transparent 34%),
+    linear-gradient(180deg, rgba(255, 244, 201, 0.06), rgba(168, 202, 177, 0.14));
+  mix-blend-mode: screen;
+  opacity: 0.92;
+}
+
+.lightbox-flight__frame {
+  inset: var(--flight-frame-inset);
+  border: 1px solid rgba(255, 248, 222, 0.78);
+  border-radius: calc(var(--flight-radius-start) * 0.72);
+  box-shadow: inset 0 0 0 1px rgba(125, 155, 102, 0.08);
+  transition:
+    inset 0.82s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.82s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lightbox-flight.is-active .lightbox-flight__frame {
+  border-radius: calc(var(--flight-radius-end) - 7px);
+}
+
+.lightbox-flight__dust {
+  inset: -22%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 240, 170, 0.34), transparent 28%),
+    radial-gradient(circle at 50% 50%, rgba(171, 209, 184, 0.18), transparent 52%);
+  filter: blur(22px);
+  opacity: 0.68;
+  transform: scale(0.84);
+  transition:
+    transform 0.92s cubic-bezier(0.2, 1, 0.22, 1),
+    opacity 0.92s ease;
+}
+
+.lightbox-flight.is-active .lightbox-flight__dust {
+  transform: scale(1.18);
+  opacity: 0.34;
 }
 
 .lb-enter-active { transition: opacity 0.4s ease; }
