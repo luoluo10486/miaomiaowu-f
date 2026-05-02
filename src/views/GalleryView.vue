@@ -65,7 +65,7 @@ const allGalleryImages = [
   ...officialGalleryImages
 ];
 
-const DISPLAY_IMAGE_COUNT = 160;
+const DISPLAY_IMAGE_COUNT = 100;
 const GALLERY_SAMPLE_STORAGE_KEY = "gallery_bodhi_sample_v1";
 const GALLERY_REFRESH_MODE_STORAGE_KEY = "gallery_bodhi_refresh_mode";
 
@@ -149,6 +149,8 @@ const lightboxCardRef = ref(null);
 const lightboxSettled = ref(false);
 const lightboxMeasureMode = ref(false);
 const lightboxFlight = ref(null);
+const lightboxOriginX = ref(50);
+const lightboxOriginY = ref(50);
 const imageAspects = ref({});
 let lastMouseX = 0;
 let lastMouseY = 0;
@@ -659,62 +661,21 @@ function getStoredImageAspect(filename, fallbackSeed) {
   return 3 / 4;
 }
 
-const basePaperItems = computed(() => {
-  const width = viewportWidth.value || 1600;
-  const height = viewportHeight.value || 900;
-  const isCompact = width < 760;
-  const base = isCompact
-    ? clampNumber(width / 2.8, 122, 170)
-    : clampNumber(width / 7.4, 230, 292);
-  const bleed = base * 1.85;
-  const stepX = base * 0.42;
-  const stepY = base * 0.34;
-  const columnCount = Math.ceil((width + bleed * 2) / stepX) + 1;
-  const rowCount = Math.ceil((height + bleed * 2) / stepY) + 1;
-  const papers = [];
-
-  for (let layer = 0; layer < 2; layer++) {
-    for (let row = 0; row < rowCount; row++) {
-      for (let column = 0; column < columnCount; column++) {
-        const index = layer * rowCount * columnCount + row * columnCount + column;
-        const r1 = seededUnit(index + 101.11);
-        const r2 = seededUnit(index + 137.43);
-        const r3 = seededUnit(index + 173.89);
-        const layerOffsetX = layer ? stepX * 0.5 : 0;
-        const layerOffsetY = layer ? stepY * 0.52 : 0;
-        const x = -width / 2 - bleed + column * stepX + layerOffsetX + (r2 - 0.5) * base * 0.2;
-        const y = -height / 2 - bleed + row * stepY + layerOffsetY + (r3 - 0.5) * base * 0.18;
-        papers.push({
-          id: `base-${layer}-${row}-${column}`,
-          x,
-          y,
-          width: base * (0.96 + r1 * 0.22),
-          height: base * (0.88 + r2 * 0.26),
-          rotate: (r3 - 0.5) * 8,
-          zIndex: index
-        });
-      }
-    }
-  }
-
-  return papers;
-});
-
 const photoWallItems = computed(() => {
   const width = viewportWidth.value || 1600;
   const height = viewportHeight.value || 900;
   const isCompact = width < 760;
   const paperBase = isCompact
-    ? clampNumber(width / 3.35, 98, 148)
-    : clampNumber(width / 9.6, 168, 224);
-  const bleed = paperBase * 1.35;
+    ? clampNumber(width / 2.8, 120, 175)
+    : clampNumber(width / 5, 240, 360);
+  const bleed = paperBase * 2.5;
   const targetCount = isCompact
-    ? clampNumber(Math.round((width * height) / 6200), 104, 168)
-    : clampNumber(Math.round((width * height) / 6200), 210, 320);
+    ? clampNumber(Math.round((width * height) / 12000), 40, 70)
+    : clampNumber(Math.round((width * height) / 9000), 80, 130);
   const columnCount = clampNumber(
     Math.round(Math.sqrt(targetCount * (width / height))),
-    isCompact ? 9 : 16,
-    isCompact ? 14 : 30
+    isCompact ? 6 : 10,
+    isCompact ? 10 : 16
   );
   const rowCount = Math.ceil(targetCount / columnCount);
   const stepX = (width + bleed * 2) / Math.max(columnCount - 1, 1);
@@ -752,11 +713,27 @@ const photoWallItems = computed(() => {
     const cardHeight = mediaHeight + matte * 2;
     const gridX = -width / 2 - bleed + slot.column * stepX;
     const gridY = -height / 2 - bleed + slot.row * stepY;
-    const x = gridX + (r2 - 0.5) * paperBase * 0.78;
-    const y = gridY + (r3 - 0.5) * paperBase * 0.66;
-    const pasteX = (seededUnit(index + 19.17) - 0.5) * width * 0.44;
-    const pasteY = (seededUnit(index + 23.41) - 0.5) * height * 0.44;
+    const x = gridX + (r2 - 0.5) * paperBase * 0.35;
+    const y = gridY + (r3 - 0.5) * paperBase * 0.3;
+    const fromLeft = index % 2 === 0;
+    const pasteX = fromLeft
+      ? -(width * (0.6 + r6 * 0.28) + paperBase * (0.5 + r5 * 0.32))
+      : (seededUnit(index + 19.17) - 0.5) * width * 0.14;
+    const pasteY = fromLeft
+      ? (seededUnit(index + 23.41) - 0.5) * height * 0.18
+      : height * (0.58 + r7 * 0.24) + paperBase * (0.45 + r6 * 0.4);
     const pasteRotate = (r2 - 0.5) * 22;
+    const driftStartX = pasteX;
+    const driftStartY = pasteY;
+    const driftStartRotate = pasteRotate * 0.92 + (r5 - 0.5) * 10;
+    const driftMidX = fromLeft
+      ? pasteX * 0.34 + clampNumber(paperBase * (0.28 + r4 * 0.12), 28, 92)
+      : (r4 - 0.5) * paperBase * 0.18;
+    const driftMidY = fromLeft
+      ? (r3 - 0.5) * paperBase * 0.16
+      : pasteY * 0.3 - clampNumber(paperBase * (0.18 + r6 * 0.08), 10, 36);
+    const driftMidRotate = pasteRotate * 0.28;
+    const revealSpacing = isCompact ? 0.09 : 0.07;
 
     return {
       filename,
@@ -773,13 +750,14 @@ const photoWallItems = computed(() => {
       pasteX,
       pasteY,
       pasteRotate,
-      driftStartX: pasteX * 0.74,
-      driftStartY: pasteY - 220,
-      driftStartRotate: pasteRotate * 0.86,
-      driftMidX: pasteX * 0.22,
-      driftMidRotate: pasteRotate * 0.22,
-      pasteDelay: index * 0.012 + r7 * 0.28,
-      pasteDuration: 0.28 + r6 * 0.14,
+      driftStartX,
+      driftStartY,
+      driftStartRotate,
+      driftMidX,
+      driftMidY,
+      driftMidRotate,
+      pasteDelay: index * revealSpacing + r7 * 0.52,
+      pasteDuration: 1.7 + r6 * 1.15,
       angle: (r1 - 0.5) * 8,
       sway: (r1 - 0.5) * 10,
       tilt: (r4 - 0.5) * 6
@@ -831,9 +809,9 @@ function createLightboxFlightStyle(sourceRect, targetRect, item) {
   const sourceCenterY = sourceRect.top + sourceRect.height / 2;
   const offsetX = sourceCenterX / window.innerWidth - 0.5;
   const offsetY = sourceCenterY / window.innerHeight - 0.5;
-  const rotateZ = clampNumber((item?.sway || 0) * 0.9 + offsetX * 6 - offsetY * 3, -10, 10);
-  const rotateX = clampNumber(10 + Math.abs(offsetY) * 18 + Math.abs(item?.tilt || 0) * 0.7, 10, 24);
-  const rotateY = clampNumber(offsetX * 22 + (item?.angle || 0) * 0.5, -18, 18);
+  const rotateZ = clampNumber((item?.sway || 0) * 1.3 + offsetX * 12 - offsetY * 6, -16, 16);
+  const rotateX = clampNumber(18 + Math.abs(offsetY) * 26 + Math.abs(item?.tilt || 0) * 1.2, 16, 36);
+  const rotateY = clampNumber(offsetX * 30 + (item?.angle || 0) * 1, -28, 28);
   const startRadius = clampNumber(sourceRect.width * 0.012, 2, 5);
   const endRadius = clampNumber(targetRect.width * 0.012, 6, 12);
   const frameInset = clampNumber(targetRect.width * 0.018, 10, 18);
@@ -858,6 +836,54 @@ function createLightboxFlightStyle(sourceRect, targetRect, item) {
   };
 }
 
+function spawnFlightGhost(src, x, y, w, h, rx, ry, rz, radius, blur) {
+  var ghost = document.createElement("div");
+  var img = document.createElement("img");
+  img.src = src;
+  img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+  ghost.appendChild(img);
+  ghost.style.cssText =
+    "position:fixed;left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;" +
+    "overflow:hidden;border-radius:" + radius + "px;pointer-events:none;z-index:10025;" +
+    "opacity:0.36;transform:perspective(1200px) rotateX(" + rx + "deg) rotateY(" + ry + "deg) rotateZ(" + rz + "deg);" +
+    "filter:blur(" + (blur + 3) + "px) brightness(1.12);" +
+    "transition:opacity 0.44s ease-out,filter 0.44s ease-out,transform 0.44s ease-out;" +
+    "box-shadow:0 0 20px rgba(255,235,160,0.28);";
+  document.body.appendChild(ghost);
+  requestAnimationFrame(function () {
+    ghost.style.opacity = "0";
+    ghost.style.filter = "blur(" + (blur + 12) + "px) brightness(1.28)";
+    ghost.style.transform += " scale(0.8)";
+  });
+  setTimeout(function () { ghost.remove(); }, 500);
+}
+
+function spawnArrivalParticles(cx, cy) {
+  for (var i = 0; i < 16; i++) {
+    var p = document.createElement("div");
+    var angle = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    var dist = 45 + Math.random() * 100;
+    var tx = Math.cos(angle) * dist;
+    var ty = Math.sin(angle) * dist;
+    var size = 3 + Math.random() * 5;
+    p.style.cssText =
+      "position:fixed;left:" + cx + "px;top:" + cy + "px;" +
+      "width:" + size + "px;height:" + size + "px;border-radius:50%;" +
+      "background:rgba(255,235,160,0.92);pointer-events:none;z-index:10035;" +
+      "transform:translate(-50%,-50%);opacity:1;" +
+      "transition:all 0.58s cubic-bezier(0.16,1,0.3,1);" +
+      "box-shadow:0 0 8px rgba(255,235,160,0.6);";
+    document.body.appendChild(p);
+    (function (el, dx, dy) {
+      requestAnimationFrame(function () {
+        el.style.transform = "translate(" + dx + "px," + dy + "px)";
+        el.style.opacity = "0";
+      });
+    })(p, tx, ty);
+    setTimeout((function (el) { return function () { el.remove(); }; })(p), 650);
+  }
+}
+
 async function runLightboxOpenFlight(sourceRect, item) {
   lightboxMeasureMode.value = true;
   await nextTick();
@@ -869,27 +895,136 @@ async function runLightboxOpenFlight(sourceRect, item) {
     return;
   }
 
+  const src = getGalleryImageUrl(activeFilename.value);
+
+  const sx = sourceRect.left;
+  const sy = sourceRect.top;
+  const sw = sourceRect.width;
+  const sh = sourceRect.height;
+  const tx = targetRect.left;
+  const ty = targetRect.top;
+  const tw = targetRect.width;
+  const th = targetRect.height;
+
+  const travelDist = Math.hypot(tx - sx, ty - sy);
+  const arcHeight = -Math.min(travelDist * 0.14, 80);
+
+  const normX = (sx + sw / 2) / window.innerWidth - 0.5;
+  const normY = (sy + sh / 2) / window.innerHeight - 0.5;
+  const startRotZ = clampNumber((item?.sway || 0) * 1.3 + normX * 14, -16, 16);
+  const startRotX = clampNumber(22 + Math.abs(normY) * 24, 18, 40);
+  const startRotY = clampNumber(normX * 32, -30, 30);
+
+  const startRadius = clampNumber(sw * 0.012, 2, 5);
+  const endRadius = clampNumber(tw * 0.012, 6, 12);
+  const frameInset = clampNumber(tw * 0.018, 10, 18);
+
   lightboxFlight.value = {
-    src: getGalleryImageUrl(activeFilename.value),
-    style: createLightboxFlightStyle(sourceRect, targetRect, item),
-    phase: "prepare"
+    src,
+    style: {
+      left: sx + "px",
+      top: sy + "px",
+      width: sw + "px",
+      height: sh + "px",
+      transition: "none",
+      transform: "translate(0px,0px) perspective(1200px) rotateX(" + startRotX + "deg) rotateY(" + startRotY + "deg) rotateZ(" + startRotZ + "deg) scale(1,1)",
+      filter: "none",
+      borderRadius: startRadius + "px",
+      "--flight-radius-start": startRadius + "px",
+      "--flight-radius-end": endRadius + "px",
+      "--flight-frame-inset": frameInset + "px"
+    },
+    phase: "active"
   };
 
-  lightboxFlightFrameA = requestAnimationFrame(() => {
-    lightboxFlightFrameB = requestAnimationFrame(() => {
-      if (!lightboxFlight.value) return;
-      lightboxFlight.value = {
-        ...lightboxFlight.value,
-        phase: "active"
-      };
-      lightboxRevealTimer = window.setTimeout(() => {
-        lightboxSettled.value = true;
-      }, LIGHTBOX_REVEAL_DELAY);
-      lightboxFlightCleanupTimer = window.setTimeout(() => {
+  await nextTick();
+  await nextTick();
+
+  const flightEl = document.querySelector(".lightbox-flight");
+  if (!flightEl) {
+    lightboxSettled.value = true;
+    lightboxFlight.value = null;
+    return;
+  }
+
+  const duration = 840;
+  const startTime = performance.now();
+  let prevPosT = 0;
+  let lastGhostTime = 0;
+
+  function easeOutExpo(t) {
+    return t >= 1 ? 1 : 1 - Math.pow(2, -13 * t);
+  }
+  function easeOutQuint(t) {
+    return 1 - Math.pow(1 - t, 5);
+  }
+
+  function tick(now) {
+    const elapsed = now - startTime;
+    const rawT = Math.min(elapsed / duration, 1);
+
+    const posT = easeOutExpo(rawT);
+    const rotT = easeOutQuint(rawT);
+
+    const cx = sx + (tx - sx) * posT;
+    const cy = sy + (ty - sy) * posT + arcHeight * Math.sin(posT * Math.PI);
+    const cw = sw + (tw - sw) * posT;
+    const ch = sh + (th - sh) * posT;
+
+    const rx = startRotX * (1 - rotT);
+    const ry = startRotY * (1 - rotT);
+    const rz = startRotZ * (1 - rotT);
+
+    const speed = Math.abs(posT - prevPosT);
+    prevPosT = posT;
+    const motionBlur = Math.min(speed * 200, 7);
+
+    const scaleBoost = rawT > 0.72 && rawT < 1
+      ? Math.sin((rawT - 0.72) / 0.28 * Math.PI) * 0.012
+      : 0;
+
+    const dx = cx - sx;
+    const dy = cy - sy;
+    const scaleX = cw / sw + scaleBoost;
+    const scaleY = ch / sh + scaleBoost;
+    const radius = startRadius + (endRadius - startRadius) * posT;
+
+    flightEl.style.transform =
+      "translate(" + dx.toFixed(2) + "px," + dy.toFixed(2) + "px) " +
+      "perspective(1200px) rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg) rotateZ(" + rz.toFixed(2) + "deg) " +
+      "scale(" + scaleX.toFixed(4) + "," + scaleY.toFixed(4) + ")";
+    flightEl.style.borderRadius = radius.toFixed(1) + "px";
+
+    if (motionBlur > 0.4) {
+      flightEl.style.filter = "blur(" + motionBlur.toFixed(1) + "px) brightness(" + (1 + (1 - posT) * 0.06).toFixed(3) + ")";
+    } else if (rawT < 0.96) {
+      flightEl.style.filter = "brightness(" + (1 + (1 - posT) * 0.03).toFixed(3) + ")";
+    } else {
+      flightEl.style.filter = "none";
+    }
+
+    if (now - lastGhostTime > 65 && rawT > 0.04 && rawT < 0.88) {
+      lastGhostTime = now;
+      spawnFlightGhost(src, cx, cy, cw, ch, rx, ry, rz, radius, motionBlur);
+    }
+
+    if (rawT < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      spawnArrivalParticles(tx + tw / 2, ty + th / 2);
+      window.setTimeout(function () {
         lightboxFlight.value = null;
-      }, LIGHTBOX_FLIGHT_DURATION);
-    });
+      }, 80);
+    }
+  }
+
+  requestAnimationFrame(function () {
+    requestAnimationFrame(tick);
   });
+
+  window.setTimeout(function () {
+    lightboxSettled.value = true;
+  }, 130);
 }
 
 async function openLightbox(index, event, item) {
@@ -901,6 +1036,12 @@ async function openLightbox(index, event, item) {
   lightboxSettled.value = false;
   lightboxMeasureMode.value = false;
   lightboxFlight.value = null;
+  lightboxOriginX.value = sourceRect
+    ? ((sourceRect.left + sourceRect.width / 2) / window.innerWidth * 100).toFixed(1)
+    : 50;
+  lightboxOriginY.value = sourceRect
+    ? ((sourceRect.top + sourceRect.height / 2) / window.innerHeight * 100).toFixed(1)
+    : 50;
   lightboxIndex.value = index;
   document.body.style.overflow = "hidden";
 
@@ -1382,35 +1523,24 @@ onBeforeUnmount(() => {
 
     <Transition name="gallery-loader-fade">
       <div v-if="galleryPhase === 'loading'" class="gallery-loader">
-        <div class="gallery-loader__panel">
-          <p class="gallery-loader__eyebrow">Math Curve Loader</p>
-          <div class="gallery-loader__orbit">
-            <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
-              <g :transform="loaderGroupTransform">
-                <path
-                  class="gallery-loader__path"
-                  :d="loaderPathData"
-                />
-                <circle
-                  v-for="(particle, index) in loaderParticles"
-                  :key="`${loaderVariantKey}-${index}`"
-                  class="gallery-loader__particle"
-                  :cx="particle.cx"
-                  :cy="particle.cy"
-                  :r="particle.r"
-                  :opacity="particle.opacity"
-                />
-              </g>
-            </svg>
-          </div>
-          <div class="gallery-loader__meta">
-            <span>{{ activeLoaderVariant.label }}</span>
-            <span>{{ galleryLoadPercent }}%</span>
-          </div>
-          <div class="gallery-loader__progress">
-            <span :style="{ transform: `scaleX(${galleryLoadProgress})` }"></span>
-          </div>
-          <p class="gallery-loader__hint">正在整理图像与版式，准备一次完整贴墙。</p>
+        <div class="gallery-loader__orbit" aria-label="loading">
+          <svg viewBox="0 0 100 100" fill="none" aria-hidden="true">
+            <g :transform="loaderGroupTransform">
+              <path
+                class="gallery-loader__path"
+                :d="loaderPathData"
+              />
+              <circle
+                v-for="(particle, index) in loaderParticles"
+                :key="`${loaderVariantKey}-${index}`"
+                class="gallery-loader__particle"
+                :cx="particle.cx"
+                :cy="particle.cy"
+                :r="particle.r"
+                :opacity="particle.opacity"
+              />
+            </g>
+          </svg>
         </div>
       </div>
     </Transition>
@@ -1445,20 +1575,6 @@ onBeforeUnmount(() => {
         <div class="photo-wall">
           <template v-if="sceneImagesMounted">
             <div
-              v-for="paper in basePaperItems"
-              :key="`${paper.id}-${revealRunId}`"
-              class="base-paper"
-              :style="{
-                '--x': `${paper.x}px`,
-                '--y': `${paper.y}px`,
-                '--rotate': `${paper.rotate}deg`,
-                width: `${paper.width}px`,
-                height: `${paper.height}px`,
-                zIndex: paper.zIndex
-              }"
-              aria-hidden="true"
-            ></div>
-            <div
               v-for="item in photoWallItems"
               :key="`${item.filename}-${item.instanceIndex}-${revealRunId}`"
               class="photo-leaf"
@@ -1475,6 +1591,7 @@ onBeforeUnmount(() => {
                 '--drift-start-y': `${item.driftStartY}px`,
                 '--drift-start-rotate': `${item.driftStartRotate}deg`,
                 '--drift-mid-x': `${item.driftMidX}px`,
+                '--drift-mid-y': `${item.driftMidY}px`,
                 '--drift-mid-rotate': `${item.driftMidRotate}deg`,
                 '--paste-delay': `${item.pasteDelay}s`,
                 '--paste-duration': `${item.pasteDuration}s`,
@@ -1513,6 +1630,10 @@ onBeforeUnmount(() => {
             'is-settled': lightboxSettled,
             'is-measuring': lightboxMeasureMode
           }"
+          :style="{
+            '--origin-x': lightboxOriginX + '%',
+            '--origin-y': lightboxOriginY + '%'
+          }"
         >
           <div class="lightbox__backdrop" @click="closeLightbox">
             <img
@@ -1544,6 +1665,7 @@ onBeforeUnmount(() => {
               :title="getSourceTitle()"
               @click="openSourceLink"
             >
+              <div class="lightbox__card-shimmer" aria-hidden="true"></div>
               <img
                 :src="getGalleryImageUrl(activeFilename)"
                 :alt="localizedGalleryDetail.title"
@@ -2291,8 +2413,8 @@ onBeforeUnmount(() => {
   opacity: 0.34;
 }
 
-.lb-enter-active { transition: opacity 0.4s ease; }
-.lb-leave-active { transition: opacity 0.3s ease; }
+.lb-enter-active { transition: opacity 0.06s ease; }
+.lb-leave-active { transition: opacity 0.32s ease; }
 .lb-enter-from, .lb-leave-to { opacity: 0; }
 
 /* ═══════════════════════════════════════════
@@ -3079,104 +3201,45 @@ onBeforeUnmount(() => {
 }
 
 .gallery-loader {
-  position: fixed;
-  inset: 0;
-  z-index: 180;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(255, 250, 232, 0.92), rgba(246, 243, 232, 0.94) 34%, rgba(232, 228, 213, 0.98) 100%);
-  backdrop-filter: blur(8px);
-}
-
-.gallery-loader__panel {
-  width: min(460px, calc(100vw - 40px));
-  padding: 34px 32px 30px;
-  border: 1px solid rgba(206, 199, 179, 0.88);
-  border-radius: 26px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 252, 0.96), rgba(243, 238, 223, 0.94));
-  box-shadow:
-    0 28px 80px rgba(112, 103, 78, 0.16),
-    0 10px 24px rgba(112, 103, 78, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-}
-
-.gallery-loader__eyebrow {
-  margin: 0 0 12px;
-  color: rgba(144, 132, 96, 0.78);
-  font-size: 11px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 90;
+  width: min(160px, 28vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .gallery-loader__orbit {
   display: grid;
   place-items: center;
-  width: min(240px, 52vw);
-  margin: 0 auto 18px;
+  width: 100%;
   aspect-ratio: 1;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 248, 221, 0.84), rgba(247, 242, 224, 0.4) 42%, transparent 72%);
+    radial-gradient(circle at 50% 50%, rgba(255, 248, 221, 0.36), rgba(247, 242, 224, 0.14) 42%, transparent 72%);
+  filter: drop-shadow(0 6px 18px rgba(168, 157, 112, 0.12));
 }
 
 .gallery-loader__orbit svg {
   width: 100%;
   height: 100%;
   overflow: visible;
-  color: rgba(143, 156, 111, 0.92);
+  color: rgba(143, 156, 111, 0.9);
 }
 
 .gallery-loader__path {
   stroke: currentColor;
-  stroke-width: 3;
+  stroke-width: 3.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
-  opacity: 0.14;
+  opacity: 0.12;
 }
 
 .gallery-loader__particle {
   fill: currentColor;
-}
-
-.gallery-loader__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 10px;
-  color: rgba(97, 101, 83, 0.82);
-  font-size: 13px;
-  letter-spacing: 0.03em;
-}
-
-.gallery-loader__progress {
-  height: 7px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(199, 193, 175, 0.5);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6);
-}
-
-.gallery-loader__progress span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background:
-    linear-gradient(90deg, rgba(154, 176, 117, 0.82), rgba(227, 198, 118, 0.92));
-  transform-origin: 0 50%;
-  transition: transform 0.22s ease;
-}
-
-.gallery-loader__hint {
-  margin: 14px 0 0;
-  color: rgba(108, 108, 96, 0.7);
-  font-size: 12px;
-  line-height: 1.7;
 }
 
 .gallery-loader-fade-enter-active,
@@ -3187,29 +3250,13 @@ onBeforeUnmount(() => {
 .gallery-loader-fade-enter-from,
 .gallery-loader-fade-leave-to {
   opacity: 0;
-  transform: scale(0.98);
-}
-
-.base-paper {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #fbfbfa, #eeeeec);
-  border: 1px solid rgba(206, 206, 202, 0.74);
-  box-shadow:
-    0 8px 14px rgba(70, 70, 64, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transform: translate(var(--x), var(--y)) rotate(var(--rotate));
-  opacity: 0;
-  animation: basePaperFadeIn 0.9s ease calc(var(--paper-delay, 0s) + 0.12s) both;
-  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.96);
 }
 
 .photo-leaf {
   opacity: 0;
   transform: translate(var(--x), var(--y)) rotate(var(--rotate));
-  animation: photoDriftPasteIn var(--paste-duration) cubic-bezier(0.16, 1, 0.3, 1) var(--paste-delay) both;
+  animation: photoDriftPasteIn var(--paste-duration) cubic-bezier(0.22, 1, 0.36, 1) var(--paste-delay) both;
 }
 
 .photo-leaf__paper {
@@ -3223,8 +3270,7 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(206, 206, 202, 0.9);
   box-shadow:
     0 9px 14px rgba(64, 64, 58, 0.18),
-    0 2px 3px rgba(64, 64, 58, 0.12),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.82);
+    0 2px 3px rgba(64, 64, 58, 0.12);
   backdrop-filter: none;
   transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
@@ -3242,7 +3288,8 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: 1px;
   background: #e9e9e6;
-  box-shadow: 0 0 0 1px rgba(216, 216, 211, 0.76);
+  border: none;
+  box-shadow: none;
 }
 
 .photo-leaf__inner::after {
@@ -3320,43 +3367,16 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes basePaperFadeIn {
-  0% {
-    opacity: 0;
-    transform: translate(var(--x), calc(var(--y) + 16px)) rotate(var(--rotate)) scale(0.98);
-    filter: blur(6px);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1);
-    filter: blur(0);
-  }
-}
-
 @keyframes photoDriftPasteIn {
   0% {
     opacity: 0;
-    transform:
-      translate(calc(var(--x) + var(--drift-start-x)), calc(var(--y) + var(--drift-start-y)))
-      rotate(calc(var(--rotate) + var(--drift-start-rotate)))
-      scale(0.72);
-    filter: blur(12px) brightness(1.08) saturate(0.84);
+    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(0.82);
+    filter: blur(12px) brightness(1.14) saturate(0.78);
   }
-  38% {
-    opacity: 0.92;
-    transform:
-      translate(calc(var(--x) + var(--drift-mid-x)), calc(var(--y) - 26px))
-      rotate(calc(var(--rotate) + var(--drift-mid-rotate)))
-      scale(0.94);
-    filter: blur(4px) brightness(1.03) saturate(0.9);
-  }
-  74% {
+  45% {
     opacity: 1;
-    transform:
-      translate(calc(var(--x) + 4px), calc(var(--y) - 6px))
-      rotate(calc(var(--rotate) + 0.8deg))
-      scale(1.012);
-    filter: blur(0) brightness(1.01) saturate(0.96);
+    transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scale(1.015);
+    filter: blur(1px) brightness(1.04) saturate(0.95);
   }
   100% {
     opacity: 1;
@@ -3371,16 +3391,7 @@ onBeforeUnmount(() => {
   }
 
   .gallery-loader {
-    padding: 16px;
-  }
-
-  .gallery-loader__panel {
-    padding: 26px 22px 22px;
-    border-radius: 22px;
-  }
-
-  .gallery-loader__orbit {
-    width: min(220px, 62vw);
+    width: min(148px, 42vw);
   }
 
   .back-btn {
@@ -3605,26 +3616,14 @@ onBeforeUnmount(() => {
     linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(241, 235, 219, 0.92));
   border: 1px solid rgba(212, 202, 172, 0.9);
   box-shadow:
-    0 22px 42px rgba(98, 90, 69, 0.24),
-    0 8px 16px rgba(98, 90, 69, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  filter: saturate(0.96) brightness(1.02);
+    0 30px 60px rgba(108, 100, 76, 0.3),
+    0 12px 24px rgba(108, 100, 76, 0.16),
+    0 0 50px rgba(255, 235, 160, 0.4),
+    0 0 100px rgba(255, 222, 125, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
   opacity: 0.98;
-  transition:
-    transform 0.82s cubic-bezier(0.18, 1, 0.24, 1),
-    border-radius 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.56s ease,
-    filter 0.56s ease,
-    opacity 0.34s ease;
-}
-
-.lightbox-flight.is-active {
-  border-radius: var(--flight-radius-end);
-  box-shadow:
-    0 42px 86px rgba(98, 90, 69, 0.18),
-    0 14px 34px rgba(98, 90, 69, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.96);
-  filter: saturate(1.03) brightness(1.05);
+  transition: none;
+  will-change: transform, filter, border-radius;
 }
 
 .lightbox-flight img {
@@ -3656,13 +3655,6 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(205, 193, 160, 0.72);
   border-radius: calc(var(--flight-radius-start) * 0.78);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
-  transition:
-    inset 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-    border-radius 0.7s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.lightbox-flight.is-active .lightbox-flight__frame {
-  border-radius: calc(var(--flight-radius-end) - 6px);
 }
 
 .lightbox-flight__dust {
@@ -3673,13 +3665,250 @@ onBeforeUnmount(() => {
   filter: blur(18px);
   opacity: 0.6;
   transform: scale(0.86);
-  transition:
-    transform 0.82s cubic-bezier(0.18, 1, 0.24, 1),
-    opacity 0.66s ease;
 }
 
-.lightbox-flight.is-active .lightbox-flight__dust {
-  opacity: 0.3;
-  transform: scale(1.16);
+.lightbox-flight::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 240, 175, 0.5) 0%, rgba(255, 240, 175, 0.14) 32%, transparent 60%);
+  filter: blur(28px);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: -1;
+  animation: flightAura 0.84s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes flightAura {
+  0% { transform: scale(0.5); opacity: 0.85; }
+  100% { transform: scale(1.5); opacity: 0.18; }
+}
+
+/* ═══════════════════════════════════════════
+   CINEMATIC LIGHTBOX OPEN TRANSITION
+   ═══════════════════════════════════════════ */
+
+/* Radial backdrop reveal from click origin */
+.lightbox__backdrop {
+  opacity: 1;
+  clip-path: circle(0% at var(--origin-x, 50%) var(--origin-y, 50%));
+  transition: clip-path 0.92s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lightbox.is-visible .lightbox__backdrop {
+  clip-path: circle(150% at var(--origin-x, 50%) var(--origin-y, 50%));
+}
+
+/* Flash burst at card destination */
+.lightbox__stage::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 140%;
+  height: 140%;
+  transform: translate(-50%, -50%) scale(0);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 242, 180, 0.7) 0%, rgba(255, 236, 160, 0.3) 30%, transparent 65%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.lightbox.is-settled .lightbox__stage::before {
+  animation: flashBurst 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes flashBurst {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.9;
+  }
+  35% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* Stage wrapper: float-in */
+.lightbox__stage {
+  transform: translateY(28px) scale(0.94);
+  opacity: 0;
+  filter: blur(10px);
+  transition:
+    transform 0.96s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.5s ease,
+    filter 0.76s ease;
+}
+
+.lightbox.is-settled .lightbox__stage {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Card: 6-axis 3D morph entrance */
+.lightbox__card {
+  opacity: 0;
+  transform:
+    perspective(1800px)
+    translateY(65px)
+    translateZ(-260px)
+    rotateX(22deg)
+    rotateY(-18deg)
+    rotateZ(-3.5deg)
+    scale(0.72);
+  filter: blur(20px) saturate(0.74) brightness(0.82);
+  transition:
+    transform 1.12s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.5s ease,
+    filter 0.88s ease,
+    box-shadow 0.76s cubic-bezier(0.2, 1, 0.3, 1),
+    border-color 0.5s ease;
+}
+
+.lightbox.is-settled .lightbox__card {
+  opacity: 1;
+  transform:
+    perspective(1800px)
+    translateY(0)
+    translateZ(0)
+    rotateX(0deg)
+    rotateY(0deg)
+    rotateZ(0deg)
+    scale(1);
+  filter: blur(0) saturate(1) brightness(1);
+  box-shadow:
+    0 36px 72px rgba(104, 96, 73, 0.26),
+    0 14px 26px rgba(104, 96, 73, 0.12),
+    0 0 0 1px rgba(255, 248, 220, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.lightbox.is-settled .lightbox__card:not(:disabled):hover {
+  transform:
+    perspective(1800px)
+    translateY(-8px)
+    translateZ(10px)
+    rotateX(1.5deg)
+    rotateY(-0.8deg)
+    scale(1.018);
+  box-shadow:
+    0 48px 88px rgba(104, 96, 73, 0.28),
+    0 18px 34px rgba(104, 96, 73, 0.14),
+    0 0 50px rgba(255, 238, 170, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+.lightbox.is-measuring .lightbox__card {
+  opacity: 0;
+  transform: none;
+  filter: none;
+  transition: none;
+}
+
+/* Card image: delayed reveal */
+.lightbox__card img {
+  transform: scale(1.1);
+  opacity: 0;
+  filter: saturate(0.76) brightness(0.84) contrast(0.92);
+  transition:
+    transform 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.1s,
+    opacity 0.6s ease 0.16s,
+    filter 0.9s ease 0.12s;
+}
+
+.lightbox.is-settled .lightbox__card img {
+  transform: scale(1);
+  opacity: 1;
+  filter: saturate(1) brightness(1) contrast(1);
+}
+
+/* Halo: golden glow burst */
+.lightbox__halo {
+  opacity: 0;
+  transform: translateY(36px) scale(0.3);
+  transition:
+    transform 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+    opacity 0.9s ease 0.08s;
+}
+
+.lightbox.is-settled .lightbox__halo {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Shadow: delayed ground shadow */
+.lightbox__shadow {
+  opacity: 0;
+  transform: translateY(28px) scaleX(0.5);
+  transition:
+    transform 1s cubic-bezier(0.16, 1, 0.3, 1) 0.06s,
+    opacity 0.9s ease 0.06s;
+}
+
+.lightbox.is-settled .lightbox__shadow {
+  opacity: 0.92;
+  transform: translateY(0) scaleX(1);
+}
+
+/* Info panel: staggered cascade */
+.lightbox__info {
+  transform: translateX(44px) translateY(20px);
+  opacity: 0;
+  filter: blur(18px);
+  transition:
+    transform 0.88s cubic-bezier(0.16, 1, 0.3, 1) 0.12s,
+    opacity 0.54s ease 0.12s,
+    filter 0.76s ease 0.12s;
+}
+
+.lightbox.is-settled .lightbox__info {
+  transform: translateX(0) translateY(0);
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Shimmer sweep on card after reveal */
+.lightbox__card-shimmer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 36%,
+    rgba(255, 255, 255, 0.22) 42%,
+    rgba(255, 255, 255, 0.44) 50%,
+    rgba(255, 255, 255, 0.22) 58%,
+    transparent 64%
+  );
+  transform: translateX(-180%);
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+}
+
+.lightbox.is-settled .lightbox__card-shimmer {
+  animation: cardShimmerSweep 0.88s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+}
+
+@keyframes cardShimmerSweep {
+  0% {
+    transform: translateX(-180%);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(180%);
+    opacity: 0;
+  }
 }
 </style>
