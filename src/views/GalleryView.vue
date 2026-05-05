@@ -2068,32 +2068,15 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: rgba(5, 5, 16, 0.94);
-  backdrop-filter: blur(60px);
+  background: transparent;
+  backdrop-filter: none;
   opacity: 0;
   transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.lightbox__backdrop::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 50% at 50% 50%, rgba(61, 216, 176, 0.03) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 40% at 20% 30%, rgba(100, 80, 200, 0.04) 0%, transparent 50%);
-  pointer-events: none;
-}
-
+.lightbox__backdrop::before,
 .lightbox__backdrop::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 48%, rgba(255, 239, 171, 0.26), transparent 24%),
-    radial-gradient(circle at 50% 50%, rgba(173, 214, 188, 0.2), transparent 46%);
-  filter: blur(18px);
-  opacity: 0.7;
-  pointer-events: none;
+  display: none;
 }
 
 .lightbox.is-visible .lightbox__backdrop {
@@ -2202,15 +2185,12 @@ onBeforeUnmount(() => {
 .lightbox__card {
   position: relative;
   display: block;
-  padding: clamp(14px, 1.8vw, 24px);
+  padding: 0;
   border: 0;
-  border-radius: 16px;
-  background: rgba(12, 16, 32, 0.8);
+  border-radius: 10px;
+  background: transparent;
   cursor: pointer;
-  box-shadow:
-    0 0 0 1px rgba(61, 216, 176, 0.06),
-    0 40px 80px rgba(0, 0, 0, 0.5),
-    0 0 60px rgba(61, 216, 176, 0.04);
+  box-shadow: none;
   overflow: hidden;
   transform: translateY(34px) scale(0.94) rotateX(10deg);
   transform-origin: 50% 64%;
@@ -2220,40 +2200,22 @@ onBeforeUnmount(() => {
   transition:
     transform 0.82s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.55s ease,
-    filter 0.7s ease,
-    box-shadow 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    filter 0.7s ease;
 }
 
 .lightbox__card:disabled { cursor: default; }
 
 .lightbox__card:not(:disabled):hover {
   transform: translateY(-4px) scale(1.01);
-  box-shadow:
-    0 0 0 1px rgba(61, 216, 176, 0.12),
-    0 48px 90px rgba(0, 0, 0, 0.55),
-    0 0 80px rgba(61, 216, 176, 0.06);
+  box-shadow: none;
 }
 
 .lightbox__card::before {
-  content: "";
-  position: absolute;
-  inset: clamp(14px, 1.8vw, 24px);
-  border: 1px solid rgba(61, 216, 176, 0.08);
-  border-radius: 8px;
-  pointer-events: none;
-  z-index: 2;
+  display: none;
 }
 
 .lightbox__card::after {
-  content: "";
-  position: absolute;
-  inset: -10%;
-  background:
-    radial-gradient(circle at 50% 10%, rgba(255, 250, 224, 0.52), transparent 30%),
-    radial-gradient(circle at 50% 100%, rgba(255, 225, 132, 0.16), transparent 36%);
-  filter: blur(18px);
-  opacity: 0.78;
-  pointer-events: none;
+  display: none;
 }
 
 .lightbox.is-settled .lightbox__card {
@@ -2830,21 +2792,17 @@ onBeforeUnmount(() => {
 }
 
 .lightbox__backdrop {
-  background: rgba(250, 247, 231, 0.9);
+  background: transparent;
 }
 
 .lightbox__backdrop::before {
-  background:
-    radial-gradient(ellipse 54% 42% at 50% 48%, rgba(255, 238, 167, 0.28), transparent 66%),
-    radial-gradient(ellipse 34% 34% at 22% 26%, rgba(160, 205, 176, 0.2), transparent 58%);
+  display: none;
 }
 
 .lightbox__card {
-  background: rgba(255, 252, 240, 0.82);
-  box-shadow:
-    0 0 0 1px rgba(172, 148, 80, 0.12),
-    0 38px 86px rgba(103, 118, 89, 0.2),
-    0 0 70px rgba(255, 231, 151, 0.16);
+  background: transparent;
+  box-shadow: none;
+  border: 0;
 }
 
 .lightbox__info {
@@ -3491,10 +3449,7 @@ onBeforeUnmount(() => {
 
 /* Lightbox motion polish: expand as a paper card instead of a glowing rounded poster. */
 .lightbox {
-  background:
-    radial-gradient(circle at 50% 48%, rgba(255, 246, 205, 0.28), transparent 20%),
-    radial-gradient(circle at 18% 18%, rgba(169, 194, 143, 0.14), transparent 28%),
-    linear-gradient(180deg, rgba(242, 239, 226, 0.72), rgba(229, 224, 206, 0.86));
+  background: transparent;
 }
 
 .lightbox__stage {
@@ -3533,14 +3488,10 @@ onBeforeUnmount(() => {
 
 .lightbox__card {
   border-radius: 10px;
-  padding: clamp(14px, 1.55vw, 22px);
-  background:
-    linear-gradient(180deg, rgba(253, 251, 244, 0.98), rgba(241, 235, 217, 0.94));
-  border: 1px solid rgba(201, 191, 162, 0.84);
-  box-shadow:
-    0 26px 50px rgba(104, 96, 73, 0.22),
-    0 8px 18px rgba(104, 96, 73, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   transform:
     perspective(1800px)
     translateY(30px)
@@ -3552,9 +3503,7 @@ onBeforeUnmount(() => {
   transition:
     transform 0.88s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.42s ease,
-    filter 0.64s ease,
-    box-shadow 0.62s cubic-bezier(0.2, 1, 0.3, 1),
-    border-color 0.42s ease;
+    filter 0.64s ease;
 }
 
 .lightbox.is-settled .lightbox__card {
@@ -3569,28 +3518,7 @@ onBeforeUnmount(() => {
 
 .lightbox__card::before,
 .lightbox__card::after {
-  display: block;
-}
-
-.lightbox__card::before {
-  content: "";
-  position: absolute;
-  inset: clamp(12px, 1.35vw, 18px);
-  border: 1px solid rgba(207, 194, 160, 0.78);
-  border-radius: 4px;
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-.lightbox__card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.56), transparent 24%),
-    linear-gradient(180deg, transparent 58%, rgba(173, 151, 87, 0.09) 100%);
-  mix-blend-mode: screen;
-  pointer-events: none;
+  display: none;
 }
 
 .lightbox__card img {
@@ -3614,26 +3542,7 @@ onBeforeUnmount(() => {
 }
 
 .lightbox__shadow {
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: -5%;
-  height: clamp(28px, 6vw, 54px);
-  background: radial-gradient(circle, rgba(85, 74, 46, 0.28) 0%, rgba(85, 74, 46, 0.08) 42%, transparent 75%);
-  filter: blur(20px);
-  opacity: 0;
-  transform: translateY(20px) scaleX(0.74);
-  transform-origin: 50% 50%;
-  transition:
-    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.02s,
-    opacity 0.8s ease 0.02s;
-  z-index: -1;
-  pointer-events: none;
-}
-
-.lightbox.is-settled .lightbox__shadow {
-  opacity: 0.92;
-  transform: translateY(0) scaleX(1);
+  display: none;
 }
 
 .lightbox__info {
@@ -3865,11 +3774,7 @@ onBeforeUnmount(() => {
     rotateZ(0deg)
     scale(1);
   filter: blur(0) saturate(1) brightness(1);
-  box-shadow:
-    0 36px 72px rgba(104, 96, 73, 0.26),
-    0 14px 26px rgba(104, 96, 73, 0.12),
-    0 0 0 1px rgba(255, 248, 220, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  box-shadow: none;
 }
 
 .lightbox.is-settled .lightbox__card:not(:disabled):hover {
@@ -3880,11 +3785,7 @@ onBeforeUnmount(() => {
     rotateX(1.5deg)
     rotateY(-0.8deg)
     scale(1.018);
-  box-shadow:
-    0 48px 88px rgba(104, 96, 73, 0.28),
-    0 18px 34px rgba(104, 96, 73, 0.14),
-    0 0 50px rgba(255, 238, 170, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  box-shadow: none;
 }
 
 .lightbox.is-measuring .lightbox__card {
@@ -3913,30 +3814,19 @@ onBeforeUnmount(() => {
 
 /* Halo: golden glow burst */
 .lightbox__halo {
-  opacity: 0;
-  transform: translateY(36px) scale(0.3);
-  transition:
-    transform 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
-    opacity 0.9s ease 0.08s;
+  display: none;
 }
 
 .lightbox.is-settled .lightbox__halo {
-  opacity: 1;
-  transform: translateY(0) scale(1);
+  display: none;
 }
 
-/* Shadow: delayed ground shadow */
 .lightbox__shadow {
-  opacity: 0;
-  transform: translateY(28px) scaleX(0.5);
-  transition:
-    transform 1s cubic-bezier(0.16, 1, 0.3, 1) 0.06s,
-    opacity 0.9s ease 0.06s;
+  display: none;
 }
 
 .lightbox.is-settled .lightbox__shadow {
-  opacity: 0.92;
-  transform: translateY(0) scaleX(1);
+  display: none;
 }
 
 /* Info panel: staggered cascade */
@@ -3958,25 +3848,11 @@ onBeforeUnmount(() => {
 
 /* Shimmer sweep on card after reveal */
 .lightbox__card-shimmer {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    105deg,
-    transparent 36%,
-    rgba(255, 255, 255, 0.22) 42%,
-    rgba(255, 255, 255, 0.44) 50%,
-    rgba(255, 255, 255, 0.22) 58%,
-    transparent 64%
-  );
-  transform: translateX(-180%);
-  pointer-events: none;
-  z-index: 10;
-  opacity: 0;
+  display: none;
 }
 
 .lightbox.is-settled .lightbox__card-shimmer {
-  animation: cardShimmerSweep 0.88s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+  display: none;
 }
 
 @keyframes cardShimmerSweep {

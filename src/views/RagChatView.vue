@@ -1080,7 +1080,7 @@ onBeforeUnmount(() => {
   grid-template-rows: 56px minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-family: var(--sans);
 }
@@ -1092,7 +1092,7 @@ onBeforeUnmount(() => {
   z-index: -1;
   pointer-events: none;
   background: url("/artwork/rag-chat-background.png") center center / cover no-repeat;
-  opacity: 0.18;
+  opacity: 1;
 }
 
 .rag-shell button,
@@ -1160,9 +1160,9 @@ onBeforeUnmount(() => {
 .chat-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--card);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-md);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .sidebar-card {
@@ -1547,19 +1547,19 @@ onBeforeUnmount(() => {
   padding: 20px 18px 28px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--card);
+  background: transparent;
   text-align: left;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;
   overflow: hidden;
 }
 
 .suggestion-card:hover {
   border-color: rgba(107, 127, 90, 0.4);
-  background: rgba(255, 252, 246, 0.95);
+  background: rgba(255, 252, 246, 0.35);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .suggestion-card__index {
@@ -1655,13 +1655,13 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  background: var(--card);
-  backdrop-filter: blur(6px);
+  background: rgba(255, 252, 246, 0.35);
+  backdrop-filter: none;
 }
 
 .message-bubble--user {
   border-color: rgba(107, 127, 90, 0.2);
-  background: rgba(107, 127, 90, 0.06);
+  background: rgba(107, 127, 90, 0.08);
 }
 
 .message-bubble__content {
@@ -1824,8 +1824,8 @@ onBeforeUnmount(() => {
 .composer-box {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--card);
-  backdrop-filter: blur(8px);
+  background: rgba(255, 252, 246, 0.35);
+  backdrop-filter: none;
   transition: border-color 0.2s ease;
 }
 
@@ -1975,7 +1975,7 @@ onBeforeUnmount(() => {
   place-items: center;
   border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--card);
+  background: rgba(255, 252, 246, 0.35);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.18s ease;
@@ -1999,8 +1999,8 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 16px;
-  background: var(--card);
-  backdrop-filter: blur(8px);
+  background: rgba(255, 252, 246, 0.35);
+  backdrop-filter: none;
   overflow: hidden;
 }
 
