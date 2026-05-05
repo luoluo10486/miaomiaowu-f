@@ -1860,7 +1860,7 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: #050510;
+  background: url("/artwork/gallery-bg.jpg") center center / cover no-repeat;
   font-family: "Noto Serif SC", "EB Garamond", Georgia, "Times New Roman", serif;
   color: rgba(220, 225, 240, 0.85);
   user-select: none;
@@ -2519,36 +2519,13 @@ onBeforeUnmount(() => {
   .lightbox__arrow { width: 40px; height: 40px; }
 }
 .gallery-root {
-  background:
-    radial-gradient(circle at 50% 38%, rgba(255, 255, 246, 0.94) 0 16%, rgba(243, 250, 237, 0.75) 17% 34%, transparent 58%),
-    linear-gradient(180deg, #f9f4e7 0%, #edf7ef 44%, #f4f0df 100%);
+  background: url("/artwork/gallery-bg.jpg") center center / cover no-repeat;
   color: rgba(67, 89, 73, 0.86);
 }
 
 .gallery-root::before,
 .gallery-root::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.gallery-root::before {
-  background:
-    radial-gradient(ellipse 54% 32% at 50% 30%, rgba(255, 246, 196, 0.5), transparent 70%),
-    radial-gradient(ellipse 34% 28% at 18% 28%, rgba(186, 219, 198, 0.34), transparent 72%),
-    radial-gradient(ellipse 36% 30% at 80% 18%, rgba(231, 192, 163, 0.28), transparent 72%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.58), transparent 55%);
-}
-
-.gallery-root::after {
-  opacity: 0.2;
-  background-image:
-    linear-gradient(rgba(136, 160, 131, 0.16) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(136, 160, 131, 0.12) 1px, transparent 1px);
-  background-size: 54px 54px;
-  mask-image: radial-gradient(circle at 50% 42%, #000 0, transparent 68%);
+  display: none;
 }
 
 .bg-deep {
@@ -3203,7 +3180,7 @@ onBeforeUnmount(() => {
 /* Final flat paper-wall treatment: close to the reference image, no 3D depth. */
 .gallery-root {
   cursor: default;
-  background: #e8e8e4;
+  background: url("/artwork/gallery-bg.jpg") center center / cover no-repeat;
   color: #596057;
 }
 
@@ -3225,9 +3202,7 @@ onBeforeUnmount(() => {
 .wall-viewport {
   z-index: 2;
   perspective: none;
-  background:
-    radial-gradient(circle at 48% 42%, rgba(255, 255, 255, 0.32), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(214, 214, 214, 0.18));
+  background: transparent;
 }
 
 .wall-scene,
