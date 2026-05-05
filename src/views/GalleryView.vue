@@ -2607,17 +2607,11 @@ onBeforeUnmount(() => {
 }
 
 .back-btn {
-  border-color: rgba(142, 167, 112, 0.24);
-  background: rgba(255, 252, 240, 0.62);
-  color: rgba(77, 99, 72, 0.78);
-  box-shadow: 0 12px 36px rgba(113, 133, 105, 0.14);
+  color: rgba(77, 99, 72, 0.5);
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 248, 0.88);
-  border-color: rgba(199, 168, 83, 0.45);
-  color: rgba(96, 118, 78, 0.95);
-  box-shadow: 0 18px 46px rgba(116, 137, 92, 0.18), 0 0 34px rgba(255, 226, 139, 0.18);
+  color: rgba(96, 118, 78, 0.85);
 }
 
 .sample-toggle {
@@ -2630,14 +2624,14 @@ onBeforeUnmount(() => {
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid rgba(142, 167, 112, 0.26);
+  border: 0;
   border-radius: 50%;
-  background: rgba(255, 252, 240, 0.66);
-  color: rgba(77, 99, 72, 0.78);
-  box-shadow: 0 14px 40px rgba(113, 133, 105, 0.14);
-  backdrop-filter: blur(14px);
+  background: transparent;
+  color: rgba(77, 99, 72, 0.5);
+  box-shadow: none;
+  backdrop-filter: none;
   cursor: pointer;
-  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: color 0.25s ease;
 }
 
 .sample-toggle svg {
@@ -2646,10 +2640,7 @@ onBeforeUnmount(() => {
 }
 
 .sample-toggle:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 248, 0.9);
-  border-color: rgba(199, 168, 83, 0.45);
-  box-shadow: 0 18px 46px rgba(116, 137, 92, 0.18), 0 0 34px rgba(255, 226, 139, 0.18);
+  color: rgba(96, 118, 78, 0.85);
 }
 
 .sample-toggle.is-refreshing {
@@ -3254,11 +3245,7 @@ onBeforeUnmount(() => {
 /* Final flat paper-wall treatment: close to the reference image, no 3D depth. */
 .gallery-root {
   cursor: default;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 1px, transparent 1px),
-    #e6e6e6;
-  background-size: 38px 38px;
+  background: #e8e8e4;
   color: #596057;
 }
 
@@ -3421,27 +3408,22 @@ onBeforeUnmount(() => {
 .back-btn,
 .sample-toggle {
   z-index: 120;
-  border: 1px solid rgba(190, 190, 185, 0.82);
-  background: rgba(247, 247, 243, 0.86);
-  color: rgba(80, 86, 78, 0.82);
-  box-shadow:
-    0 10px 20px rgba(96, 96, 88, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
+  border: 0;
+  background: transparent;
+  color: rgba(80, 86, 78, 0.55);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .back-btn:hover,
 .sample-toggle:hover {
-  background: rgba(255, 255, 252, 0.94);
-  border-color: rgba(170, 170, 165, 0.94);
-  color: rgba(62, 68, 60, 0.92);
-  box-shadow:
-    0 14px 28px rgba(96, 96, 88, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
+  background: transparent;
+  color: rgba(62, 68, 60, 0.88);
+  box-shadow: none;
 }
 
 .sample-toggle.is-refreshing {
-  color: rgba(174, 174, 166, 0.96);
+  color: rgba(80, 86, 78, 0.55);
 }
 
 @keyframes photoPasteIn {
