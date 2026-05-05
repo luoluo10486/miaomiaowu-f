@@ -1193,7 +1193,7 @@ onBeforeUnmount(() => {
   height: 34px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);

@@ -1662,18 +1662,22 @@ onBeforeUnmount(() => {
       type="button"
       :class="{ 'is-refreshing': refreshOnReload }"
       :aria-pressed="refreshOnReload"
+      :title="refreshOnReload ? '刷新抽样' : '固定图集'"
       @click="toggleRefreshMode"
     >
-      <span class="sample-toggle__dot"></span>
-      <span>{{ refreshOnReload ? "刷新抽样" : "固定图集" }}</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+        <path d="M16 16h5v5" />
+      </svg>
     </button>
 
     <!-- Back button -->
-    <button class="back-btn" type="button" @click="router.push('/workspace')">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M19 12H5M12 19l-7-7 7-7"/>
+    <button class="back-btn" type="button" title="返回" @click="router.push('/workspace')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
-      <span>返回</span>
     </button>
 
     <!-- Photo wall -->
@@ -1906,20 +1910,23 @@ onBeforeUnmount(() => {
   top: 28px;
   left: 32px;
   z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 20px 10px 14px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 1px solid rgba(61, 216, 176, 0.1);
-  border-radius: 10px;
+  border-radius: 50%;
   background: rgba(10, 15, 30, 0.5);
   color: rgba(180, 210, 200, 0.5);
   cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  letter-spacing: 0.06em;
   transition: all 0.35s ease;
   backdrop-filter: blur(12px);
+}
+
+.back-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .back-btn:hover {
@@ -2601,19 +2608,9 @@ onBeforeUnmount(() => {
 
 .back-btn {
   border-color: rgba(142, 167, 112, 0.24);
-  border-radius: 999px;
   background: rgba(255, 252, 240, 0.62);
   color: rgba(77, 99, 72, 0.78);
   box-shadow: 0 12px 36px rgba(113, 133, 105, 0.14);
-}
-
-.back-btn span {
-  font-size: 0;
-}
-
-.back-btn span::after {
-  content: "返回";
-  font-size: 13px;
 }
 
 .back-btn:hover {
@@ -2628,22 +2625,24 @@ onBeforeUnmount(() => {
   right: 28px;
   bottom: 26px;
   z-index: 120;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 112px;
-  padding: 11px 15px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 1px solid rgba(142, 167, 112, 0.26);
-  border-radius: 999px;
+  border-radius: 50%;
   background: rgba(255, 252, 240, 0.66);
   color: rgba(77, 99, 72, 0.78);
   box-shadow: 0 14px 40px rgba(113, 133, 105, 0.14);
   backdrop-filter: blur(14px);
   cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-  letter-spacing: 0.02em;
   transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.sample-toggle svg {
+  width: 17px;
+  height: 17px;
 }
 
 .sample-toggle:hover {
@@ -2653,17 +2652,8 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 46px rgba(116, 137, 92, 0.18), 0 0 34px rgba(255, 226, 139, 0.18);
 }
 
-.sample-toggle__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(119, 151, 103, 0.82);
-  box-shadow: 0 0 0 4px rgba(119, 151, 103, 0.12);
-}
-
-.sample-toggle.is-refreshing .sample-toggle__dot {
-  background: rgba(205, 158, 76, 0.92);
-  box-shadow: 0 0 0 4px rgba(205, 158, 76, 0.14), 0 0 18px rgba(255, 216, 128, 0.4);
+.sample-toggle.is-refreshing {
+  color: rgba(205, 158, 76, 0.92);
 }
 
 .wall-viewport {
@@ -3450,10 +3440,8 @@ onBeforeUnmount(() => {
     inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
-.sample-toggle__dot,
-.sample-toggle.is-refreshing .sample-toggle__dot {
-  background: rgba(174, 174, 166, 0.96);
-  box-shadow: 0 0 0 4px rgba(174, 174, 166, 0.18);
+.sample-toggle.is-refreshing {
+  color: rgba(174, 174, 166, 0.96);
 }
 
 @keyframes photoPasteIn {
@@ -3516,8 +3504,6 @@ onBeforeUnmount(() => {
   .sample-toggle {
     right: 16px;
     bottom: 16px;
-    min-width: 104px;
-    padding: 10px 13px;
   }
 }
 
