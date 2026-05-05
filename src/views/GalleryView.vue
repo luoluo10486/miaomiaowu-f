@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { defaultGalleryDetail, galleryDetails } from "../data/gallerySources";
+import { authorTweetMetaBySourceUrl } from "../data/authorTweetMeta";
 import { officialGalleryDetails, officialGalleryImages } from "../data/officialGallerySources";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
@@ -68,6 +69,7 @@ const allGalleryImages = [
 const DISPLAY_IMAGE_COUNT = 100;
 const GALLERY_SAMPLE_STORAGE_KEY = "gallery_bodhi_sample_v1";
 const GALLERY_REFRESH_MODE_STORAGE_KEY = "gallery_bodhi_refresh_mode";
+const MEDIA_ONLY_TWEET_MESSAGE = "这条 X 推文仅发布了图片，没有单独的文字说明。";
 
 function pickRandomImages(images, count) {
   const pool = [...images];
@@ -316,15 +318,17 @@ const localizedGalleryDetail = computed(() => {
 });
 
 const displayAuthorName = computed(() => {
-  return activeTweetMeta.value?.authorName || localizedGalleryDetail.value.title;
+  return localizedGalleryDetail.value.title;
 });
 
 const displayAuthorUrl = computed(() => {
-  return activeTweetMeta.value?.authorUrl || "";
+  const sourceUrl = activeGalleryDetail.value?.sourceUrl || "";
+  return sourceUrl.includes("udon0531") ? activeTweetMeta.value?.authorUrl || "" : "";
 });
 
 const displayTweetText = computed(() => {
-  return activeTweetMeta.value?.tweetText || localizedGalleryDetail.value.description;
+  const tweetText = formatTweetTextForDisplay(activeTweetMeta.value);
+  return tweetText || localizedGalleryDetail.value.description;
 });
 
 function getGalleryImageUrl(filename) {
@@ -517,6 +521,22 @@ function localizeDescription(description) {
     .replace(/商品详情🔽/g, "商品详情：")
     .replace(/🔽详情：/g, "详情：")
     .replace(/Matched to the original X post by Soichiro Yamamoto\./g, "已匹配到山本崇一朗发布的原始 X 动态。");
+}
+
+function formatTweetTextForDisplay(meta) {
+  if (!meta || typeof meta !== "object") return "";
+
+  const tweetText = String(meta.tweetText || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+
+  if (!tweetText) {
+    return meta.mediaOnly ? MEDIA_ONLY_TWEET_MESSAGE : "";
+  }
+
+  const localized = localizeDescription(tweetText);
+  return localized && localized !== "（暂无相关内容）" ? localized : tweetText;
 }
 
 function stripTweetLabel(text) {
@@ -1144,31 +1164,92 @@ function readTweetMetaCache(sourceUrl) {
     const raw = window.localStorage.getItem(getTweetMetaCacheKey(sourceUrl));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : null;
+    return normalizeTweetMeta(parsed);
   } catch {
     return null;
   }
 }
 
 function writeTweetMetaCache(sourceUrl, data) {
+  const normalized = normalizeTweetMeta(data);
+  if (!normalized) return;
+
   try {
-    window.localStorage.setItem(getTweetMetaCacheKey(sourceUrl), JSON.stringify(data));
+    window.localStorage.setItem(getTweetMetaCacheKey(sourceUrl), JSON.stringify(normalized));
   } catch {
     return;
   }
 }
 
-function loadTweetMeta(sourceUrl) {
-  const requestId = ++activeTweetRequestId;
-  activeTweetMeta.value = null;
+function normalizeTweetMeta(meta) {
+  if (!meta || typeof meta !== "object") return null;
 
-  if (!sourceUrl || !sourceUrl.includes("twitter.com/")) return;
+  const normalized = {
+    authorName: String(meta.authorName || "").trim(),
+    authorUrl: String(meta.authorUrl || "").trim(),
+    tweetText: String(meta.tweetText || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .trim(),
+    mediaOnly: Boolean(meta.mediaOnly)
+  };
 
-  const cached = readTweetMetaCache(sourceUrl);
-  if (cached?.authorName || cached?.tweetText) {
-    activeTweetMeta.value = cached;
+  return normalized.authorName || normalized.authorUrl || normalized.tweetText || normalized.mediaOnly
+    ? normalized
+    : null;
+}
+
+function getStaticTweetMeta(sourceUrl) {
+  return normalizeTweetMeta(authorTweetMetaBySourceUrl[sourceUrl]);
+}
+
+function parseTweetSource(sourceUrl) {
+  const match = String(sourceUrl || "").match(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/([^/?#]+)\/status\/(\d+)/i);
+  if (!match) return null;
+
+  return {
+    handle: match[1],
+    tweetId: match[2]
+  };
+}
+
+async function requestTweetMetaFromFx(sourceUrl, requestId) {
+  const tweetSource = parseTweetSource(sourceUrl);
+  if (!tweetSource) return null;
+
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), 10000)
+    : 0;
+
+  try {
+    const response = await fetch(`https://api.fxtwitter.com/${tweetSource.handle}/status/${tweetSource.tweetId}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      signal: controller?.signal
+    });
+    if (!response.ok) return null;
+
+    const payload = await response.json();
+    if (requestId !== activeTweetRequestId) return null;
+
+    const tweet = payload?.tweet;
+    const meta = normalizeTweetMeta({
+      authorName: String(tweet?.author?.name || "").trim(),
+      authorUrl: String(tweet?.author?.url || "").trim(),
+      tweetText: String(tweet?.text || "").trim() || cleanupTweetText(String(tweet?.raw_text?.text || ""))
+    });
+
+    return meta;
+  } catch {
+    return null;
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
   }
+}
 
+function requestTweetMetaFromOEmbed(sourceUrl, requestId) {
   const callbackName = `__galleryTweetMeta_${requestId}_${Date.now()}`;
   const cleanup = () => {
     try { delete window[callbackName]; } catch { window[callbackName] = undefined; }
@@ -1182,12 +1263,12 @@ function loadTweetMeta(sourceUrl) {
       cleanup();
       return;
     }
-    const meta = {
+    const meta = normalizeTweetMeta({
       authorName: payload?.author_name || "",
       authorUrl: payload?.author_url || "",
       tweetText: extractTweetTextFromHtml(payload?.html || "")
-    };
-    if (meta.authorName || meta.tweetText) {
+    });
+    if (meta) {
       activeTweetMeta.value = meta;
       writeTweetMetaCache(sourceUrl, meta);
     }
@@ -1197,6 +1278,37 @@ function loadTweetMeta(sourceUrl) {
   script.onerror = cleanup;
   script.src = endpoint;
   document.body.appendChild(script);
+}
+
+async function loadTweetMeta(sourceUrl) {
+  const requestId = ++activeTweetRequestId;
+  activeTweetMeta.value = null;
+
+  const tweetSource = parseTweetSource(sourceUrl);
+  if (!tweetSource) return;
+
+  const staticMeta = getStaticTweetMeta(sourceUrl);
+  if (staticMeta) {
+    activeTweetMeta.value = staticMeta;
+    writeTweetMetaCache(sourceUrl, staticMeta);
+    return;
+  }
+
+  const cached = readTweetMetaCache(sourceUrl);
+  if (cached) {
+    activeTweetMeta.value = cached;
+  }
+
+  const fxMeta = await requestTweetMetaFromFx(sourceUrl, requestId);
+  if (requestId !== activeTweetRequestId) return;
+
+  if (fxMeta) {
+    activeTweetMeta.value = fxMeta;
+    writeTweetMetaCache(sourceUrl, fxMeta);
+    return;
+  }
+
+  requestTweetMetaFromOEmbed(sourceUrl, requestId);
 }
 
 function openSourceLink() {
@@ -2257,6 +2369,7 @@ onBeforeUnmount(() => {
   color: rgba(200, 210, 225, 0.6);
   font-size: 13px;
   line-height: 1.9;
+  white-space: pre-line;
 }
 
 .lightbox__tags {
