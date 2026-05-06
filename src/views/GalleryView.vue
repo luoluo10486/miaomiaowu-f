@@ -1661,13 +1661,12 @@ onBeforeUnmount(() => {
       title="换一批"
       @click="handleRefresh"
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
         <path d="M3 3v5h5" />
         <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
         <path d="M16 16h5v5" />
       </svg>
-      <span class="sample-toggle__label">换一批</span>
     </button>
 
     <!-- Back button -->
@@ -1907,39 +1906,31 @@ onBeforeUnmount(() => {
   top: 28px;
   left: 32px;
   z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 16px 0 12px;
-  border: 1px solid rgba(61, 216, 176, 0.2);
-  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid rgba(61, 216, 176, 0.25);
+  border-radius: 50%;
   background: rgba(10, 15, 30, 0.65);
-  color: rgba(180, 210, 200, 0.7);
+  color: rgba(180, 210, 200, 0.8);
   cursor: pointer;
   transition: all 0.35s ease;
   backdrop-filter: blur(14px);
 }
 
 .back-btn svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.back-btn__label {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  width: 20px;
+  height: 20px;
 }
 
 .back-btn:hover {
   background: rgba(15, 25, 50, 0.85);
   color: rgba(61, 216, 176, 0.95);
-  border-color: rgba(61, 216, 176, 0.4);
+  border-color: rgba(61, 216, 176, 0.5);
   transform: translateX(-2px);
-  box-shadow: 0 0 24px rgba(61, 216, 176, 0.12), 0 2px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 24px rgba(61, 216, 176, 0.15), 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* ═══════════════════════════════════════════
@@ -2567,15 +2558,15 @@ onBeforeUnmount(() => {
   right: 28px;
   bottom: 26px;
   z-index: 120;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 16px 0 12px;
-  border: 1px solid rgba(61, 216, 176, 0.2);
-  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid rgba(61, 216, 176, 0.25);
+  border-radius: 50%;
   background: rgba(10, 15, 30, 0.65);
-  color: rgba(180, 210, 200, 0.7);
+  color: rgba(180, 210, 200, 0.8);
   box-shadow: none;
   backdrop-filter: blur(14px);
   cursor: pointer;
@@ -2583,27 +2574,19 @@ onBeforeUnmount(() => {
 }
 
 .sample-toggle svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.sample-toggle__label {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  width: 20px;
+  height: 20px;
 }
 
 .sample-toggle:hover {
   background: rgba(15, 25, 50, 0.85);
   color: rgba(61, 216, 176, 0.95);
-  border-color: rgba(61, 216, 176, 0.4);
-  box-shadow: 0 0 24px rgba(61, 216, 176, 0.12), 0 2px 12px rgba(0, 0, 0, 0.2);
+  border-color: rgba(61, 216, 176, 0.5);
+  box-shadow: 0 0 24px rgba(61, 216, 176, 0.15), 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 .sample-toggle:active {
-  transform: scale(0.95);
+  transform: scale(0.92);
 }
 
 .wall-viewport {
@@ -3434,23 +3417,25 @@ onBeforeUnmount(() => {
   .back-btn {
     top: 18px;
     left: 18px;
-    height: 36px;
-    padding: 0 12px 0 10px;
+    width: 40px;
+    height: 40px;
   }
 
-  .back-btn__label {
-    font-size: 12px;
+  .back-btn svg {
+    width: 18px;
+    height: 18px;
   }
 
   .sample-toggle {
     right: 16px;
     bottom: 16px;
-    height: 36px;
-    padding: 0 12px 0 10px;
+    width: 40px;
+    height: 40px;
   }
 
-  .sample-toggle__label {
-    font-size: 12px;
+  .sample-toggle svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
