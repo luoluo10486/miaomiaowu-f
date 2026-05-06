@@ -1080,7 +1080,7 @@ onBeforeUnmount(() => {
   grid-template-rows: 56px minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
-  background: url("/artwork/F2OApQ-bUAEZIQF.jpg") center center / cover no-repeat;
+  background: url("/artwork/rag-chat-background.png") center center / cover no-repeat;
   color: var(--text);
   font-family: var(--sans);
 }
