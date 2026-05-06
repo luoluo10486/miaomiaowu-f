@@ -1080,19 +1080,13 @@ onBeforeUnmount(() => {
   grid-template-rows: 56px minmax(0, 1fr);
   gap: 0;
   overflow: hidden;
-  background: transparent;
+  background: url("/artwork/rag-chat-background.png") center center / cover no-repeat;
   color: var(--text);
   font-family: var(--sans);
 }
 
 .rag-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: url("/artwork/rag-chat-background.png") center center / cover no-repeat;
-  opacity: 1;
+  display: none;
 }
 
 .rag-shell button,

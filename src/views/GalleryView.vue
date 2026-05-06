@@ -3180,7 +3180,11 @@ onBeforeUnmount(() => {
 /* Final flat paper-wall treatment: close to the reference image, no 3D depth. */
 .gallery-root {
   cursor: default;
-  background: url("/artwork/gallery-bg.jpg") center center / cover no-repeat;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 1px, transparent 1px),
+    #e6e6e6;
+  background-size: 38px 38px;
   color: #596057;
 }
 
