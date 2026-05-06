@@ -1,12 +1,25 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getStoredAuthToken } from "../utils/auth";
+import { getStoredAuthToken, getStoredAuthUser } from "../utils/auth";
 
 const LoginView = () => import("../views/LoginView.vue");
 const RagChatView = () => import("../views/RagChatView.vue");
 const WorkbenchView = () => import("../views/WorkbenchView.vue");
-const AdminConsoleView = () => import("../views/AdminConsoleView.vue");
 const IdeaNotesView = () => import("../views/IdeaNotesView.vue");
 const GalleryView = () => import("../views/GalleryView.vue");
+
+const AdminLayoutView = () => import("../views/admin/AdminLayoutView.vue");
+const DashboardPage = () => import("../views/admin/DashboardPage.vue");
+const KnowledgeListPage = () => import("../views/admin/KnowledgeListPage.vue");
+const KnowledgeDocumentsPage = () => import("../views/admin/KnowledgeDocumentsPage.vue");
+const KnowledgeChunksPage = () => import("../views/admin/KnowledgeChunksPage.vue");
+const IntentTreePage = () => import("../views/admin/IntentTreePage.vue");
+const IngestionPage = () => import("../views/admin/IngestionPage.vue");
+const TracesPage = () => import("../views/admin/TracesPage.vue");
+const TraceDetailPage = () => import("../views/admin/TraceDetailPage.vue");
+const SettingsPage = () => import("../views/admin/SettingsPage.vue");
+const SampleQuestionsPage = () => import("../views/admin/SampleQuestionsPage.vue");
+const MappingsPage = () => import("../views/admin/MappingsPage.vue");
+const UsersPage = () => import("../views/admin/UsersPage.vue");
 
 function resolveRedirectTarget(target) {
   if (typeof target !== "string") {
@@ -34,8 +47,8 @@ const router = createRouter({
       component: WorkbenchView,
       meta: {
         requiresAuth: true,
-        title: "工作台首页",
-        description: "登录后的默认入口，用于进入问答、管理与灵感页面。"
+        title: "Workspace",
+        description: "登录后的默认入口。"
       }
     },
     {
@@ -44,19 +57,96 @@ const router = createRouter({
       component: RagChatView,
       meta: {
         requiresAuth: true,
-        title: "RAG 问答",
-        description: "基于知识检索与流式回答的问答工作台。"
+        title: "RAG Chat",
+        description: "RAG 问答工作台。"
+      }
+    },
+    {
+      path: "/rag/:sessionId",
+      name: "rag-chat-session",
+      component: RagChatView,
+      meta: {
+        requiresAuth: true,
+        title: "RAG Chat",
+        description: "支持会话深链的 RAG 问答工作台。"
       }
     },
     {
       path: "/admin",
-      name: "rag-admin",
-      component: AdminConsoleView,
+      component: AdminLayoutView,
       meta: {
         requiresAuth: true,
-        title: "后台管理",
-        description: "面向知识库与系统配置的后台管理入口。"
-      }
+        requiresAdmin: true,
+        fullscreen: true,
+        title: "Admin",
+        description: "RAG 管理控制台。"
+      },
+      children: [
+        {
+          path: "",
+          redirect: "/admin/dashboard"
+        },
+        {
+          path: "dashboard",
+          name: "admin-dashboard",
+          component: DashboardPage
+        },
+        {
+          path: "knowledge",
+          name: "admin-knowledge",
+          component: KnowledgeListPage
+        },
+        {
+          path: "knowledge/:kbId",
+          name: "admin-knowledge-documents",
+          component: KnowledgeDocumentsPage
+        },
+        {
+          path: "knowledge/:kbId/docs/:docId",
+          name: "admin-knowledge-chunks",
+          component: KnowledgeChunksPage
+        },
+        {
+          path: "intent-tree",
+          name: "admin-intent-tree",
+          component: IntentTreePage
+        },
+        {
+          path: "ingestion",
+          name: "admin-ingestion",
+          component: IngestionPage
+        },
+        {
+          path: "traces",
+          name: "admin-traces",
+          component: TracesPage
+        },
+        {
+          path: "traces/:traceId",
+          name: "admin-trace-detail",
+          component: TraceDetailPage
+        },
+        {
+          path: "settings",
+          name: "admin-settings",
+          component: SettingsPage
+        },
+        {
+          path: "sample-questions",
+          name: "admin-sample-questions",
+          component: SampleQuestionsPage
+        },
+        {
+          path: "mappings",
+          name: "admin-mappings",
+          component: MappingsPage
+        },
+        {
+          path: "users",
+          name: "admin-users",
+          component: UsersPage
+        }
+      ]
     },
     {
       path: "/ideas",
@@ -64,8 +154,8 @@ const router = createRouter({
       component: IdeaNotesView,
       meta: {
         requiresAuth: true,
-        title: "小巧思",
-        description: "记录工作台视觉表达与动效升级方案。"
+        title: "Ideas",
+        description: "灵感记录页。"
       }
     },
     {
@@ -74,8 +164,8 @@ const router = createRouter({
       component: GalleryView,
       meta: {
         requiresAuth: true,
-        title: "美图鉴赏",
-        description: "3D 立体旋转展示高木同学美图收藏。"
+        title: "Gallery",
+        description: "图片展示页。"
       }
     },
     {
@@ -91,20 +181,66 @@ const router = createRouter({
       redirect: { path: "/login", query: { mode: "register" } }
     },
     {
+      path: "/chat",
+      redirect: "/rag"
+    },
+    {
+      path: "/chat/:sessionId",
+      redirect: (to) => `/rag/${to.params.sessionId || ""}`
+    },
+    {
       path: "/articles",
       redirect: "/workspace"
     },
     {
       path: "/about",
       redirect: "/workspace"
+    },
+    {
+      path: "/dashboard",
+      redirect: "/admin/dashboard"
+    },
+    {
+      path: "/knowledge",
+      redirect: "/admin/knowledge"
+    },
+    {
+      path: "/traces",
+      redirect: "/admin/traces"
+    },
+    {
+      path: "/settings",
+      redirect: "/admin/settings"
+    },
+    {
+      path: "/users",
+      redirect: "/admin/users"
+    },
+    {
+      path: "/mappings",
+      redirect: "/admin/mappings"
+    },
+    {
+      path: "/sample-questions",
+      redirect: "/admin/sample-questions"
+    },
+    {
+      path: "/intent-tree",
+      redirect: "/admin/intent-tree"
+    },
+    {
+      path: "/ingestion",
+      redirect: "/admin/ingestion"
     }
   ]
 });
 
 router.beforeEach((to) => {
   const token = getStoredAuthToken();
+  const user = getStoredAuthUser();
   const isAuthenticated = Boolean(token);
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
 
   if (requiresAuth && !isAuthenticated) {
     return {
@@ -117,6 +253,10 @@ router.beforeEach((to) => {
 
   if (to.name === "login" && isAuthenticated) {
     return resolveRedirectTarget(to.query.redirect);
+  }
+
+  if (requiresAdmin && user?.role !== "admin") {
+    return "/rag";
   }
 
   return true;

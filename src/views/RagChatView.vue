@@ -1,12 +1,14 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { marked } from "marked";
 import {
   createRagChatStream,
   deleteRagSession,
   listRagMessages,
   listRagSessions,
   listSampleQuestions,
+  renameRagSession,
   stopRagTask,
   submitRagMessageFeedback
 } from "../services/ragService";
@@ -31,6 +33,7 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 const router = useRouter();
+const route = useRoute();
 const sessions = ref([]);
 const messages = ref([]);
 const suggestions = ref(DEFAULT_SUGGESTIONS);
@@ -131,6 +134,40 @@ const requestStats = computed(() => [
 function setNotice(message, type = "info") {
   noticeText.value = message;
   noticeType.value = type;
+}
+
+function escapeHtml(raw) {
+  return String(raw || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderMarkdown(content) {
+  return marked.parse(escapeHtml(content || ""), {
+    gfm: true,
+    breaks: true
+  });
+}
+
+function getRouteSessionId() {
+  return typeof route.params.sessionId === "string" ? route.params.sessionId : "";
+}
+
+function syncRouteWithSession(sessionId, replace = false) {
+  const target = sessionId ? `/rag/${sessionId}` : "/rag";
+  if (route.fullPath === target) {
+    return;
+  }
+
+  if (replace) {
+    router.replace(target);
+    return;
+  }
+
+  router.push(target);
 }
 
 function formatSessionTime(value) {
@@ -237,6 +274,32 @@ function updateSessionTitle(sessionId, title) {
   );
 }
 
+async function promptRenameSession(session) {
+  const targetSessionId = session?.id || currentSessionId.value;
+  const currentTitle = session?.title || activeSession.value?.title || "新对话";
+
+  if (!targetSessionId) {
+    return;
+  }
+
+  const nextTitle =
+    typeof window === "undefined"
+      ? currentTitle
+      : window.prompt("请输入新的会话名称", currentTitle);
+
+  if (!nextTitle || !nextTitle.trim() || nextTitle.trim() === currentTitle) {
+    return;
+  }
+
+  try {
+    await renameRagSession(targetSessionId, nextTitle.trim());
+    updateSessionTitle(targetSessionId, nextTitle.trim());
+    setNotice("会话名称已更新", "success");
+  } catch (error) {
+    setNotice(error?.message || "重命名会话失败，请稍后重试", "error");
+  }
+}
+
 function computeThinkingDuration() {
   if (!thinkingStartAt.value) {
     return 0;
@@ -284,6 +347,7 @@ function createConversation() {
   messages.value = [];
   showRetrievalPanel.value = false;
   setNotice("", "info");
+  syncRouteWithSession("", true);
   focusComposer();
   resizeComposer();
 }
@@ -328,9 +392,21 @@ async function loadSessions({ autoSelect = true } = {}) {
     const data = await listRagSessions();
     const nextSessions = Array.isArray(data) ? sortSessions(data.map(mapSession)) : [];
     sessions.value = nextSessions;
+    const routeSessionId = getRouteSessionId();
 
     if (!autoSelect) {
       return;
+    }
+
+    if (routeSessionId) {
+      const matchedSession = nextSessions.find((item) => item.id === routeSessionId);
+      if (matchedSession) {
+        await selectSession(routeSessionId, {
+          updateRoute: false,
+          replaceRoute: true
+        });
+        return;
+      }
     }
 
     if (currentSessionId.value && nextSessions.some((item) => item.id === currentSessionId.value)) {
@@ -338,7 +414,9 @@ async function loadSessions({ autoSelect = true } = {}) {
     }
 
     if (nextSessions.length > 0) {
-      await selectSession(nextSessions[0].id);
+      await selectSession(nextSessions[0].id, {
+        replaceRoute: true
+      });
       return;
     }
 
@@ -350,7 +428,9 @@ async function loadSessions({ autoSelect = true } = {}) {
   }
 }
 
-async function selectSession(sessionId) {
+async function selectSession(sessionId, options = {}) {
+  const { updateRoute = true, replaceRoute = false } = options;
+
   if (!sessionId) {
     createConversation();
     return;
@@ -361,6 +441,9 @@ async function selectSession(sessionId) {
   }
 
   currentSessionId.value = sessionId;
+  if (updateRoute) {
+    syncRouteWithSession(sessionId, replaceRoute);
+  }
   loadingMessages.value = true;
   showRetrievalPanel.value = false;
   setNotice("", "info");
@@ -400,7 +483,9 @@ async function removeSession(sessionId) {
 
     if (currentSessionId.value === sessionId) {
       if (remaining.length > 0) {
-        await selectSession(remaining[0].id);
+        await selectSession(remaining[0].id, {
+          replaceRoute: true
+        });
       } else {
         createConversation();
       }
@@ -571,6 +656,7 @@ async function sendMessage() {
         const nextSessionId = payload?.conversationId || currentSessionId.value;
         if (nextSessionId) {
           currentSessionId.value = nextSessionId;
+          syncRouteWithSession(nextSessionId, true);
           upsertSession({
             id: nextSessionId,
             title:
@@ -612,6 +698,7 @@ async function sendMessage() {
         }
 
         if (currentSessionId.value) {
+          syncRouteWithSession(currentSessionId.value, true);
           upsertSession({
             id: currentSessionId.value,
             title:
@@ -655,6 +742,14 @@ async function sendMessage() {
   } finally {
     focusComposer();
   }
+}
+
+function openSession(session) {
+  void selectSession(session?.id);
+}
+
+function handleSessionRename(session) {
+  void promptRenameSession(session);
 }
 
 function handleSuggestionClick(question) {
@@ -743,6 +838,25 @@ onBeforeUnmount(() => {
   }
   cancelStreamRequest?.();
 });
+
+watch(
+  () => route.fullPath,
+  (nextPath) => {
+    if (!nextPath.startsWith("/rag")) {
+      return;
+    }
+
+    const sessionId = getRouteSessionId();
+    if (!sessionId || sessionId === currentSessionId.value) {
+      return;
+    }
+
+    void selectSession(sessionId, {
+      updateRoute: false,
+      replaceRoute: true
+    });
+  }
+);
 </script>
 
 <template>
@@ -792,7 +906,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   :class="['session-item', { 'is-active': currentSessionId === session.id }]"
-                  @click="selectSession(session.id)"
+                  @click="openSession(session)"
                 >
                   <span class="session-item__title">{{ session.title }}</span>
                   <span class="session-item__time">{{ formatSessionTime(session.lastTime) }}</span>
@@ -800,6 +914,12 @@ onBeforeUnmount(() => {
                 <button class="session-item__delete" type="button" title="删除会话" @click="removeSession(session.id)">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+                <button class="session-item__edit" type="button" title="rename session" @click="handleSessionRename(session)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h16" />
+                    <path d="M5 15.5 15.5 5a2.1 2.1 0 0 1 3 3L8 18.5 4 20z" />
                   </svg>
                 </button>
               </li>
@@ -818,6 +938,7 @@ onBeforeUnmount(() => {
       <main class="chat-card">
         <header class="chat-card__header">
           <h1>{{ currentSessionTitle }}</h1>
+          <button class="chat-card__rename" type="button" @click="handleSessionRename(activeSession || { id: currentSessionId })">重命名</button>
           <span class="chat-card__badge" v-if="isStreaming">生成中</span>
         </header>
 

@@ -72,9 +72,17 @@ export async function requestRag(path, options = {}) {
   };
 
   if (body !== undefined) {
-    requestHeaders["Content-Type"] = requestHeaders["Content-Type"] || "application/json";
+    const isFormData =
+      typeof FormData !== "undefined" && body instanceof FormData;
+
+    if (!isFormData) {
+      requestHeaders["Content-Type"] = requestHeaders["Content-Type"] || "application/json";
+    }
+
     requestInit.body =
-      requestHeaders["Content-Type"] === "application/json" ? JSON.stringify(body) : body;
+      !isFormData && requestHeaders["Content-Type"] === "application/json"
+        ? JSON.stringify(body)
+        : body;
   }
 
   const response = await fetch(joinUrl(path), requestInit);
