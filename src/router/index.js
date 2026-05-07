@@ -1,6 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { getStoredAuthToken, getStoredAuthUser } from "../utils/auth";
 
+export function isAdminUser(user) {
+  if (!user || typeof user !== "object") return false;
+  const t = (user.userType || user.role || "").toString().toLowerCase();
+  return t === "admin" || t === "superadmin";
+}
+
 const LoginView = () => import("../views/LoginView.vue");
 const RagChatView = () => import("../views/RagChatView.vue");
 const WorkbenchView = () => import("../views/WorkbenchView.vue");
@@ -255,8 +261,8 @@ router.beforeEach((to) => {
     return resolveRedirectTarget(to.query.redirect);
   }
 
-  if (requiresAdmin && user?.role !== "admin") {
-    return "/rag";
+  if (requiresAdmin && isAuthenticated && !isAdminUser(user)) {
+    return "/workspace";
   }
 
   return true;

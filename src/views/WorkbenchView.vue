@@ -6,6 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import WorkbenchLive2DScene from "../components/WorkbenchLive2DScene.vue";
 import { clearStoredAuth, getStoredAuthUser } from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
+import { isAdminUser } from "../router";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -34,6 +35,11 @@ const chapters = [
   { key: "gallery", label: "美图鉴赏" },
   { key: "todo", label: "待开发" }
 ];
+
+const isAdmin = computed(() => isAdminUser(currentUser.value));
+const visibleChapters = computed(() =>
+  isAdmin.value ? chapters : chapters.filter((c) => c.key !== "admin")
+);
 
 const currentUserName = computed(() => {
   const user = currentUser.value;
@@ -93,8 +99,8 @@ function setupHorizontalStory() {
         onUpdate: (self) => {
           progress.value = self.progress;
           activeChapter.value = Math.min(
-            chapters.length - 1,
-            Math.round(self.progress * (chapters.length - 1))
+            visibleChapters.value.length - 1,
+            Math.round(self.progress * (visibleChapters.value.length - 1))
           );
         }
       }
@@ -156,7 +162,7 @@ onBeforeUnmount(() => {
 
       <nav class="gallery-nav__links" aria-label="工作台导航">
         <button
-          v-for="(chapter, index) in chapters"
+          v-for="(chapter, index) in visibleChapters"
           :key="chapter.key"
           type="button"
           :class="{ 'is-active': activeChapter === index }"
@@ -189,7 +195,7 @@ onBeforeUnmount(() => {
           />
         </section>
 
-        <section class="story-panel story-panel--admin">
+        <section v-if="isAdmin" class="story-panel story-panel--admin">
           <button class="scene-label scene-label--button" type="button" @click="router.push('/admin')">
             后台管理
           </button>
