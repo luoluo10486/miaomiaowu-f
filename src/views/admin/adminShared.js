@@ -11,6 +11,7 @@ export const adminNavGroups = [
     items: [
       { label: "Knowledge Bases", to: "/admin/knowledge" },
       { label: "Intent Tree", to: "/admin/intent-tree" },
+      { label: "Intent List", to: "/admin/intent-list" },
       { label: "Mappings", to: "/admin/mappings" },
       { label: "Sample Questions", to: "/admin/sample-questions" }
     ]
@@ -113,6 +114,67 @@ export function flattenIntentTree(nodes = [], depth = 0, parent = null) {
 
     return [current, ...flattenIntentTree(node.children || [], depth + 1, current)];
   });
+}
+
+export function parseIntentExamples(value) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item)).filter(Boolean);
+    }
+  } catch {
+    // fall through to plain text parsing
+  }
+
+  return String(value)
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function resolveIntentLevelLabel(value) {
+  const map = {
+    0: "DOMAIN",
+    1: "CATEGORY",
+    2: "TOPIC"
+  };
+  return map[value] || "UNKNOWN";
+}
+
+export function resolveIntentKindLabel(value) {
+  const map = {
+    0: "KB",
+    1: "SYSTEM",
+    2: "MCP"
+  };
+  return map[value] || "UNKNOWN";
+}
+
+export function resolveIntentKindBadgeClass(value) {
+  if (value === 2) {
+    return "is-primary";
+  }
+  if (value === 1) {
+    return "is-muted";
+  }
+  return "is-info";
+}
+
+export function findIntentNodeById(nodes = [], id) {
+  for (const node of safeArray(nodes)) {
+    if (String(node.id) === String(id)) {
+      return node;
+    }
+    const found = findIntentNodeById(node.children || [], id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }
 
 export function escapeHtml(raw = "") {
