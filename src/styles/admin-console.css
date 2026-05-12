@@ -38,6 +38,7 @@
   background: var(--admin-bg);
   color: var(--admin-ink);
   font-family: var(--admin-sans);
+  font-family: var(--admin-sans);
 }
 
 .admin-shell * { box-sizing: border-box; }
@@ -426,6 +427,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  gap: 8px;
   flex-wrap: wrap;
   flex-shrink: 0;
 }
@@ -590,6 +592,8 @@
 .admin-file {
   height: 36px;
   padding: 0 12px;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-radius-sm);
   background: var(--admin-card);
@@ -609,10 +613,13 @@
 
 .admin-input {
   min-width: 200px;
+  min-width: 200px;
 }
 
 .admin-textarea {
   width: 100%;
+  min-height: 100px;
+  padding: 10px 12px;
   min-height: 100px;
   padding: 10px 12px;
   border: 1px solid var(--admin-line);
@@ -623,6 +630,7 @@
   font-family: var(--admin-sans);
   resize: vertical;
   outline: none;
+  font-family: var(--admin-sans);
 }
 
 /* ===== Buttons ===== */
@@ -684,9 +692,12 @@
 .admin-button--ghost[disabled],
 .admin-button--danger[disabled] {
   opacity: 0.5;
+  opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
+
+/* ── Grids ── */
 
 /* ===== Table ===== */
 .admin-table-wrap {
@@ -766,6 +777,7 @@
 
 .admin-badge.is-danger {
   background: var(--admin-danger-light);
+  background: var(--admin-danger-light);
   color: var(--admin-danger);
 }
 
@@ -804,10 +816,13 @@
 /* ===== Empty State ===== */
 .admin-empty {
   min-height: 120px;
+  min-height: 120px;
   display: grid;
   place-items: center;
-  border: 1px dashed var(--admin-line);
+  border: 1px dashed var(--admin-line-strong);
   border-radius: var(--admin-radius-md);
+  font-size: 13px;
+  color: var(--admin-muted);
   font-size: 13px;
   color: var(--admin-muted);
 }
@@ -815,7 +830,7 @@
 /* ===== Key-Value ===== */
 .admin-kv {
   display: grid;
-  gap: 12px;
+  gap: 0;
 }
 
 .admin-kv div {
@@ -837,6 +852,7 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--admin-ink);
+  font-weight: 500;
 }
 
 /* ===== Info Item (for settings cards) ===== */
@@ -873,6 +889,7 @@
 .admin-card-list {
   display: grid;
   gap: 12px;
+  gap: 12px;
 }
 
 .admin-card-item {
@@ -886,11 +903,16 @@
   margin: 0 0 8px;
   font-size: 14px;
   font-weight: 600;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .admin-card-item p {
   margin: 4px 0 0;
+  margin: 4px 0 0;
   color: var(--admin-muted);
+  font-size: 12px;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -899,12 +921,13 @@
 .admin-tree-list {
   display: grid;
   gap: 8px;
+  gap: 8px;
 }
 
 .admin-tree-item {
   display: grid;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 14px 18px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-radius-md);
   background: var(--admin-bg-soft);
@@ -991,6 +1014,8 @@
   backdrop-filter: blur(4px);
   animation: adminFadeIn 0.15s ease;
 }
+
+/* ── Panel ── */
 
 .admin-dialog {
   position: relative;

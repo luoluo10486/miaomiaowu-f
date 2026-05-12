@@ -13,6 +13,8 @@ const KnowledgeListPage = () => import("../views/admin/KnowledgeListPage.vue");
 const KnowledgeDocumentsPage = () => import("../views/admin/KnowledgeDocumentsPage.vue");
 const KnowledgeChunksPage = () => import("../views/admin/KnowledgeChunksPage.vue");
 const IntentTreePage = () => import("../views/admin/IntentTreePage.vue");
+const IntentListPage = () => import("../views/admin/IntentListPage.vue");
+const IntentEditPage = () => import("../views/admin/IntentEditPage.vue");
 const IngestionPage = () => import("../views/admin/IngestionPage.vue");
 const TracesPage = () => import("../views/admin/TracesPage.vue");
 const TraceDetailPage = () => import("../views/admin/TraceDetailPage.vue");
@@ -112,6 +114,16 @@ const router = createRouter({
           path: "intent-tree",
           name: "admin-intent-tree",
           component: IntentTreePage
+        },
+        {
+          path: "intent-list",
+          name: "admin-intent-list",
+          component: IntentListPage
+        },
+        {
+          path: "intent-list/:id/edit",
+          name: "admin-intent-edit",
+          component: IntentEditPage
         },
         {
           path: "intent-list",
@@ -239,6 +251,14 @@ const router = createRouter({
     {
       path: "/intent-tree",
       redirect: "/admin/intent-tree"
+    },
+    {
+      path: "/intent-list",
+      redirect: "/admin/intent-list"
+    },
+    {
+      path: "/intent-list/:id/edit",
+      redirect: (to) => `/admin/intent-list/${to.params.id || ""}/edit`
     },
     {
       path: "/ingestion",

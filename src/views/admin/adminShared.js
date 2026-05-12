@@ -2,30 +2,17 @@ export const adminNavGroups = [
   {
     title: "导航",
     items: [
-      { label: "Dashboard", to: "/admin/dashboard", icon: "◉" },
-      { label: "知识库管理", to: "/admin/knowledge", icon: "◆" },
-      {
-        id: "intent",
-        label: "意图管理",
-        to: "/admin/intent-tree",
-        icon: "◇",
-        children: [
-          { label: "意图树配置", to: "/admin/intent-tree", icon: "⑂" },
-          { label: "意图列表", to: "/admin/intent-list", icon: "☰" }
-        ]
-      },
-      {
-        id: "ingestion",
-        label: "数据通道",
-        to: "/admin/ingestion",
-        icon: "▲",
-        children: [
-          { label: "流水线管理", to: "/admin/ingestion?tab=pipelines", icon: "◫" },
-          { label: "流水线任务", to: "/admin/ingestion?tab=tasks", icon: "☰" }
-        ]
-      },
-      { label: "关键词映射", to: "/admin/mappings", icon: "⇄" },
-      { label: "链路追踪", to: "/admin/traces", icon: "◎" }
+      { label: "Dashboard", to: "/admin/dashboard" },
+      { label: "Trace Runs", to: "/admin/traces" }
+    ]
+  },
+  {
+    title: "Knowledge",
+    items: [
+      { label: "Knowledge Bases", to: "/admin/knowledge" },
+      { label: "Intent Tree", to: "/admin/intent-tree" },
+      { label: "Mappings", to: "/admin/mappings" },
+      { label: "Sample Questions", to: "/admin/sample-questions" }
     ]
   },
   {
@@ -115,6 +102,67 @@ function parseExamplesCount(value) {
     if (Array.isArray(parsed)) return parsed.length;
   } catch {}
   return String(value).split("\n").filter(Boolean).length;
+}
+
+export function parseIntentExamples(value) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item)).filter(Boolean);
+    }
+  } catch {
+    // fall through to plain text parsing
+  }
+
+  return String(value)
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function resolveIntentLevelLabel(value) {
+  const map = {
+    0: "DOMAIN",
+    1: "CATEGORY",
+    2: "TOPIC"
+  };
+  return map[value] || "UNKNOWN";
+}
+
+export function resolveIntentKindLabel(value) {
+  const map = {
+    0: "KB",
+    1: "SYSTEM",
+    2: "MCP"
+  };
+  return map[value] || "UNKNOWN";
+}
+
+export function resolveIntentKindBadgeClass(value) {
+  if (value === 2) {
+    return "is-primary";
+  }
+  if (value === 1) {
+    return "is-muted";
+  }
+  return "is-info";
+}
+
+export function findIntentNodeById(nodes = [], id) {
+  for (const node of safeArray(nodes)) {
+    if (String(node.id) === String(id)) {
+      return node;
+    }
+    const found = findIntentNodeById(node.children || [], id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }
 
 export function escapeHtml(raw = "") {
