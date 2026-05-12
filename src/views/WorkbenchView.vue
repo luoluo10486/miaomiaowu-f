@@ -6,7 +6,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import WorkbenchLive2DScene from "../components/WorkbenchLive2DScene.vue";
 import { clearStoredAuth, getStoredAuthUser } from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
-import { isAdminUser } from "../router";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -36,10 +35,7 @@ const chapters = [
   { key: "todo", label: "待开发" }
 ];
 
-const isAdmin = computed(() => isAdminUser(currentUser.value));
-const visibleChapters = computed(() =>
-  isAdmin.value ? chapters : chapters.filter((c) => c.key !== "admin")
-);
+const visibleChapters = computed(() => chapters);
 
 const currentUserName = computed(() => {
   const user = currentUser.value;
@@ -195,7 +191,7 @@ onBeforeUnmount(() => {
           />
         </section>
 
-        <section v-if="isAdmin" class="story-panel story-panel--admin">
+        <section class="story-panel story-panel--admin">
           <button class="scene-label scene-label--button" type="button" @click="router.push('/admin')">
             后台管理
           </button>

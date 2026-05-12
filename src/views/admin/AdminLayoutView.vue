@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref } from "vue";
-import { RouterLink, RouterView, useRouter } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { adminNavGroups } from "./adminShared";
 import { clearStoredAuth, getStoredAuthUser } from "../../utils/auth";
 import {
@@ -11,15 +11,123 @@ import {
 
 const route = useRoute();
 const router = useRouter();
-const route = useRoute();
 const currentUser = ref(getStoredAuthUser());
+const collapsed = ref(false);
+const openGroups = ref({});
+const kbQuery = ref("");
+const searchFocused = ref(false);
+const kbOptions = ref([]);
+const docOptions = ref([]);
+const searchLoading = ref(false);
+let searchTimeout = null;
+
+const passwordOpen = ref(false);
+const passwordSubmitting = ref(false);
+const passwordForm = ref({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
 const currentUserName = computed(() => {
   const user = currentUser.value;
-  return user?.displayName || user?.username || user?.email || "Current User";
+  return user?.displayName || user?.username || user?.email || "Admin";
+});
+const currentUserRole = computed(() => {
+  const role = currentUser.value?.role || "member";
+  return role === "admin" ? "管理员" : "成员";
+});
+const avatarInitial = computed(() => {
+  const name = currentUserName.value;
+  return name ? name.charAt(0).toUpperCase() : "A";
 });
 
-const currentUserRole = computed(() => currentUser.value?.role || "member");
+const breadcrumbMap = {
+  dashboard: "Dashboard",
+  knowledge: "知识库管理",
+  "intent-tree": "意图树配置",
+  "intent-list": "意图列表",
+  ingestion: "数据通道",
+  traces: "链路追踪",
+  "sample-questions": "示例问题",
+  mappings: "关键词映射",
+  settings: "系统设置",
+  users: "用户管理"
+};
+
+const breadcrumbs = computed(() => {
+  const segments = route.path.split("/").filter(Boolean);
+  const items = [{ label: "首页", to: "/admin/dashboard" }];
+
+  if (segments[0] !== "admin") return items;
+  const section = segments[1];
+
+  if (section === "intent-tree" || section === "intent-list") {
+    items.push({ label: "意图管理", to: "/admin/intent-tree" });
+    if (section === "intent-list" && segments.length > 2) {
+      items.push({ label: "意图列表", to: "/admin/intent-list" });
+      items.push({ label: "编辑节点" });
+    } else {
+      items.push({ label: breadcrumbMap[section] || section });
+    }
+  } else if (section) {
+    items.push({
+      label: breadcrumbMap[section] || section,
+      to: `/admin/${section}`
+    });
+  }
+
+  if (section === "ingestion") {
+    const tab = route.query?.tab;
+    if (tab === "tasks") items.push({ label: "流水线任务" });
+    else if (tab === "pipelines") items.push({ label: "流水线管理" });
+  }
+  if (section === "knowledge" && segments.length > 2) items.push({ label: "文档管理" });
+  if (section === "knowledge" && segments.includes("docs")) items.push({ label: "切片管理" });
+  if (section === "traces" && segments.length > 2) items.push({ label: "链路详情" });
+
+  return items;
+});
+
+const activePath = computed(() => route.path);
+
+function isActive(path) {
+  return activePath.value === path || activePath.value.startsWith(`${path}/`);
+}
+
+function isItemActive(item) {
+  if (item.children?.length) {
+    return item.children.some((child) => {
+      const childPath = child.to.split("?")[0];
+      return activePath.value === childPath || activePath.value.startsWith(`${childPath}/`);
+    });
+  }
+  return isActive(item.to);
+}
+
+function toggleGroup(title) {
+  openGroups.value[title] = !openGroups.value[title];
+}
+
+function toggleNavGroup(groupId) {
+  openGroups.value[groupId] = !openGroups.value[groupId];
+}
+
+watch(
+  () => route.path,
+  () => {
+    adminNavGroups.forEach((group) => {
+      if (group.items.some((item) => isItemActive(item)) && !openGroups.value[group.title]) {
+        openGroups.value[group.title] = true;
+      }
+      group.items.forEach((item) => {
+        if (item.id && item.children?.some((child) => {
+          const childPath = child.to.split("?")[0];
+          return activePath.value === childPath || activePath.value.startsWith(`${childPath}/`);
+        })) {
+          openGroups.value[item.id] = true;
+        }
+      });
+    });
+  },
+  { immediate: true }
+);
 
 function logout() {
   clearStoredAuth();
@@ -115,43 +223,89 @@ async function handlePasswordSubmit() {
 </script>
 
 <template>
-  <section class="admin-shell">
-    <div class="admin-layout">
-      <aside class="admin-sidebar">
-        <div class="admin-brand">
-          <small>Independent Admin</small>
-          <h1>RAG Console</h1>
-          <p>与参考前端对齐的问答管理台，保留当前项目的国风质感，并补齐主要模块入口与常用操作。</p>
+  <div class="admin-shell">
+    <aside :class="['admin-sidebar', { 'admin-sidebar--collapsed': collapsed }]">
+      <div class="admin-brand">
+        <div :class="['admin-brand-inner', { 'is-collapsed': collapsed }]">
+          <div class="admin-brand-logo">R</div>
+          <template v-if="!collapsed">
+            <div>
+              <h1>RAG Console</h1>
+              <small>Knowledge Console</small>
+            </div>
+          </template>
         </div>
+      </div>
 
-        <nav class="admin-nav">
-          <section v-for="group in adminNavGroups" :key="group.title" class="admin-nav-group">
-            <h2>{{ group.title }}</h2>
-            <RouterLink v-for="item in group.items" :key="item.to" :to="item.to">
-              <span>{{ item.label }}</span>
-              <span aria-hidden="true">›</span>
-            </RouterLink>
-          </section>
-        </nav>
+      <nav class="admin-nav">
+        <section v-for="group in adminNavGroups" :key="group.title" class="admin-nav-group">
+          <h2 v-if="!collapsed">{{ group.title }}</h2>
+          <div class="admin-nav-group-items">
+            <template v-for="item in group.items" :key="item.to">
+              <template v-if="item.children?.length">
+                <button
+                  type="button"
+                  :class="['admin-nav-item', 'admin-nav-item--group', { 'admin-nav-item--active': isItemActive(item) }]"
+                  @click="toggleNavGroup(item.id)"
+                >
+                  <span :class="['admin-nav-item-indicator', { 'is-active': isItemActive(item) }]" />
+                  <span class="admin-nav-item-icon">{{ item.icon || "●" }}</span>
+                  <span v-if="!collapsed" class="admin-nav-item-label">{{ item.label }}</span>
+                  <span v-if="!collapsed" class="admin-nav-item-arrow">{{ openGroups[item.id] ? "▾" : "▸" }}</span>
+                </button>
+                <template v-if="openGroups[item.id] && !collapsed">
+                  <RouterLink
+                    v-for="child in item.children"
+                    :key="child.to"
+                    :to="child.to"
+                    :class="['admin-nav-item', 'admin-nav-item--child', { 'admin-nav-item--active': activePath === child.to.split('?')[0] }]"
+                  >
+                    <span :class="['admin-nav-item-indicator', { 'is-active': activePath === child.to.split('?')[0] }]" />
+                    <span class="admin-nav-item-icon">{{ child.icon || "●" }}</span>
+                    <span>{{ child.label }}</span>
+                  </RouterLink>
+                </template>
+              </template>
+              <template v-else>
+                <RouterLink
+                  :to="item.to"
+                  :title="collapsed ? item.label : undefined"
+                  :class="['admin-nav-item', { 'admin-nav-item--active': isActive(item.to) }]"
+                >
+                  <span :class="['admin-nav-item-indicator', { 'is-active': isActive(item.to) }]" />
+                  <span class="admin-nav-item-icon">{{ item.icon || "●" }}</span>
+                  <span v-if="!collapsed">{{ item.label }}</span>
+                </RouterLink>
+              </template>
+            </template>
+          </div>
+        </section>
+      </nav>
 
-        <div class="admin-sidebar-footer">
-          <div class="admin-user-card">
+      <div class="admin-sidebar-footer">
+        <button type="button" class="admin-collapse-btn" @click="collapsed = !collapsed">
+          {{ collapsed ? "»" : "« 收起侧边栏" }}
+        </button>
+        <div class="admin-user-card">
+          <div class="admin-user-avatar">{{ avatarInitial }}</div>
+          <div v-if="!collapsed" class="admin-user-info">
             <strong>{{ currentUserName }}</strong>
             <span>{{ currentUserRole }}</span>
           </div>
-          <div class="admin-button-row">
-            <button class="admin-button--ghost" type="button" @click="router.push('/workspace')">
-              Workspace
-            </button>
-            <button class="admin-button--ghost" type="button" @click="router.push('/rag')">
-              Chat
-            </button>
-            <button class="admin-button--danger" type="button" @click="logout">
-              Logout
-            </button>
-          </div>
         </div>
-      </aside>
+        <div class="admin-button-row">
+          <button class="admin-button--sidebar" type="button" @click="router.push('/workspace')">
+            {{ collapsed ? "W" : "Workspace" }}
+          </button>
+          <button class="admin-button--sidebar" type="button" @click="router.push('/rag')">
+            {{ collapsed ? "C" : "Chat" }}
+          </button>
+          <button class="admin-button--sidebar-logout" type="button" @click="logout">
+            {{ collapsed ? "✕" : "退出登录" }}
+          </button>
+        </div>
+      </div>
+    </aside>
 
     <main class="admin-main">
       <header class="admin-topbar">
