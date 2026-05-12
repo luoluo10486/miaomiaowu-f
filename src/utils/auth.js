@@ -86,16 +86,38 @@ export function getStoredAuthUser() {
   }
 }
 
+function normalizeAuthUser(source) {
+  const userSource = source?.user && typeof source.user === "object" ? source.user : source;
+  if (!userSource || typeof userSource !== "object") {
+    return null;
+  }
+
+  const userKeys = ["userId", "id", "memberId", "username", "displayName", "email", "phone", "role", "avatar"];
+  const hasUserField = userKeys.some((key) => userSource[key] !== undefined && userSource[key] !== null && userSource[key] !== "");
+  if (!hasUserField) {
+    return null;
+  }
+
+  return {
+    ...userSource
+  };
+}
+
+export function isAdminUser(user) {
+  return String(user?.role || "").trim().toLowerCase() === "admin";
+}
+
 export function saveAuthSession(payload) {
   const source = payload?.data && typeof payload.data === "object" ? payload.data : payload;
   const token = normalizeAuthToken(source?.token, source?.tokenType || "Bearer");
+  const user = normalizeAuthUser(source);
 
   if (token) {
     writeLocalStorage(AUTH_TOKEN_KEY, token);
   }
 
-  if (source?.user && typeof source.user === "object") {
-    writeLocalStorage(AUTH_USER_KEY, JSON.stringify(source.user));
+  if (user) {
+    writeLocalStorage(AUTH_USER_KEY, JSON.stringify(user));
   }
 
   return token;

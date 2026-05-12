@@ -1,26 +1,39 @@
 export const adminNavGroups = [
   {
-    title: "Overview",
+    title: "导航",
     items: [
-      { label: "Dashboard", to: "/admin/dashboard" },
-      { label: "Trace Runs", to: "/admin/traces" }
+      { label: "Dashboard", to: "/admin/dashboard", icon: "◉" },
+      { label: "知识库管理", to: "/admin/knowledge", icon: "◆" },
+      {
+        id: "intent",
+        label: "意图管理",
+        to: "/admin/intent-tree",
+        icon: "◇",
+        children: [
+          { label: "意图树配置", to: "/admin/intent-tree", icon: "⑂" },
+          { label: "意图列表", to: "/admin/intent-list", icon: "☰" }
+        ]
+      },
+      {
+        id: "ingestion",
+        label: "数据通道",
+        to: "/admin/ingestion",
+        icon: "▲",
+        children: [
+          { label: "流水线管理", to: "/admin/ingestion?tab=pipelines", icon: "◫" },
+          { label: "流水线任务", to: "/admin/ingestion?tab=tasks", icon: "☰" }
+        ]
+      },
+      { label: "关键词映射", to: "/admin/mappings", icon: "⇄" },
+      { label: "链路追踪", to: "/admin/traces", icon: "◎" }
     ]
   },
   {
-    title: "Knowledge",
+    title: "设置",
     items: [
-      { label: "Knowledge Bases", to: "/admin/knowledge" },
-      { label: "Intent Tree", to: "/admin/intent-tree" },
-      { label: "Mappings", to: "/admin/mappings" },
-      { label: "Sample Questions", to: "/admin/sample-questions" }
-    ]
-  },
-  {
-    title: "System",
-    items: [
-      { label: "Ingestion", to: "/admin/ingestion" },
-      { label: "Users", to: "/admin/users" },
-      { label: "Settings", to: "/admin/settings" }
+      { label: "用户管理", to: "/admin/users", icon: "●" },
+      { label: "示例问题", to: "/admin/sample-questions", icon: "◈" },
+      { label: "系统设置", to: "/admin/settings", icon: "⚙" }
     ]
   }
 ];
@@ -64,55 +77,44 @@ export function pageTotal(page) {
   return Number(page?.total ?? page?.records?.length ?? 0);
 }
 
-export function trimPromptValue(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-export function askText(message, defaultValue = "") {
-  if (typeof window === "undefined") {
-    return defaultValue;
-  }
-
-  const result = window.prompt(message, defaultValue);
-  if (result === null) {
-    return null;
-  }
-
-  return result.trim();
-}
-
-export function askNumber(message, defaultValue = "") {
-  const input = askText(message, String(defaultValue ?? ""));
-  if (input === null || input === "") {
-    return input;
-  }
-
-  const value = Number(input);
-  return Number.isFinite(value) ? value : null;
-}
-
-export function confirmAction(message) {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
-  return window.confirm(message);
+export function pageCount(page) {
+  const total = pageTotal(page);
+  const size = Number(page?.size ?? 50);
+  return size > 0 ? Math.max(1, Math.ceil(total / size)) : 1;
 }
 
 export function normalizeBooleanLabel(value) {
   return value ? "Enabled" : "Disabled";
 }
 
-export function flattenIntentTree(nodes = [], depth = 0, parent = null) {
+export function flattenIntentTree(nodes = [], depth = 0, parent = null, parentNames = [], parentCodes = []) {
   return safeArray(nodes).flatMap((node) => {
+    const currentNames = [...parentNames, node.name];
+    const currentCodes = [...parentCodes, node.intentCode];
+    const children = node.children || [];
     const current = {
       ...node,
       depth,
-      parentName: parent?.name || ""
+      parentName: parent?.name || "",
+      parentCode: node.parentCode || parent?.intentCode || null,
+      pathText: currentNames.join(" > "),
+      pathNames: currentNames,
+      pathCodes: currentCodes,
+      childCount: children.length,
+      exampleCount: parseExamplesCount(node.examples)
     };
 
-    return [current, ...flattenIntentTree(node.children || [], depth + 1, current)];
+    return [current, ...flattenIntentTree(children, depth + 1, current, currentNames, currentCodes)];
   });
+}
+
+function parseExamplesCount(value) {
+  if (!value) return 0;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.length;
+  } catch {}
+  return String(value).split("\n").filter(Boolean).length;
 }
 
 export function escapeHtml(raw = "") {

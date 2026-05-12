@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getStoredAuthToken, getStoredAuthUser } from "../utils/auth";
+import { getStoredAuthToken } from "../utils/auth";
 
 const LoginView = () => import("../views/LoginView.vue");
 const RagChatView = () => import("../views/RagChatView.vue");
@@ -20,6 +20,8 @@ const SettingsPage = () => import("../views/admin/SettingsPage.vue");
 const SampleQuestionsPage = () => import("../views/admin/SampleQuestionsPage.vue");
 const MappingsPage = () => import("../views/admin/MappingsPage.vue");
 const UsersPage = () => import("../views/admin/UsersPage.vue");
+const IntentListPage = () => import("../views/admin/IntentListPage.vue");
+const IntentEditPage = () => import("../views/admin/IntentEditPage.vue");
 
 function resolveRedirectTarget(target) {
   if (typeof target !== "string") {
@@ -110,6 +112,16 @@ const router = createRouter({
           path: "intent-tree",
           name: "admin-intent-tree",
           component: IntentTreePage
+        },
+        {
+          path: "intent-list",
+          name: "admin-intent-list",
+          component: IntentListPage
+        },
+        {
+          path: "intent-list/:id/edit",
+          name: "admin-intent-edit",
+          component: IntentEditPage
         },
         {
           path: "ingestion",
@@ -237,10 +249,8 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const token = getStoredAuthToken();
-  const user = getStoredAuthUser();
   const isAuthenticated = Boolean(token);
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
 
   if (requiresAuth && !isAuthenticated) {
     return {
@@ -253,10 +263,6 @@ router.beforeEach((to) => {
 
   if (to.name === "login" && isAuthenticated) {
     return resolveRedirectTarget(to.query.redirect);
-  }
-
-  if (requiresAdmin && user?.role !== "admin") {
-    return "/rag";
   }
 
   return true;
