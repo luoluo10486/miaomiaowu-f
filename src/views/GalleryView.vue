@@ -1,12 +1,15 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { defaultGalleryDetail, galleryDetails } from "../data/gallerySources";
 import { authorTweetMetaBySourceUrl } from "../data/authorTweetMeta";
 import { officialGalleryDetails, officialGalleryImages } from "../data/officialGallerySources";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
 const router = useRouter();
+gsap.registerPlugin(ScrollTrigger);
 
 const localGalleryImages = [
   "1648137658919.jpg","1648137770487.jpg","1648137785223.jpg","1648137830647.png",
@@ -136,8 +139,14 @@ const revealRunId = ref(0);
 const sceneImagesMounted = ref(false);
 const loaderVariantKey = ref("rose-orbit");
 const loaderElapsedMs = ref(0);
+const scrollShellRef = ref(null);
+const lightboxViewportRef = ref(null);
+const lightboxScrollRef = ref(null);
 const lightboxIndex = ref(-1);
 const lightboxVisible = ref(false);
+const selectedWallIndex = ref(-1);
+const galleryScrubProgress = ref(0);
+const galleryInteractionState = ref("idle");
 const cursorX = ref(-999);
 const cursorY = ref(-999);
 const canvasRef = ref(null);
@@ -167,6 +176,8 @@ let lightboxFlightFrameB = 0;
 let galleryRevealTimer = 0;
 let loaderAnimId = 0;
 let gallerySequenceToken = 0;
+let galleryScrollContext = null;
+let gallerySelectionTween = null;
 
 const LIGHTBOX_CLOSE_DURATION = 420;
 const LIGHTBOX_FLIGHT_DURATION = 640;
@@ -264,6 +275,30 @@ const activeLoaderVariant = computed(() => {
   return GALLERY_LOADER_VARIANTS.find((variant) => variant.key === loaderVariantKey.value) || GALLERY_LOADER_VARIANTS[0];
 });
 
+const lightboxRailDistance = computed(() => Math.max(viewportHeight.value * 2.1, 1800));
+
+const lightboxRailHeight = computed(() => {
+  return `${Math.round(lightboxRailDistance.value)}px`;
+});
+
+const lightboxScrubDistance = computed(() => {
+  return Math.max(
+    lightboxRailDistance.value - viewportHeight.value * 0.2,
+    viewportHeight.value * 1.15,
+    920
+  );
+});
+
+const galleryStateClasses = computed(() => ({
+  "has-lightbox": lightboxIndex.value >= 0,
+  "is-idle": galleryInteractionState.value === "idle",
+  "is-selected": galleryInteractionState.value === "selected",
+  "is-expanding": galleryInteractionState.value === "expanding",
+  "is-fullscreen": galleryInteractionState.value === "fullscreen",
+  "is-returning": galleryInteractionState.value === "returning",
+  "is-scrubbing": galleryInteractionState.value === "scrubbing"
+}));
+
 const galleryLoadPercent = computed(() => {
   return Math.round(galleryLoadProgress.value * 100);
 });
@@ -333,6 +368,150 @@ const displayTweetText = computed(() => {
 
 function getGalleryImageUrl(filename) {
   return resolvePublicAssetUrl(`gallery/${filename}`);
+}
+
+function cleanupLightboxScrollScrub() {
+  if (galleryScrollContext) {
+    galleryScrollContext.revert();
+    galleryScrollContext = null;
+  }
+  if (gallerySelectionTween) {
+    gallerySelectionTween.kill();
+    gallerySelectionTween = null;
+  }
+}
+
+function setupLightboxScrollScrub() {
+  cleanupLightboxScrollScrub();
+
+  if (!lightboxScrollRef.value || !lightboxViewportRef.value || lightboxIndex.value < 0) {
+    return;
+  }
+
+  const scrollContainer = lightboxScrollRef.value;
+  const viewport = lightboxViewportRef.value;
+  const backdrop = viewport.querySelector(".lightbox__backdrop");
+  const backdropImage = viewport.querySelector(".lightbox__backdrop-img");
+  const infoPanel = viewport.querySelector(".lightbox__info");
+  const stage = viewport.querySelector(".lightbox__stage");
+  const card = lightboxCardRef.value;
+  const cardImage = card?.querySelector("img");
+  const closeBtn = viewport.querySelector(".lightbox__close");
+  const arrows = Array.from(viewport.querySelectorAll(".lightbox__arrow"));
+  const selectedColumns = "minmax(0, 1fr) minmax(320px, 380px)";
+  const fullscreenColumns = "minmax(0, 1fr) 0px";
+  const selectedStageWidth = "min(56vw, 800px)";
+  const fullscreenStageWidth = "100vw";
+
+  galleryInteractionState.value = "selected";
+  galleryScrubProgress.value = 0;
+  scrollContainer.scrollTop = 0;
+
+  galleryScrollContext = gsap.context(() => {
+    gsap.set(viewport, { gridTemplateColumns: selectedColumns });
+    gsap.set(stage, { y: 0, scale: 1, filter: "blur(0px)", width: selectedStageWidth, justifySelf: "end" });
+    gsap.set(card, {
+      scale: 1,
+      y: 0,
+      rotateX: 0,
+      rotateZ: 0,
+      padding: "0px",
+      borderRadius: "0px"
+    });
+    gsap.set(infoPanel, { x: 0, opacity: 1, filter: "blur(0px)" });
+    gsap.set(backdrop, { opacity: 0.24, scale: 1.03 });
+    if (backdropImage) {
+      gsap.set(backdropImage, { opacity: 0.18 });
+    }
+    if (cardImage) {
+      gsap.set(cardImage, { scale: 1, transformOrigin: "center center" });
+    }
+
+    gallerySelectionTween = gsap.timeline({
+      scrollTrigger: {
+        scroller: scrollContainer,
+        trigger: viewport,
+        start: "top top",
+        end: () => `+=${Math.round(lightboxScrubDistance.value)}`,
+        scrub: 1,
+        pin: viewport,
+        pinSpacing: false,
+        anticipatePin: 1,
+        invalidateOnRefresh: true,
+        onUpdate: (self) => {
+          galleryScrubProgress.value = self.progress;
+          if (self.progress > 0.18 && self.progress < 0.82) {
+            if (self.progress < 0.42) {
+              galleryInteractionState.value = "expanding";
+            } else if (self.progress > 0.58) {
+              galleryInteractionState.value = "returning";
+            } else {
+              galleryInteractionState.value = "fullscreen";
+            }
+          } else if (self.progress > 0.78) {
+            galleryInteractionState.value = "settled";
+          } else if (self.progress > 0.12) {
+            galleryInteractionState.value = "scrubbing";
+          } else {
+            galleryInteractionState.value = "selected";
+          }
+        }
+      }
+    });
+
+    if (backdrop) {
+      gallerySelectionTween
+        .to(backdrop, { opacity: 0.86, scale: 1, ease: "none", duration: 0.24 }, 0.08)
+        .to(backdrop, { opacity: 0.52, scale: 1.01, ease: "none", duration: 0.26 }, 0.36)
+        .to(backdrop, { opacity: 0.24, scale: 1.03, ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (backdropImage) {
+      gallerySelectionTween
+        .to(backdropImage, { opacity: 0.32, ease: "none", duration: 0.24 }, 0.08)
+        .to(backdropImage, { opacity: 0.22, ease: "none", duration: 0.26 }, 0.36)
+        .to(backdropImage, { opacity: 0.18, ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (viewport) {
+      gallerySelectionTween
+        .to(viewport, { gridTemplateColumns: fullscreenColumns, ease: "none", duration: 0.24 }, 0.08)
+        .to(viewport, { gridTemplateColumns: fullscreenColumns, ease: "none", duration: 0.26 }, 0.36)
+        .to(viewport, { gridTemplateColumns: selectedColumns, ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (stage) {
+      gallerySelectionTween
+        .to(stage, { y: 0, scale: 1, width: fullscreenStageWidth, justifySelf: "stretch", ease: "none", duration: 0.24 }, 0.08)
+        .to(stage, { y: 0, scale: 1, width: fullscreenStageWidth, justifySelf: "stretch", ease: "none", duration: 0.26 }, 0.36)
+        .to(stage, { y: 0, scale: 1, width: selectedStageWidth, justifySelf: "end", ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (card) {
+      gallerySelectionTween
+        .to(card, { scale: 1.02, padding: "0px", borderRadius: "0px", ease: "none", duration: 0.24 }, 0.08)
+        .to(card, { scale: 1.08, padding: "0px", borderRadius: "0px", ease: "none", duration: 0.26 }, 0.36)
+        .to(card, { scale: 1, padding: "0px", borderRadius: "0px", ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (cardImage) {
+      gallerySelectionTween
+        .to(cardImage, { scale: 1, ease: "none", duration: 0.24 }, 0.08)
+        .to(cardImage, { scale: 1, ease: "none", duration: 0.26 }, 0.36)
+        .to(cardImage, { scale: 1, ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (infoPanel) {
+      gallerySelectionTween
+        .to(infoPanel, { x: 52, opacity: 0, filter: "blur(16px)", ease: "none", duration: 0.24 }, 0.08)
+        .to(infoPanel, { x: 64, opacity: 0, filter: "blur(18px)", ease: "none", duration: 0.26 }, 0.36)
+        .to(infoPanel, { x: 0, opacity: 1, filter: "blur(0px)", ease: "none", duration: 0.24 }, 0.68);
+    }
+    if (closeBtn) {
+      gallerySelectionTween
+        .to(closeBtn, { opacity: 1, scale: 1, ease: "none", duration: 0.18 }, 0.14);
+    }
+    if (arrows.length) {
+      gallerySelectionTween
+        .fromTo(arrows, { opacity: 0, x: (index) => (index === 0 ? -10 : 10) }, { opacity: 1, x: 0, ease: "none", stagger: 0.04, duration: 0.18 }, 0.12);
+    }
+  }, viewport);
+
+  ScrollTrigger.refresh();
 }
 
 /* ── Bodhi Tree Canopy Layout ──
@@ -708,8 +887,13 @@ const photoWallItems = computed(() => {
         row,
         column,
         order: seededUnit(row * 97.13 + column * 31.71 + width * 0.003 + height * 0.005)
-      });
-    }
+  });
+}
+
+function syncSelectedLeafState(index) {
+  selectedWallIndex.value = index;
+  galleryInteractionState.value = "selected";
+}
   }
 
   slots.sort((a, b) => a.order - b.order);
@@ -1049,6 +1233,7 @@ async function runLightboxOpenFlight(sourceRect, item) {
 
 async function openLightbox(index, event, item) {
   cancelLightboxMotion();
+  cleanupLightboxScrollScrub();
   const sourceNode = event?.currentTarget?.querySelector(".photo-leaf__paper") || event?.currentTarget;
   const sourceRect = sourceNode?.getBoundingClientRect?.();
 
@@ -1056,6 +1241,9 @@ async function openLightbox(index, event, item) {
   lightboxSettled.value = false;
   lightboxMeasureMode.value = false;
   lightboxFlight.value = null;
+  selectedWallIndex.value = index;
+  galleryInteractionState.value = "selected";
+  galleryScrubProgress.value = 0;
   lightboxOriginX.value = sourceRect
     ? ((sourceRect.left + sourceRect.width / 2) / window.innerWidth * 100).toFixed(1)
     : 50;
@@ -1071,18 +1259,23 @@ async function openLightbox(index, event, item) {
 
   if (sourceRect?.width && sourceRect?.height) {
     runLightboxOpenFlight(sourceRect, item);
-    return;
   }
 
   lightboxSettled.value = true;
+  await nextTick();
+  setupLightboxScrollScrub();
 }
 
 function closeLightbox() {
   cancelLightboxMotion();
+  cleanupLightboxScrollScrub();
   lightboxVisible.value = false;
   lightboxSettled.value = false;
   lightboxMeasureMode.value = false;
   lightboxFlight.value = null;
+  selectedWallIndex.value = -1;
+  galleryInteractionState.value = "idle";
+  galleryScrubProgress.value = 0;
   document.body.style.overflow = "";
   lightboxCloseTimer = window.setTimeout(() => {
     lightboxIndex.value = -1;
@@ -1093,12 +1286,18 @@ function prevImage() {
   lightboxIndex.value = lightboxIndex.value > 0
     ? lightboxIndex.value - 1
     : galleryImages.value.length - 1;
+  selectedWallIndex.value = lightboxIndex.value;
+  galleryInteractionState.value = "selected";
+  window.setTimeout(() => setupLightboxScrollScrub(), 0);
 }
 
 function nextImage() {
   lightboxIndex.value = lightboxIndex.value < galleryImages.value.length - 1
     ? lightboxIndex.value + 1
     : 0;
+  selectedWallIndex.value = lightboxIndex.value;
+  galleryInteractionState.value = "selected";
+  window.setTimeout(() => setupLightboxScrollScrub(), 0);
 }
 
 function handleRefresh() {
@@ -1610,6 +1809,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointermove", onPointerMove);
   window.removeEventListener("resize", updateViewportSize);
   cancelLightboxMotion();
+  cleanupLightboxScrollScrub();
   cancelGalleryMotion();
   if (animId) cancelAnimationFrame(animId);
   if (cleanupCanvas) cleanupCanvas();
@@ -1680,6 +1880,11 @@ onBeforeUnmount(() => {
     <div ref="wallRef" class="wall-viewport">
       <div
         class="wall-scene"
+        :class="{
+          'is-selected': selectedWallIndex >= 0,
+          'is-scrubbing': galleryInteractionState === 'scrubbing',
+          'is-settled': galleryInteractionState === 'settled'
+        }"
         :style="{
           opacity: entranceOpacity
         }"
@@ -1690,6 +1895,12 @@ onBeforeUnmount(() => {
               v-for="item in photoWallItems"
               :key="`${item.filename}-${item.instanceIndex}-${revealRunId}`"
               class="photo-leaf"
+              :class="{
+                'is-selected': selectedWallIndex === item.globalIndex,
+                'is-dimmed': lightboxIndex >= 0 && selectedWallIndex !== item.globalIndex,
+                'is-scrubbing': galleryInteractionState === 'scrubbing',
+                'is-settled': galleryInteractionState === 'settled'
+              }"
               :style="{
                 '--matte-padding': `${item.matte}px`,
                 '--glow-strength': item.glow,
@@ -1732,119 +1943,136 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Lightbox -->
-    <Teleport to="body">
-      <Transition name="lb">
+    <Transition name="lb">
         <div
           v-if="lightboxIndex >= 0"
           class="lightbox"
-          :class="{
-            'is-visible': lightboxVisible,
-            'is-settled': lightboxSettled,
-            'is-measuring': lightboxMeasureMode
-          }"
+          :class="galleryStateClasses"
           :style="{
             '--origin-x': lightboxOriginX + '%',
-            '--origin-y': lightboxOriginY + '%'
+            '--origin-y': lightboxOriginY + '%',
+            '--scrub-progress': galleryScrubProgress
           }"
         >
-          <div class="lightbox__backdrop" @click="closeLightbox">
-            <img
-              class="lightbox__backdrop-img"
-              :src="getGalleryImageUrl(activeFilename)"
-              alt=""
-            />
-          </div>
+          <div ref="lightboxScrollRef" class="lightbox__scroll" :style="{ '--rail-height': lightboxRailHeight }">
+            <div ref="lightboxViewportRef" class="lightbox__viewport" :class="{
+              'is-visible': lightboxVisible,
+              'is-settled': lightboxSettled,
+              'is-measuring': lightboxMeasureMode,
+              'is-scrubbing': galleryInteractionState === 'scrubbing',
+              'is-selected': galleryInteractionState === 'selected'
+            }">
+              <div class="lightbox__backdrop" @click="closeLightbox">
+                <img
+                  class="lightbox__backdrop-img"
+                  :src="getGalleryImageUrl(activeFilename)"
+                  alt=""
+                />
+              </div>
 
-          <button class="lightbox__close" @click="closeLightbox" aria-label="关闭">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-
-          <button class="lightbox__arrow lightbox__arrow--left" @click="prevImage" aria-label="上一张">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M15 18l-6-6 6-6"/>
-            </svg>
-          </button>
-
-          <div class="lightbox__stage">
-            <div class="lightbox__halo" aria-hidden="true"></div>
-            <button
-              ref="lightboxCardRef"
-              class="lightbox__card"
-              type="button"
-              :disabled="!localizedGalleryDetail.sourceUrl"
-              :title="getSourceTitle()"
-              @click="openSourceLink"
-            >
-              <div class="lightbox__card-shimmer" aria-hidden="true"></div>
-              <img
-                :src="getGalleryImageUrl(activeFilename)"
-                :alt="localizedGalleryDetail.title"
-              />
-            </button>
-            <div class="lightbox__shadow" aria-hidden="true"></div>
-          </div>
-
-          <aside class="lightbox__info">
-            <p class="lightbox__eyebrow">{{ localizedGalleryDetail.collection }}</p>
-            <h2>
-              <button
-                class="lightbox__author"
-                type="button"
-                :disabled="!displayAuthorUrl"
-                @click="openAuthorLink"
-              >
-                <span>{{ displayAuthorName }}</span>
-                <svg v-if="displayAuthorUrl" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M7 17L17 7"/>
-                  <path d="M9 7h8v8"/>
+              <button class="lightbox__close" @click="closeLightbox" aria-label="关闭">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
               </button>
-            </h2>
-            <p class="lightbox__original">{{ localizedGalleryDetail.originalTitle }}</p>
-            <p class="lightbox__desc">{{ displayTweetText }}</p>
 
-            <div class="lightbox__tags">
-              <span v-for="tag in localizedGalleryDetail.tags" :key="tag">{{ tag }}</span>
+              <button class="lightbox__arrow lightbox__arrow--left" @click="prevImage" aria-label="上一张">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
+
+              <div class="lightbox__stage">
+                <div class="lightbox__halo" aria-hidden="true"></div>
+                <button
+                  ref="lightboxCardRef"
+                  class="lightbox__card"
+                  type="button"
+                  :disabled="!localizedGalleryDetail.sourceUrl"
+                  :title="getSourceTitle()"
+                  @click="openSourceLink"
+                >
+                  <div class="lightbox__card-shimmer" aria-hidden="true"></div>
+                  <img
+                    :src="getGalleryImageUrl(activeFilename)"
+                    :alt="localizedGalleryDetail.title"
+                  />
+                </button>
+                <div class="lightbox__shadow" aria-hidden="true"></div>
+              </div>
+
+              <aside class="lightbox__info">
+                <div class="lightbox__progress">
+                  <span class="lightbox__progress-label">Scrub</span>
+                  <span class="lightbox__progress-value">{{ Math.round(galleryScrubProgress * 100) }}%</span>
+                  <div class="lightbox__progress-track" aria-hidden="true">
+                    <i
+                      class="lightbox__progress-line"
+                      :style="{ '--scrub-progress': Math.max(0, Math.min(1, galleryScrubProgress)) }"
+                    ></i>
+                  </div>
+                </div>
+
+                <p class="lightbox__eyebrow">{{ localizedGalleryDetail.collection }}</p>
+                <h2>
+                  <button
+                    class="lightbox__author"
+                    type="button"
+                    :disabled="!displayAuthorUrl"
+                    @click="openAuthorLink"
+                  >
+                    <span>{{ displayAuthorName }}</span>
+                    <svg v-if="displayAuthorUrl" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M7 17L17 7"/>
+                      <path d="M9 7h8v8"/>
+                    </svg>
+                  </button>
+                </h2>
+                <p class="lightbox__original">{{ localizedGalleryDetail.originalTitle }}</p>
+                <p class="lightbox__desc">{{ displayTweetText }}</p>
+
+                <div class="lightbox__tags">
+                  <span v-for="tag in localizedGalleryDetail.tags" :key="tag">{{ tag }}</span>
+                </div>
+
+                <button
+                  class="lightbox__source"
+                  type="button"
+                  :disabled="!localizedGalleryDetail.sourceUrl"
+                  @click="openSourceLink"
+                >
+                  <span>{{ localizedGalleryDetail.sourceLabel }}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 17L17 7"/>
+                    <path d="M9 7h8v8"/>
+                  </svg>
+                </button>
+
+                <p class="lightbox__note">{{ localizedGalleryDetail.note }}</p>
+              </aside>
+
+              <button class="lightbox__arrow lightbox__arrow--right" @click="nextImage" aria-label="下一张">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
             </div>
-
-            <button
-              class="lightbox__source"
-              type="button"
-              :disabled="!localizedGalleryDetail.sourceUrl"
-              @click="openSourceLink"
-            >
-              <span>{{ localizedGalleryDetail.sourceLabel }}</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M7 17L17 7"/>
-                <path d="M9 7h8v8"/>
-              </svg>
-            </button>
-
-            <p class="lightbox__note">{{ localizedGalleryDetail.note }}</p>
-          </aside>
-
-          <button class="lightbox__arrow lightbox__arrow--right" @click="nextImage" aria-label="下一张">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 18l6-6-6-6"/>
-            </svg>
-          </button>
+            <div class="lightbox__rail" :style="{ height: lightboxRailHeight }" aria-hidden="true"></div>
+          </div>
         </div>
-      </Transition>
-      <div
-        v-if="lightboxFlight"
-        class="lightbox-flight"
-        :class="{ 'is-active': lightboxFlight.phase === 'active' }"
-        :style="lightboxFlight.style"
-        aria-hidden="true"
-      >
-        <img :src="lightboxFlight.src" alt="" />
-        <div class="lightbox-flight__veil"></div>
-        <div class="lightbox-flight__frame"></div>
-        <div class="lightbox-flight__dust"></div>
-      </div>
-    </Teleport>
+    </Transition>
+    <div
+      v-if="lightboxFlight"
+      class="lightbox-flight"
+      :class="{ 'is-active': lightboxFlight.phase === 'active' }"
+      :style="lightboxFlight.style"
+      aria-hidden="true"
+    >
+      <img :src="lightboxFlight.src" alt="" />
+      <div class="lightbox-flight__veil"></div>
+      <div class="lightbox-flight__frame"></div>
+      <div class="lightbox-flight__dust"></div>
+    </div>
   </div>
 </template>
 
@@ -3332,6 +3560,30 @@ onBeforeUnmount(() => {
   transition: transform 0.25s ease, filter 0.25s ease;
 }
 
+.photo-leaf.is-selected {
+  z-index: 6000 !important;
+}
+
+.photo-leaf.is-dimmed {
+  opacity: 0.18;
+  filter: saturate(0.62) brightness(0.72);
+  transition: opacity 0.34s ease, filter 0.34s ease, transform 0.34s ease;
+}
+
+.photo-leaf.is-dimmed .photo-leaf__paper {
+  box-shadow:
+    0 4px 8px rgba(64, 64, 58, 0.08),
+    0 1px 2px rgba(64, 64, 58, 0.06);
+}
+
+.photo-leaf.is-selected .photo-leaf__paper {
+  transform: translateY(-6px) scale(1.035);
+  box-shadow:
+    0 18px 30px rgba(64, 64, 58, 0.28),
+    0 4px 8px rgba(64, 64, 58, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.86);
+}
+
 .photo-leaf:hover .photo-leaf__paper {
   transform: translateY(-2px);
   box-shadow:
@@ -3441,64 +3693,212 @@ onBeforeUnmount(() => {
 
 /* Lightbox motion polish: expand as a paper card instead of a glowing rounded poster. */
 .lightbox {
-  background: transparent;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  overflow: hidden;
+  pointer-events: none;
+  color: rgba(235, 240, 248, 0.9);
 }
+
+.lightbox::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(103, 232, 249, 0.07), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(251, 191, 36, 0.08), transparent 24%),
+    radial-gradient(circle at 80% 78%, rgba(16, 185, 129, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(6, 10, 18, 0.86), rgba(10, 12, 22, 0.94));
+}
+
+.lightbox__scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  pointer-events: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.lightbox__scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.lightbox__viewport {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: clamp(22px, 3.6vw, 54px);
+  align-items: center;
+  padding: clamp(24px, 4.4vw, 64px) clamp(20px, 5vw, 92px);
+  pointer-events: none;
+}
+
+.lightbox__backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  background:
+    linear-gradient(180deg, rgba(250, 246, 239, 0.7), rgba(230, 236, 244, 0.8)),
+    radial-gradient(circle at 50% 50%, rgba(181, 197, 214, 0.22), transparent 68%);
+  pointer-events: auto;
+}
+
+.lightbox.is-visible .lightbox__backdrop,
+.lightbox__viewport.is-visible .lightbox__backdrop {
+  opacity: 1;
+}
+
+.lightbox__backdrop-img {
+  position: absolute;
+  inset: 6vh auto auto 50%;
+  width: min(74vw, 1080px);
+  height: 84vh;
+  object-fit: cover;
+  transform: translateX(-50%) scale(1.08);
+  opacity: 0.24;
+  filter: blur(30px) saturate(0.74) brightness(1.08) contrast(0.94);
+}
+
+.lightbox__close,
+.lightbox__arrow,
+.lightbox__card,
+.lightbox__source,
+.lightbox__author {
+  pointer-events: auto;
+}
+
+.lightbox__close {
+  position: absolute;
+  top: clamp(18px, 3vw, 30px);
+  right: clamp(18px, 3vw, 32px);
+  z-index: 20;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(194, 184, 166, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(92, 103, 118, 0.84);
+  cursor: pointer;
+  backdrop-filter: blur(16px) saturate(1.08);
+  opacity: 0.78;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease, background 0.35s ease, border-color 0.35s ease;
+}
+
+.lightbox__close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(164, 178, 195, 0.34);
+  transform: rotate(90deg) scale(1.06);
+}
+
+.lightbox__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(194, 184, 166, 0.24);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(92, 103, 118, 0.78);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  opacity: 0.76;
+  backdrop-filter: blur(14px) saturate(1.08);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease, background 0.35s ease, border-color 0.35s ease;
+}
+
+.lightbox__arrow:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(164, 178, 195, 0.34);
+}
+
+.lightbox__arrow--left { left: clamp(14px, 2.4vw, 30px); }
+.lightbox__arrow--right { right: clamp(14px, 2.4vw, 30px); }
+.lightbox__arrow--left:hover { transform: translateY(-50%) translateX(-3px); }
+.lightbox__arrow--right:hover { transform: translateY(-50%) translateX(3px); }
 
 .lightbox__stage {
-  isolation: isolate;
-  transform: translateY(10px);
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  transform: translateY(20px) scale(0.96);
+  opacity: 0;
+  filter: blur(12px);
   transition:
-    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.42s ease;
+    transform 0.82s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.54s ease,
+    filter 0.72s ease;
 }
 
-.lightbox.is-settled .lightbox__stage {
-  transform: translateY(0);
+.lightbox__viewport.is-visible .lightbox__stage {
+  opacity: 1;
+}
+
+.lightbox__viewport.is-settled .lightbox__stage {
+  transform: translateY(0) scale(1);
+  filter: blur(0);
 }
 
 .lightbox__halo {
   position: absolute;
-  inset: auto 10% 5% 10%;
-  height: clamp(140px, 24vw, 260px);
+  inset: auto 10% 8% 10%;
+  height: clamp(140px, 22vw, 260px);
   border-radius: 50%;
   background:
-    radial-gradient(circle, rgba(255, 240, 186, 0.5) 0%, rgba(255, 240, 186, 0.18) 34%, transparent 72%);
-  filter: blur(30px);
+    radial-gradient(circle, rgba(255, 240, 186, 0.46) 0%, rgba(255, 240, 186, 0.16) 32%, transparent 72%);
+  filter: blur(32px);
   opacity: 0;
-  transform: translateY(28px) scale(0.72);
+  transform: translateY(26px) scale(0.76);
   transition:
-    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.06s,
-    opacity 0.8s ease 0.06s;
-  z-index: 0;
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+    opacity 0.72s ease 0.08s;
   pointer-events: none;
 }
 
-.lightbox.is-settled .lightbox__halo {
+.lightbox__viewport.is-settled .lightbox__halo {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
 
 .lightbox__card {
-  border-radius: 10px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  position: relative;
+  border-radius: 18px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 239, 232, 0.74));
+  border: 1px solid rgba(194, 184, 166, 0.28);
+  box-shadow:
+    0 32px 90px rgba(143, 132, 116, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset;
   transform:
     perspective(1800px)
-    translateY(30px)
-    scale(0.94)
-    rotateX(11deg)
-    rotateZ(-1.35deg);
+    translateY(32px)
+    scale(0.92)
+    rotateX(10deg)
+    rotateZ(-1.4deg);
   transform-origin: 50% 78%;
-  filter: blur(8px) saturate(0.92);
+  filter: blur(10px) saturate(0.88);
   transition:
     transform 0.88s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.42s ease,
-    filter 0.64s ease;
+    filter 0.64s ease,
+    box-shadow 0.42s ease;
 }
 
-.lightbox.is-settled .lightbox__card {
+.lightbox__viewport.is-settled .lightbox__card {
   transform:
     perspective(1800px)
     translateY(0)
@@ -3514,20 +3914,19 @@ onBeforeUnmount(() => {
 }
 
 .lightbox__card img {
-  border-radius: 4px;
-  background: rgba(228, 223, 207, 0.9);
-  box-shadow: 0 10px 22px rgba(95, 87, 67, 0.12);
-  transform: scale(1.045);
-  transform-origin: 50% 50%;
-  opacity: 0.72;
-  filter: saturate(0.94) contrast(0.98);
+  border-radius: 10px;
+  background: rgba(250, 248, 244, 0.94);
+  box-shadow: 0 10px 22px rgba(95, 87, 67, 0.08);
+  transform: scale(1.04);
+  opacity: 0.84;
+  filter: saturate(0.95) contrast(0.98);
   transition:
     transform 0.96s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.5s ease,
     filter 0.7s ease;
 }
 
-.lightbox.is-settled .lightbox__card img {
+.lightbox__viewport.is-settled .lightbox__card img {
   transform: scale(1);
   opacity: 1;
   filter: saturate(1) contrast(1);
@@ -3539,55 +3938,166 @@ onBeforeUnmount(() => {
 
 .lightbox__info {
   position: relative;
-  padding: clamp(24px, 2.4vw, 34px) 0;
-  transform: translateX(28px) translateY(12px);
-  filter: blur(10px);
+  z-index: 2;
+  min-width: 0;
+  padding: clamp(22px, 2.2vw, 30px);
+  border-radius: 28px;
+  border: 1px solid rgba(194, 184, 166, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.94), rgba(242, 239, 232, 0.78));
+  box-shadow:
+    0 26px 84px rgba(143, 132, 116, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.03);
+  transform: translateX(24px) translateY(12px);
   opacity: 0;
+  filter: blur(12px);
   transition:
     transform 0.72s cubic-bezier(0.16, 1, 0.3, 1) 0.12s,
     opacity 0.42s ease 0.12s,
     filter 0.58s ease 0.12s;
 }
 
+.lightbox__viewport.is-visible .lightbox__info {
+  opacity: 1;
+}
+
+.lightbox__viewport.is-settled .lightbox__info {
+  transform: translateX(0) translateY(0);
+  filter: blur(0);
+}
+
 .lightbox__info::before {
   content: "";
   position: absolute;
-  left: -20px;
-  top: 10%;
-  width: 1px;
-  height: 72%;
-  background: linear-gradient(180deg, transparent, rgba(170, 155, 112, 0.68), transparent);
-  transform: scaleY(0.72);
-  transform-origin: 50% 0;
-  opacity: 0.32;
-  transition:
-    transform 0.76s cubic-bezier(0.16, 1, 0.3, 1) 0.18s,
-    opacity 0.46s ease 0.18s;
-}
-
-.lightbox.is-settled .lightbox__info::before {
-  transform: scaleY(1);
-  opacity: 0.7;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 36%),
+    radial-gradient(circle at 100% 0%, rgba(122, 151, 207, 0.16), transparent 36%),
+    radial-gradient(circle at 0% 100%, rgba(255, 198, 145, 0.14), transparent 28%);
+  pointer-events: none;
+  opacity: 0.9;
 }
 
 .lightbox__info > * {
-  transform: translateY(16px);
+  position: relative;
+  z-index: 1;
+  transform: translateY(14px);
   opacity: 0;
   transition:
     transform 0.62s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.38s ease;
 }
 
-.lightbox__info > *:nth-child(1) { transition-delay: 0.16s; }
-.lightbox__info > *:nth-child(2) { transition-delay: 0.22s; }
-.lightbox__info > *:nth-child(3) { transition-delay: 0.28s; }
-.lightbox__info > *:nth-child(4) { transition-delay: 0.34s; }
-.lightbox__info > *:nth-child(5) { transition-delay: 0.4s; }
-.lightbox__info > *:nth-child(6) { transition-delay: 0.46s; }
-
-.lightbox.is-settled .lightbox__info > * {
+.lightbox__viewport.is-settled .lightbox__info > * {
   transform: translateY(0);
   opacity: 1;
+}
+
+.lightbox__progress {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 12px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.lightbox__progress-label,
+.lightbox__progress-value {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(96, 109, 125, 0.68);
+}
+
+.lightbox__progress-value {
+  justify-self: end;
+}
+
+.lightbox__progress-track {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(166, 177, 193, 0.18);
+  overflow: hidden;
+}
+
+.lightbox__progress-line {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(214, 183, 122, 0.34), rgba(120, 167, 221, 0.9), rgba(145, 201, 169, 0.8));
+  box-shadow: 0 0 16px rgba(120, 167, 221, 0.22);
+}
+
+.lightbox__eyebrow,
+.lightbox__original,
+.lightbox__desc,
+.lightbox__note {
+  color: rgba(88, 98, 110, 0.88);
+}
+
+.lightbox__tags span {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(194, 184, 166, 0.24);
+  color: rgba(88, 98, 110, 0.84);
+}
+
+.lightbox__source,
+.lightbox__author {
+  color: rgba(72, 83, 95, 0.96);
+}
+
+.lightbox__info h2 {
+  margin: 0;
+}
+
+.lightbox__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lightbox__source {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(194, 184, 166, 0.3);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.lightbox__source:hover:not(:disabled),
+.lightbox__author:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.lightbox__source:disabled,
+.lightbox__author:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.lightbox__rail {
+  position: relative;
+  width: 1px;
+  height: var(--rail-height);
+  pointer-events: none;
+  opacity: 0;
+  margin-top: -100vh;
 }
 
 .lightbox-flight {
@@ -3600,8 +4110,7 @@ onBeforeUnmount(() => {
   box-shadow:
     0 30px 60px rgba(108, 100, 76, 0.3),
     0 12px 24px rgba(108, 100, 76, 0.16),
-    0 0 50px rgba(255, 235, 160, 0.4),
-    0 0 100px rgba(255, 222, 125, 0.2),
+    0 0 50px rgba(255, 235, 160, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.94);
   opacity: 0.98;
   transition: none;
@@ -3626,8 +4135,8 @@ onBeforeUnmount(() => {
 
 .lightbox-flight__veil {
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.5), transparent 22%),
-    radial-gradient(circle at 50% 12%, rgba(255, 244, 198, 0.48), transparent 34%);
+    linear-gradient(150deg, rgba(255, 255, 255, 0.42), transparent 22%),
+    radial-gradient(circle at 50% 12%, rgba(255, 244, 198, 0.42), transparent 34%);
   opacity: 0.78;
   mix-blend-mode: screen;
 }
@@ -3642,7 +4151,7 @@ onBeforeUnmount(() => {
 .lightbox-flight__dust {
   inset: -18%;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 233, 164, 0.3) 0%, rgba(255, 233, 164, 0.08) 28%, transparent 60%),
+    radial-gradient(circle at 50% 50%, rgba(255, 233, 164, 0.24) 0%, rgba(255, 233, 164, 0.06) 28%, transparent 60%),
     radial-gradient(circle at 50% 60%, rgba(165, 184, 129, 0.16) 0%, transparent 56%);
   filter: blur(18px);
   opacity: 0.6;
@@ -3652,10 +4161,10 @@ onBeforeUnmount(() => {
 .lightbox-flight::before {
   content: "";
   position: absolute;
-  inset: -50%;
+  inset: -40%;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 240, 175, 0.5) 0%, rgba(255, 240, 175, 0.14) 32%, transparent 60%);
+    radial-gradient(circle at 50% 50%, rgba(255, 240, 175, 0.34) 0%, rgba(255, 240, 175, 0.12) 32%, transparent 60%);
   filter: blur(28px);
   opacity: 0.7;
   pointer-events: none;
@@ -3861,9 +4370,12 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Final readability pass: keep the gallery page from bleeding through the lightbox */
+/* Final polish: light bento-like exhibition frame */
 .lightbox {
-  background: rgba(4, 8, 16, 0.88);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.86), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(220, 231, 248, 0.72), transparent 24%),
+    linear-gradient(180deg, #f5efe6, #e9eef5 54%, #dfe7f1);
 }
 
 .lightbox::before {
@@ -3871,19 +4383,22 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.06), transparent 34%),
-    linear-gradient(180deg, rgba(4, 8, 16, 0.84), rgba(4, 8, 16, 0.94));
+    radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.3), transparent 28%),
+    radial-gradient(circle at 15% 80%, rgba(176, 191, 219, 0.12), transparent 24%),
+    radial-gradient(circle at 85% 72%, rgba(224, 194, 156, 0.1), transparent 22%);
   pointer-events: none;
 }
 
 .lightbox__backdrop {
-  background: rgba(4, 8, 16, 0.92);
+  background:
+    linear-gradient(180deg, rgba(250, 246, 239, 0.66), rgba(233, 238, 244, 0.8)),
+    radial-gradient(circle at 50% 50%, rgba(181, 197, 214, 0.2), transparent 65%);
 }
 
 .lightbox__backdrop-img {
-  opacity: 0.14;
-  filter: blur(26px) saturate(0.75) brightness(0.55);
-  transform: scale(1.08);
+  opacity: 0.22;
+  filter: blur(30px) saturate(0.8) brightness(1.04) contrast(0.95);
+  transform: scale(1.12);
 }
 
 .lightbox__stage {
@@ -3891,51 +4406,189 @@ onBeforeUnmount(() => {
   z-index: 2;
 }
 
+.lightbox__card {
+  border-radius: 18px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(245, 240, 232, 0.76));
+  border: 1px solid rgba(194, 184, 166, 0.26);
+  box-shadow:
+    0 32px 90px rgba(143, 132, 116, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.lightbox__card img {
+  border-radius: 10px;
+  background: rgba(250, 248, 244, 0.96);
+  box-shadow: 0 10px 22px rgba(95, 87, 67, 0.08);
+}
+
 .lightbox__info {
   position: relative;
   z-index: 2;
-  padding: 28px 26px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 26px;
+  padding: 26px 24px;
+  border: 1px solid rgba(194, 184, 166, 0.28);
+  border-radius: 28px;
   background:
-    linear-gradient(180deg, rgba(10, 14, 24, 0.92), rgba(10, 14, 24, 0.78));
+    linear-gradient(180deg, rgba(255, 252, 246, 0.94), rgba(242, 239, 232, 0.78));
   box-shadow:
-    0 24px 80px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(18px) saturate(1.05);
+    0 26px 84px rgba(143, 132, 116, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.03);
 }
 
 .lightbox__eyebrow,
 .lightbox__original,
 .lightbox__desc,
 .lightbox__note {
-  color: rgba(233, 239, 248, 0.92);
+  color: rgba(88, 98, 110, 0.88);
 }
 
 .lightbox__tags span {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(194, 184, 166, 0.24);
+  color: rgba(88, 98, 110, 0.84);
 }
 
 .lightbox__source,
 .lightbox__author {
-  color: rgba(250, 252, 255, 0.96);
+  color: rgba(72, 83, 95, 0.96);
 }
 
 .lightbox__info::before {
   content: "";
   position: absolute;
-  inset: -1px;
+  inset: 0;
   border-radius: inherit;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.16), transparent 38%),
-    radial-gradient(circle at top right, rgba(98, 130, 255, 0.22), transparent 42%);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 36%),
+    radial-gradient(circle at 100% 0%, rgba(122, 151, 207, 0.16), transparent 36%),
+    radial-gradient(circle at 0% 100%, rgba(255, 198, 145, 0.14), transparent 28%);
   pointer-events: none;
-  opacity: 0.75;
+  opacity: 0.9;
 }
 
 .lightbox__info > * {
   position: relative;
   z-index: 1;
+}
+
+.lightbox__close,
+.lightbox__arrow {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(194, 184, 166, 0.28);
+  color: rgba(92, 103, 118, 0.84);
+}
+
+.lightbox__close:hover,
+.lightbox__arrow:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(164, 178, 195, 0.34);
+  color: rgba(72, 83, 95, 0.98);
+}
+
+/* Final rescue override: keep the open state visible and light. */
+.lightbox {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.92), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(220, 231, 248, 0.8), transparent 24%),
+    linear-gradient(180deg, #f7f2ea, #ecf1f7 54%, #e2e9f2) !important;
+  color: rgba(74, 84, 96, 0.98) !important;
+}
+
+.lightbox__scroll {
+  background: transparent !important;
+}
+
+.lightbox__viewport {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px) !important;
+  align-items: center !important;
+  gap: clamp(18px, 3vw, 44px) !important;
+  min-height: 100vh !important;
+  padding: clamp(22px, 4vw, 58px) clamp(18px, 4.8vw, 84px) !important;
+}
+
+.lightbox__backdrop {
+  background:
+    linear-gradient(180deg, rgba(250, 246, 239, 0.72), rgba(233, 238, 244, 0.82)),
+    radial-gradient(circle at 50% 50%, rgba(181, 197, 214, 0.18), transparent 68%) !important;
+}
+
+.lightbox__backdrop-img {
+  opacity: 0.18;
+  filter: blur(26px) saturate(0.82) brightness(1.05) contrast(0.94);
+}
+
+.lightbox__stage {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}
+
+.lightbox__card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(245, 240, 232, 0.76));
+  border: 1px solid rgba(194, 184, 166, 0.26);
+  box-shadow:
+    0 30px 80px rgba(143, 132, 116, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.lightbox__card img {
+  max-width: min(52vw, 760px);
+  max-height: 76vh;
+  background: rgba(250, 248, 244, 0.98);
+}
+
+.lightbox__info {
+  border: 1px solid rgba(194, 184, 166, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.96), rgba(242, 239, 232, 0.82));
+}
+
+.lightbox__eyebrow,
+.lightbox__original,
+.lightbox__desc,
+.lightbox__note,
+.lightbox__source,
+.lightbox__author,
+.lightbox__progress-label,
+.lightbox__progress-value {
+  color: rgba(74, 84, 96, 0.96) !important;
+}
+
+.lightbox__tags span {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(194, 184, 166, 0.24) !important;
+  color: rgba(88, 98, 110, 0.88) !important;
+}
+
+.lightbox__close,
+.lightbox__arrow {
+  background: rgba(255, 255, 255, 0.86);
+  color: rgba(92, 103, 118, 0.9);
+  border-color: rgba(194, 184, 166, 0.26);
+}
+
+.lightbox__progress-track {
+  background: rgba(166, 177, 193, 0.18);
+}
+
+.lightbox__progress-line {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--scrub-progress, 0));
+  opacity: calc(0.2 + var(--scrub-progress, 0) * 0.8);
+  background: linear-gradient(90deg, rgba(214, 183, 122, 0.22), rgba(120, 167, 221, 0.92), rgba(145, 201, 169, 0.88));
+  box-shadow: 0 0 16px rgba(120, 167, 221, 0.24);
+  will-change: transform, opacity;
+}
+
+.lightbox__rail {
+  margin-top: 0;
 }
 </style>
