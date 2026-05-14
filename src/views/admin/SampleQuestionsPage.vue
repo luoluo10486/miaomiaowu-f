@@ -5,7 +5,7 @@ import {
   deleteSampleQuestion,
   getSampleQuestionsPage,
   updateSampleQuestion
-} from "../../services/adminService";
+} from "../../services/sampleQuestionService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const loading = ref(false);

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { getSystemSettings } from "../../services/adminService";
+import { getSystemSettings } from "../../services/settingsService";
 import { normalizeBooleanLabel } from "./adminShared";
 
 const loading = ref(false);

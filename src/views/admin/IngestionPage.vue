@@ -10,7 +10,7 @@ import {
   getIngestionPipelines,
   updateIngestionPipeline,
   uploadIngestionTask
-} from "../../services/adminService";
+} from "../../services/ingestionService";
 import { formatDateTime, pageRecords, pageTotal } from "./adminShared";
 
 const route = useRoute();

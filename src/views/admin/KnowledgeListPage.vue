@@ -6,7 +6,7 @@ import {
   deleteKnowledgeBase,
   getKnowledgeBases,
   renameKnowledgeBase
-} from "../../services/adminService";
+} from "../../services/knowledgeService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const router = useRouter();

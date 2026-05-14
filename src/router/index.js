@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getStoredAuthToken } from "../utils/auth";
+import { getStoredAuthToken, getStoredAuthUser, isAdminUser } from "../utils/auth";
 
 const LoginView = () => import("../views/LoginView.vue");
+const NotFoundView = () => import("../views/NotFoundView.vue");
 const RagChatView = () => import("../views/RagChatView.vue");
 const WorkbenchView = () => import("../views/WorkbenchView.vue");
 const IdeaNotesView = () => import("../views/IdeaNotesView.vue");
@@ -78,6 +79,7 @@ const router = createRouter({
       component: AdminLayoutView,
       meta: {
         requiresAuth: true,
+        requiresAdmin: true,
         fullscreen: true,
         title: "Admin",
         description: "RAG 管理控制台。"
@@ -242,14 +244,21 @@ const router = createRouter({
     {
       path: "/ingestion",
       redirect: "/admin/ingestion"
+    },
+    {
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      component: NotFoundView
     }
   ]
 });
 
 router.beforeEach((to) => {
   const token = getStoredAuthToken();
+  const user = getStoredAuthUser();
   const isAuthenticated = Boolean(token);
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
 
   if (requiresAuth && !isAuthenticated) {
     return {
@@ -258,6 +267,10 @@ router.beforeEach((to) => {
         redirect: to.fullPath
       }
     };
+  }
+
+  if (requiresAdmin && !isAdminUser(user)) {
+    return "/rag";
   }
 
   if (to.name === "login" && isAuthenticated) {

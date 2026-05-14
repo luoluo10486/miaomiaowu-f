@@ -2,38 +2,38 @@ export const adminNavGroups = [
   {
     title: "导航",
     items: [
-      { label: "Dashboard", to: "/admin/dashboard", icon: "◉" },
+      { label: "Dashboard", to: "/admin/dashboard", icon: "◆" },
       { label: "知识库管理", to: "/admin/knowledge", icon: "◆" },
       {
         id: "intent",
         label: "意图管理",
         to: "/admin/intent-tree",
-        icon: "◇",
+        icon: "◆",
         children: [
-          { label: "意图树配置", to: "/admin/intent-tree", icon: "⑂" },
-          { label: "意图列表", to: "/admin/intent-list", icon: "☰" }
+          { label: "意图树配置", to: "/admin/intent-tree", icon: "◆" },
+          { label: "意图列表", to: "/admin/intent-list", icon: "◆" }
         ]
       },
       {
         id: "ingestion",
         label: "数据通道",
         to: "/admin/ingestion",
-        icon: "▲",
+        icon: "◆",
         children: [
-          { label: "流水线管理", to: "/admin/ingestion?tab=pipelines", icon: "◫" },
-          { label: "流水线任务", to: "/admin/ingestion?tab=tasks", icon: "☰" }
+          { label: "流水线管理", to: "/admin/ingestion?tab=pipelines", icon: "◆" },
+          { label: "流水线任务", to: "/admin/ingestion?tab=tasks", icon: "◆" }
         ]
       },
-      { label: "关键词映射", to: "/admin/mappings", icon: "⇄" },
-      { label: "链路追踪", to: "/admin/traces", icon: "◎" }
+      { label: "关键词映射", to: "/admin/mappings", icon: "◆" },
+      { label: "链路追踪", to: "/admin/traces", icon: "◆" }
     ]
   },
   {
     title: "设置",
     items: [
-      { label: "用户管理", to: "/admin/users", icon: "●" },
-      { label: "示例问题", to: "/admin/sample-questions", icon: "◈" },
-      { label: "系统设置", to: "/admin/settings", icon: "⚙" }
+      { label: "用户管理", to: "/admin/users", icon: "◆" },
+      { label: "示例问题", to: "/admin/sample-questions", icon: "◆" },
+      { label: "系统设置", to: "/admin/settings", icon: "◆" }
     ]
   }
 ];
@@ -84,7 +84,7 @@ export function pageCount(page) {
 }
 
 export function normalizeBooleanLabel(value) {
-  return value ? "Enabled" : "Disabled";
+  return value ? "启用" : "禁用";
 }
 
 export function flattenIntentTree(nodes = [], depth = 0, parent = null, parentNames = [], parentCodes = []) {
@@ -113,7 +113,9 @@ function parseExamplesCount(value) {
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) return parsed.length;
-  } catch {}
+  } catch {
+    // ignore parse errors
+  }
   return String(value).split("\n").filter(Boolean).length;
 }
 

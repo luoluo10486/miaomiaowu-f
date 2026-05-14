@@ -5,9 +5,8 @@ import { adminNavGroups } from "./adminShared";
 import { clearStoredAuth, getStoredAuthUser } from "../../utils/auth";
 import {
   changeCurrentUserPassword,
-  getKnowledgeBases,
-  searchKnowledgeDocuments
-} from "../../services/adminService";
+} from "../../services/userService";
+import { getKnowledgeBases, searchKnowledgeDocuments } from "../../services/knowledgeService";
 
 const route = useRoute();
 const router = useRouter();
@@ -23,6 +22,7 @@ let searchTimeout = null;
 
 const passwordOpen = ref(false);
 const passwordSubmitting = ref(false);
+const passwordErrorText = ref("");
 const passwordForm = ref({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
 const currentUserName = computed(() => {
@@ -200,22 +200,33 @@ function handleSearchKeyDown(event) {
 
 const showSuggest = computed(() => searchFocused.value && kbQuery.value.trim().length > 0);
 
+function openPasswordDialog() {
+  passwordErrorText.value = "";
+  passwordOpen.value = true;
+}
+
+function closePasswordDialog() {
+  passwordOpen.value = false;
+  passwordErrorText.value = "";
+}
+
 async function handlePasswordSubmit() {
   if (!passwordForm.value.currentPassword || !passwordForm.value.newPassword) return;
   if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
-    alert("两次输入的新密码不一致");
+    passwordErrorText.value = "两次输入的新密码不一致";
     return;
   }
+  passwordErrorText.value = "";
   passwordSubmitting.value = true;
   try {
     await changeCurrentUserPassword({
       currentPassword: passwordForm.value.currentPassword,
       newPassword: passwordForm.value.newPassword
     });
-    passwordOpen.value = false;
+    closePasswordDialog();
     passwordForm.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
   } catch (error) {
-    alert(error?.message || "修改密码失败");
+    passwordErrorText.value = error?.message || "修改密码失败";
   } finally {
     passwordSubmitting.value = false;
   }
@@ -356,7 +367,7 @@ async function handlePasswordSubmit() {
           </div>
           <div class="admin-topbar-actions">
             <button class="admin-button--ghost" type="button" @click="router.push('/rag')">返回聊天</button>
-            <button class="admin-button--ghost" type="button" @click="passwordOpen=true">修改密码</button>
+            <button class="admin-button--ghost" type="button" @click="openPasswordDialog">修改密码</button>
             <div class="admin-topbar-user">
               <div class="admin-topbar-avatar">{{ avatarInitial }}</div>
               <span>{{ currentUserName }}</span>
@@ -380,11 +391,11 @@ async function handlePasswordSubmit() {
       </div>
     </main>
 
-    <div v-if="passwordOpen" class="admin-dialog-overlay" @click.self="passwordOpen=false">
+    <div v-if="passwordOpen" class="admin-dialog-overlay" @click.self="closePasswordDialog">
       <div class="admin-dialog">
-        <button class="admin-dialog-close" type="button" @click="passwordOpen=false">&times;</button>
+        <button class="admin-dialog-close" type="button" @click="closePasswordDialog">&times;</button>
         <h3>修改密码</h3>
-        <p>请输入当前密码与新密码</p>
+        <p>请输入当前密码与新密码。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>当前密码</label>
@@ -398,9 +409,10 @@ async function handlePasswordSubmit() {
             <label>确认新密码</label>
             <input v-model="passwordForm.confirmPassword" type="password" class="admin-input" placeholder="再次输入新密码" />
           </div>
+          <p v-if="passwordErrorText" class="admin-dialog-error">{{ passwordErrorText }}</p>
         </div>
         <div class="admin-dialog-footer">
-          <button class="admin-button--ghost" type="button" @click="passwordOpen=false">取消</button>
+          <button class="admin-button--ghost" type="button" @click="closePasswordDialog">取消</button>
           <button class="admin-button" type="button" :disabled="passwordSubmitting || !passwordForm.currentPassword || !passwordForm.newPassword" @click="handlePasswordSubmit">
             {{ passwordSubmitting ? "保存中..." : "保存" }}
           </button>

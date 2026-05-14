@@ -10,7 +10,7 @@ import {
   toggleKnowledgeChunk,
   updateKnowledgeChunk,
   batchToggleKnowledgeChunks
-} from "../../services/adminService";
+} from "../../services/knowledgeService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const route = useRoute();

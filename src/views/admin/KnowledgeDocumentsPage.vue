@@ -10,9 +10,9 @@ import {
   deleteKnowledgeDocument,
   uploadKnowledgeDocument,
   getChunkStrategies,
-  getIngestionPipelines,
   getKnowledgeChunkLogsPage
-} from "../../services/adminService";
+} from "../../services/knowledgeService";
+import { getIngestionPipelines } from "../../services/ingestionService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const route = useRoute();

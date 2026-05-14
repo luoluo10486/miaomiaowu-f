@@ -5,7 +5,7 @@ import {
   deleteUser,
   getUsersPage,
   updateUser
-} from "../../services/adminService";
+} from "../../services/userService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const loading = ref(false);

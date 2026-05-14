@@ -7,7 +7,7 @@ import {
   deleteIntentNode,
   getIntentTree,
   updateIntentNode
-} from "../../services/adminService";
+} from "../../services/intentTreeService";
 import { flattenIntentTree } from "./adminShared";
 
 const loading = ref(false);

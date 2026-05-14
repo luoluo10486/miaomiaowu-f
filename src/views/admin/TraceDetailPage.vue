@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { getRagTraceDetail, getRagTraceNodes } from "../../services/adminService";
+import { getRagTraceDetail, getRagTraceNodes } from "../../services/ragTraceService";
 import { formatDateTime, formatRelativeStatus, safeArray } from "./adminShared";
 
 const route = useRoute();

@@ -1,4 +1,6 @@
 import { clearStoredAuth, getStoredAuthToken } from "../utils/auth";
+import { deleteSession, listMessages, listSessions, renameSession } from "./sessionService";
+import { stopTask, submitFeedback } from "./chatService";
 
 const RAG_API_BASE_URL = (import.meta.env.VITE_RAG_API_BASE_URL || "/api/ragent").trim().replace(/\/$/, "");
 
@@ -213,26 +215,19 @@ async function readSseStream(response, handlers, signal) {
 }
 
 export async function listRagSessions() {
-  return requestRag("/conversations");
+  return listSessions();
 }
 
 export async function listRagMessages(conversationId) {
-  return requestRag(`/conversations/${conversationId}/messages`);
+  return listMessages(conversationId);
 }
 
 export async function deleteRagSession(conversationId) {
-  return requestRag(`/conversations/${conversationId}`, {
-    method: "DELETE"
-  });
+  return deleteSession(conversationId);
 }
 
 export async function renameRagSession(conversationId, title) {
-  return requestRag(`/conversations/${conversationId}`, {
-    method: "PUT",
-    body: {
-      title
-    }
-  });
+  return renameSession(conversationId, title);
 }
 
 export async function listSampleQuestions() {
@@ -240,18 +235,11 @@ export async function listSampleQuestions() {
 }
 
 export async function stopRagTask(taskId) {
-  return requestRag(`/rag/v3/stop${buildQuery({ taskId })}`, {
-    method: "POST"
-  });
+  return stopTask(taskId);
 }
 
 export async function submitRagMessageFeedback(messageId, vote) {
-  return requestRag(`/conversations/messages/${messageId}/feedback`, {
-    method: "POST",
-    body: {
-      vote
-    }
-  });
+  return submitFeedback(messageId, vote);
 }
 
 export function createRagChatStream(params, handlers = {}) {

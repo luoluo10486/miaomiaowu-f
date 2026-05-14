@@ -4,7 +4,7 @@ import {
   getAdminDashboardOverview,
   getAdminDashboardPerformance,
   getAdminDashboardTrends
-} from "../../services/adminService";
+} from "../../services/dashboardService";
 import { formatDateTime } from "./adminShared";
 
 const loading = ref(false);

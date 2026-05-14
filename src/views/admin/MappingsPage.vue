@@ -5,7 +5,7 @@ import {
   deleteQueryTermMapping,
   getQueryTermMappingsPage,
   updateQueryTermMapping
-} from "../../services/adminService";
+} from "../../services/queryTermMappingService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const loading = ref(false);

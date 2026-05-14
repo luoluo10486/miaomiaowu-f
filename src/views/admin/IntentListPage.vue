@@ -6,7 +6,7 @@ import {
   batchDisableIntentNodes,
   batchEnableIntentNodes,
   getIntentTree
-} from "../../services/adminService";
+} from "../../services/intentTreeService";
 import { flattenIntentTree } from "./adminShared";
 
 const router = useRouter();

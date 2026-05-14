@@ -1065,6 +1065,12 @@
   width: 100%;
 }
 
+.admin-dialog-error {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--admin-danger);
+}
+
 .admin-dialog-footer {
   display: flex;
   justify-content: flex-end;

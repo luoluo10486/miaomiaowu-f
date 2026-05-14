@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { getRagTraceRuns } from "../../services/adminService";
+import { getRagTraceRuns } from "../../services/ragTraceService";
 import { formatDateTime, formatRelativeStatus, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const router = useRouter();
