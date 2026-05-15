@@ -329,6 +329,18 @@ onMounted(() => {
       />
     </div>
 
+    <section class="admin-detail-card chunks-hero">
+      <div class="chunks-hero-copy">
+        <p class="trace-hero-tag">Chunk Flow</p>
+        <h2>切片内容与批量状态管理</h2>
+        <p>围绕文档切片进行预览、编辑、启停和批量操作。</p>
+      </div>
+      <div class="chunks-hero-side">
+        <span class="admin-badge is-outline">{{ doc?.docName || "当前文档" }}</span>
+        <p>通过筛选、批量处理和日志查看，快速掌握当前切片集状态。</p>
+      </div>
+    </section>
+
     <section class="admin-split">
       <article class="admin-table-card">
         <div class="admin-table-card__header">
@@ -523,6 +535,37 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.chunks-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.chunks-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.chunks-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.chunks-hero-copy p,
+.chunks-hero-side p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.chunks-hero-side {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 280px;
+}
+
 .admin-chunk-preview {
   margin: 0;
   white-space: pre-wrap;
@@ -531,5 +574,11 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1.7;
   color: var(--admin-ink);
+}
+
+@media (max-width: 960px) {
+  .chunks-hero {
+    flex-direction: column;
+  }
 }
 </style>
