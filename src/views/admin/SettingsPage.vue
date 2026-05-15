@@ -13,6 +13,8 @@ const ragDefaults = computed(() => settings.value?.rag?.default || {});
 const queryRewrite = computed(() => settings.value?.rag?.queryRewrite || {});
 const rateLimit = computed(() => settings.value?.rag?.rateLimit?.global || {});
 const memory = computed(() => settings.value?.rag?.memory || {});
+const selection = computed(() => settings.value?.ai?.selection || {});
+const stream = computed(() => settings.value?.ai?.stream || {});
 const providerEntries = computed(() => Object.entries(settings.value?.ai?.providers || {}));
 const providerCount = computed(() => providerEntries.value.length);
 const modelCountLabel = computed(() => {
@@ -21,10 +23,33 @@ const modelCountLabel = computed(() => {
   const rerank = settings.value?.ai?.rerank?.defaultModel || "--";
   return `${chat} / ${embedding} / ${rerank}`;
 });
+const modelCoverageLabel = computed(() => {
+  const chat = Array.isArray(settings.value?.ai?.chat?.candidates) ? settings.value.ai.chat.candidates.length : 0;
+  const embedding = Array.isArray(settings.value?.ai?.embedding?.candidates) ? settings.value.ai.embedding.candidates.length : 0;
+  const rerank = Array.isArray(settings.value?.ai?.rerank?.candidates) ? settings.value.ai.rerank.candidates.length : 0;
+  return `${chat} / ${embedding} / ${rerank}`;
+});
 const modelGroups = computed(() => [
   { label: "Chat", data: settings.value?.ai?.chat || {}, tone: "indigo" },
   { label: "Embedding", data: settings.value?.ai?.embedding || {}, tone: "cyan" },
   { label: "Rerank", data: settings.value?.ai?.rerank || {}, tone: "emerald" }
+]);
+const strategyOverview = computed(() => [
+  {
+    label: "Failure Threshold",
+    value: selection.value.failureThreshold ?? "--",
+    hint: "模型切换触发阈值"
+  },
+  {
+    label: "Open Duration",
+    value: selection.value.openDurationMs ?? "--",
+    hint: "熔断窗口毫秒数"
+  },
+  {
+    label: "Stream Chunk",
+    value: stream.value.messageChunkSize ?? "--",
+    hint: "流式输出分片大小"
+  }
 ]);
 
 const stats = computed(() => [
@@ -124,6 +149,10 @@ onMounted(() => {
           <span class="settings-hero-cardlabel">Chat / Embedding / Rerank</span>
           <strong>{{ modelCountLabel }}</strong>
         </div>
+        <div class="settings-hero-cardline">
+          <span class="settings-hero-cardlabel">Candidates</span>
+          <strong>{{ modelCoverageLabel }}</strong>
+        </div>
       </div>
     </section>
 
@@ -182,6 +211,18 @@ onMounted(() => {
       </article>
 
       <aside class="admin-dashboard-aside">
+        <article class="admin-detail-card">
+          <h3>模型策略</h3>
+          <p class="admin-detail-card-desc">对照前端参考页的“选择策略”和“流式响应”分区，便于快速排查模型路由。</p>
+          <div class="admin-card-list">
+            <div v-for="item in strategyOverview" :key="item.label" class="admin-card-item">
+              <h3>{{ item.label }}</h3>
+              <p class="admin-badge is-muted">{{ item.value }}</p>
+              <p class="admin-list-meta">{{ item.hint }}</p>
+            </div>
+          </div>
+        </article>
+
         <article class="admin-detail-card">
           <h3>AI Provider</h3>
           <p class="admin-detail-card-desc">当前提供商和端点信息。</p>

@@ -524,6 +524,12 @@ onMounted(() => {
         </div>
         <p>{{ healthMeta.detail }}</p>
       </div>
+      <div class="dashboard-hero-summary">
+        <div v-for="item in dashboardHeroSummary" :key="item.label" class="dashboard-hero-summary-item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
     </section>
 
     <div class="admin-stat-grid">
@@ -721,6 +727,7 @@ onMounted(() => {
 
 .dashboard-hero {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 20px;
   align-items: stretch;
@@ -746,6 +753,34 @@ onMounted(() => {
   gap: 10px;
   align-content: start;
   min-width: 240px;
+}
+
+.dashboard-hero-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1 0 100%;
+  padding-top: 4px;
+}
+
+.dashboard-hero-summary-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
+}
+
+.dashboard-hero-summary-item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.dashboard-hero-summary-item strong {
+  color: var(--admin-ink);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .dashboard-header-meta {
@@ -825,6 +860,10 @@ onMounted(() => {
   .dashboard-hero,
   .admin-split {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-hero-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dashboard-trend-grid {

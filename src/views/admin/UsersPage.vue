@@ -33,6 +33,7 @@ const pageUsers = computed(() => pageRecords(page.value));
 const totalUsers = computed(() => pageTotal(page.value));
 const adminCount = computed(() => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length);
 const enabledCount = computed(() => pageUsers.value.filter((item) => item.enabled !== false).length);
+const protectedCount = computed(() => pageUsers.value.filter((item) => isProtectedUser(item)).length);
 const activeFilterLabel = computed(() => (keyword.value ? keyword.value : "全部用户"));
 const selectedUser = computed(() => {
   if (selectedUserId.value) {
@@ -298,6 +299,10 @@ onMounted(() => {
           <span class="users-hero-cardlabel">管理员 / 启用</span>
           <strong>{{ adminCount }} / {{ enabledCount }}</strong>
         </div>
+        <div class="users-hero-cardline">
+          <span class="users-hero-cardlabel">保护账号</span>
+          <strong>{{ protectedCount }}</strong>
+        </div>
       </div>
     </section>
 
@@ -407,6 +412,17 @@ onMounted(() => {
       </article>
 
       <aside class="admin-dashboard-aside">
+        <article class="admin-detail-card">
+          <h3>账号结构</h3>
+          <p class="admin-detail-card-desc">先看当前页里的角色、状态和保护账号分布，再进入单个用户详情。</p>
+          <div class="admin-kv">
+            <div><dt>当前页</dt><dd>{{ pageUsers.length }}</dd></div>
+            <div><dt>管理员</dt><dd>{{ adminCount }}</dd></div>
+            <div><dt>启用</dt><dd>{{ enabledCount }}</dd></div>
+            <div><dt>保护账号</dt><dd>{{ protectedCount }}</dd></div>
+          </div>
+        </article>
+
         <article class="admin-detail-card">
           <h3>用户预览</h3>
           <p class="admin-detail-card-desc">点击一行查看完整资料和账号状态。</p>

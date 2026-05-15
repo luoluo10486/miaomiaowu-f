@@ -51,6 +51,13 @@ const selectedQuestionLabel = computed(() => {
   return `${selectedQuestion.value.title || "--"} · ${selectedQuestion.value.question?.length || 0} 字`;
 });
 const questionSummaryLabel = computed(() => `筛选: ${activeFilterLabel.value} · 当前页: ${visibleQuestionCount.value}`);
+const averageQuestionLength = computed(() => {
+  if (questions.value.length === 0) return 0;
+  const totalLength = questions.value.reduce((sum, item) => sum + (item.question?.length || 0), 0);
+  return Math.round(totalLength / questions.value.length);
+});
+const titledCount = computed(() => questions.value.filter((item) => Boolean(item.title?.trim())).length);
+const describedCount = computed(() => questions.value.filter((item) => Boolean(item.description?.trim())).length);
 
 const stats = computed(() => [
   {
@@ -231,6 +238,7 @@ onMounted(() => {
           <span class="admin-badge is-muted">当前页：{{ questions.length }}</span>
           <span class="admin-badge is-muted">选中：{{ selectedQuestionLabel }}</span>
           <span class="admin-badge is-muted">最新：{{ latestQuestionLabel }}</span>
+          <span class="admin-badge is-muted">{{ questionSummaryLabel }}</span>
         </div>
       </template>
       <template #actions>
@@ -254,6 +262,8 @@ onMounted(() => {
         <div><span>问题长度</span><strong>{{ selectedQuestionLength }}</strong></div>
         <div><span>当前页</span><strong>{{ currentPageLabel }}</strong></div>
         <div><span>最新条目</span><strong>{{ latestQuestionLabel }}</strong></div>
+        <div><span>平均长度</span><strong>{{ averageQuestionLength }}</strong></div>
+        <div><span>带标题</span><strong>{{ titledCount }}</strong></div>
       </div>
     </section>
 
@@ -337,6 +347,17 @@ onMounted(() => {
       </article>
 
       <aside class="admin-dashboard-aside">
+        <article class="admin-detail-card">
+          <h3>页面摘要</h3>
+          <p class="admin-detail-card-desc">这页更适合先看总览，再进入列表编辑。标题、描述和问题长度都能在这里快速确认。</p>
+          <div class="admin-kv admin-kv--compact">
+            <div><dt>当前筛选</dt><dd>{{ activeFilterLabel }}</dd></div>
+            <div><dt>当前页</dt><dd>{{ visibleQuestionCount }}</dd></div>
+            <div><dt>带标题</dt><dd>{{ titledCount }}</dd></div>
+            <div><dt>带描述</dt><dd>{{ describedCount }}</dd></div>
+          </div>
+        </article>
+
         <article class="admin-detail-card">
           <h3>问题预览</h3>
           <p class="admin-detail-card-desc">点击表格中的任意一行即可查看完整内容。</p>

@@ -217,6 +217,13 @@ const latestDocumentLabel = computed(() => {
   if (!latestDocument.value) return "--";
   return `${latestDocument.value.docName || latestDocument.value.id} · ${formatSourceLabel(latestDocument.value.sourceType)}`;
 });
+const documentsHeroSummary = computed(() => [
+  { label: "知识库", value: kb.value?.name || kbId.value || "--" },
+  { label: "文档总数", value: String(visibleDocumentCount.value) },
+  { label: "当前筛选", value: currentFilterSummary.value },
+  { label: "最新文档", value: latestDocumentLabel.value },
+  { label: "最近日志", value: latestLog.value ? latestLog.value.status || "--" : "--" }
+]);
 
 const stats = computed(() => {
   const records = documents.value;
@@ -639,6 +646,20 @@ onMounted(() => {
         <div class="docs-hero-cardline">
           <span class="docs-hero-cardlabel">最新文档</span>
           <strong>{{ latestDocumentLabel }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-detail-card docs-summary">
+      <div class="docs-summary__copy">
+        <p class="trace-hero-tag">Documents Summary</p>
+        <h2>文档状态概览</h2>
+        <p>对齐 frontend 的知识文档页，先展示知识库、筛选和最新状态，再进入文档表格与详情弹窗。</p>
+      </div>
+      <div class="docs-summary__grid">
+        <div v-for="item in documentsHeroSummary" :key="item.label" class="docs-summary__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </div>
       </div>
     </section>
@@ -1072,6 +1093,57 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.docs-summary {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.docs-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.docs-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.docs-summary__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.docs-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.docs-summary__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.docs-summary__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.docs-summary__item strong {
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .admin-header-meta {
   display: flex;
   align-items: center;
@@ -1082,6 +1154,10 @@ onMounted(() => {
 @media (max-width: 960px) {
   .docs-hero {
     flex-direction: column;
+  }
+
+  .docs-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .docs-hero-side {

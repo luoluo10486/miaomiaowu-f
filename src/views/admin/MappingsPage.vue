@@ -31,6 +31,10 @@ const deleteSubmitting = ref(false);
 
 const mappings = computed(() => pageRecords(page.value));
 const currentPageLabel = computed(() => `${pageNo.value} / ${pageCount(page.value)}`);
+const enabledCount = computed(() => mappings.value.filter((item) => item.enabled).length);
+const disabledCount = computed(() => mappings.value.filter((item) => !item.enabled).length);
+const exactCount = computed(() => mappings.value.filter((item) => String(item.matchType || "").toUpperCase() === "EXACT").length);
+const regexCount = computed(() => mappings.value.filter((item) => String(item.matchType || "").toUpperCase() === "REGEX").length);
 const selectedMapping = computed(() => {
   if (selectedMappingId.value) {
     return mappings.value.find((item) => item.id === selectedMappingId.value) || mappings.value[0] || null;
@@ -270,6 +274,10 @@ onMounted(() => {
           <span class="mappings-hero-cardlabel">最新规则</span>
           <strong>{{ latestMappingLabel }}</strong>
         </div>
+        <div class="mappings-hero-cardline">
+          <span class="mappings-hero-cardlabel">启用 / 禁用</span>
+          <strong>{{ enabledCount }} / {{ disabledCount }}</strong>
+        </div>
       </div>
     </section>
 
@@ -357,6 +365,17 @@ onMounted(() => {
       </article>
 
       <aside class="admin-dashboard-aside">
+        <article class="admin-detail-card">
+          <h3>规则分布</h3>
+          <p class="admin-detail-card-desc">先看当前页里的匹配类型和启用状态，再进入具体规则详情。</p>
+          <div class="admin-kv">
+            <div><dt>当前页</dt><dd>{{ mappings.length }}</dd></div>
+            <div><dt>启用</dt><dd>{{ enabledCount }}</dd></div>
+            <div><dt>禁用</dt><dd>{{ disabledCount }}</dd></div>
+            <div><dt>精确 / 正则</dt><dd>{{ exactCount }} / {{ regexCount }}</dd></div>
+          </div>
+        </article>
+
         <article class="admin-detail-card">
           <h3>规则预览</h3>
           <p class="admin-detail-card-desc">点击任意一行查看映射规则的完整细节。</p>

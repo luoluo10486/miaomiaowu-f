@@ -107,6 +107,14 @@ const averageChunkChars = computed(() => {
   const total = chunks.value.reduce((sum, item) => sum + Number(item.charCount || 0), 0);
   return Math.round(total / chunks.value.length);
 });
+const chunksHeroSummary = computed(() => [
+  { label: "当前文档", value: doc.value?.docName || docId.value || "--" },
+  { label: "切片总数", value: String(pageTotal(chunksPage.value)) },
+  { label: "当前筛选", value: currentFilterLabel.value },
+  { label: "已选中", value: String(selectedIds.value.size) },
+  { label: "最新切片", value: latestChunkSummary.value },
+  { label: "最近日志", value: latestLogSummary.value }
+]);
 
 const stats = computed(() => {
   const records = chunks.value;
@@ -406,6 +414,20 @@ onMounted(() => {
       </div>
     </section>
 
+    <section class="admin-detail-card chunks-summary">
+      <div class="chunks-summary__copy">
+        <p class="trace-hero-tag">Chunks Summary</p>
+        <h2>切片状态概览</h2>
+        <p>对齐 frontend 的切片管理页，先确认文档、筛选和最近执行状态，再进入切片表格和预览弹窗。</p>
+      </div>
+      <div class="chunks-summary__grid">
+        <div v-for="item in chunksHeroSummary" :key="item.label" class="chunks-summary__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </section>
+
     <section class="admin-split">
       <article class="admin-table-card">
         <div class="admin-table-card__header">
@@ -677,6 +699,57 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.chunks-summary {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.chunks-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.chunks-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.chunks-summary__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.chunks-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chunks-summary__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.chunks-summary__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chunks-summary__item strong {
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .admin-header-meta {
   display: flex;
   align-items: center;
@@ -697,6 +770,10 @@ onMounted(() => {
 @media (max-width: 960px) {
   .chunks-hero {
     flex-direction: column;
+  }
+
+  .chunks-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .chunks-hero-side {

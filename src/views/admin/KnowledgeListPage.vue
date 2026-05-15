@@ -59,6 +59,16 @@ const latestKnowledgeBaseLabel = computed(() => {
   const collection = latestKnowledgeBase.value.collectionName || "未设置 Collection";
   return `${name} · ${collection}`;
 });
+const knowledgeHeroSummary = computed(() => [
+  { label: "当前筛选", value: currentKeywordLabel.value },
+  { label: "本页结果", value: String(visibleKnowledgeBaseCount.value) },
+  { label: "最新知识库", value: latestKnowledgeBaseLabel.value },
+  {
+    label: "活跃占比",
+    value:
+      stats.totalCount > 0 ? `${Math.round((stats.activeCount / stats.totalCount) * 100)}%` : "--"
+  }
+]);
 const knowledgeSummaryLabel = computed(() => {
   const parts = [];
   parts.push(`搜索: ${currentKeywordLabel.value}`);
@@ -320,6 +330,29 @@ onMounted(() => {
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
+    <section class="admin-detail-card knowledge-hero">
+      <div class="knowledge-hero-copy">
+        <p class="trace-hero-tag">Knowledge</p>
+        <h2>{{ currentKeywordLabel === "全部" ? "全部知识库" : `搜索结果：${currentKeywordLabel}` }}</h2>
+        <p>集合、文档和 embedding 模型一眼可见，方便继续进入文档管理。</p>
+      </div>
+      <div class="knowledge-hero-side">
+        <div class="admin-kv admin-kv--compact">
+          <div><dt>总数</dt><dd>{{ formatStatValue(stats.totalCount) }}</dd></div>
+          <div><dt>文档总数</dt><dd>{{ formatStatValue(stats.documentCount) }}</dd></div>
+          <div><dt>活跃知识库</dt><dd>{{ formatStatValue(stats.activeCount) }}</dd></div>
+          <div><dt>创建者数</dt><dd>{{ formatStatValue(stats.creatorCount) }}</dd></div>
+        </div>
+        <p>最新知识库：{{ latestKnowledgeBaseLabel }}</p>
+      </div>
+      <div class="knowledge-hero-summary">
+        <div v-for="item in knowledgeHeroSummary" :key="item.label" class="knowledge-hero-summary-item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </section>
+
     <div class="admin-stat-grid">
       <StatCard title="知识库总数" :value="formatStatValue(stats.totalCount)" tone="indigo">
         <template #icon>库</template>
@@ -520,6 +553,65 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.knowledge-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+.knowledge-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.knowledge-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.knowledge-hero-copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+}
+
+.knowledge-hero-side {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 240px;
+}
+
+.knowledge-hero-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1 0 100%;
+  padding-top: 4px;
+}
+
+.knowledge-hero-summary-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
+}
+
+.knowledge-hero-summary-item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.knowledge-hero-summary-item strong {
+  color: var(--admin-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .knowledge-aside {
   display: grid;
   gap: 12px;
@@ -529,6 +621,10 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
+  .knowledge-hero-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .knowledge-aside {
     position: static;
   }

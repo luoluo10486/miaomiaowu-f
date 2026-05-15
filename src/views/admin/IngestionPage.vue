@@ -195,6 +195,13 @@ const pipelineStats = computed(() => [
     tone: "rose"
   }
 ]);
+const ingestionHeroSummary = computed(() => [
+  { label: "当前视图", value: currentTabLabel.value },
+  { label: "流水线总数", value: String(pageTotal(pipelines.value)) },
+  { label: "任务总数", value: String(pageTotal(tasks.value)) },
+  { label: "Running", value: String(activeTaskCount.value) },
+  { label: "Failed", value: String(failedTaskCount.value) }
+]);
 
 watch(activeTab, (val) => {
   router.replace({ query: { ...route.query, tab: val } });
@@ -1016,6 +1023,20 @@ onMounted(() => {
       </div>
     </section>
 
+    <section class="admin-detail-card ingestion-summary">
+      <div class="ingestion-summary__copy">
+        <p class="trace-hero-tag">Ingestion Summary</p>
+        <h2>数据通道概览</h2>
+        <p>对齐 frontend 的 ingestion 页，先显示当前视图与任务态，再进入流水线、任务和详情弹窗。</p>
+      </div>
+      <div class="ingestion-summary__grid">
+        <div v-for="item in ingestionHeroSummary" :key="item.label" class="ingestion-summary__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </section>
+
     <section class="admin-split ingestion-layout">
       <div class="ingestion-main">
         <article v-if="activeTab === 'pipelines'" class="admin-table-card">
@@ -1762,6 +1783,57 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.ingestion-summary {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.ingestion-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.ingestion-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.ingestion-summary__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.ingestion-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ingestion-summary__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.ingestion-summary__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ingestion-summary__item strong {
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .trace-hero-tag {
   margin: 0;
   color: var(--admin-accent);
@@ -1818,6 +1890,10 @@ onMounted(() => {
 @media (max-width: 960px) {
   .ingestion-hero {
     grid-template-columns: 1fr;
+  }
+
+  .ingestion-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ingestion-layout {

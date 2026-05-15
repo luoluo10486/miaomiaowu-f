@@ -117,6 +117,7 @@ const selectedResource = computed(() => {
   if (selectedNode.value.kind === 2) return selectedNode.value.mcpToolId || "--";
   return "系统意图";
 });
+const selectedResourceLabel = computed(() => `${selectedResource.value} · ${selectedExamples.value.length} examples`);
 const searchSummary = computed(() => (keyword.value ? `关键词: ${keyword.value}` : "全部节点"));
 const selectedNodeLabel = computed(() => {
   if (!selectedNode.value) return "--";
@@ -126,6 +127,14 @@ const selectedMetaSummary = computed(() => {
   if (!selectedNode.value) return "--";
   return `${selectedResource.value} · ${selectedExamples.value.length} examples`;
 });
+const intentTreeSummary = computed(() => [
+  { label: "当前节点", value: selectedNodeLabel.value },
+  { label: "Intent Code", value: selectedNode.value?.intentCode || "--" },
+  { label: "路径", value: selectedPath.value },
+  { label: "资源", value: selectedResource.value },
+  { label: "示例数", value: String(selectedExamples.value.length) },
+  { label: "展开分支", value: String(expandedCount.value) }
+]);
 
 const stats = computed(() => {
   const allRows = rows.value;
@@ -411,6 +420,7 @@ onMounted(() => {
           <span class="admin-badge is-muted">展开：{{ expandedCount }}</span>
           <span class="admin-badge is-muted">焦点：{{ selectedNodeLabel }}</span>
           <span class="admin-badge is-muted">路径：{{ selectedPath }}</span>
+          <span class="admin-badge is-muted">资源：{{ selectedResourceLabel }}</span>
           <span class="admin-badge is-muted">搜索：{{ searchSummary }}</span>
         </div>
       </template>
@@ -433,6 +443,20 @@ onMounted(() => {
       />
     </div>
 
+    <section class="admin-detail-card intent-tree-summary">
+      <div class="intent-tree-summary__copy">
+        <p class="trace-hero-tag">Intent Summary</p>
+        <h2>树形节点概览</h2>
+        <p>对齐 frontend 的树页阅读顺序，先确认当前焦点节点和路径，再进行新建、编辑与启停操作。</p>
+      </div>
+      <div class="intent-tree-summary__grid">
+        <div v-for="item in intentTreeSummary" :key="item.label" class="intent-tree-summary__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </section>
+
     <section class="admin-detail-card intent-hero-card">
       <div class="intent-hero-copy">
         <p class="trace-hero-tag">Intent Overview</p>
@@ -443,6 +467,8 @@ onMounted(() => {
         <div><span>当前节点</span><strong>{{ selectedNodeLabel }}</strong></div>
         <div><span>Intent Code</span><strong>{{ selectedNode?.intentCode || "--" }}</strong></div>
         <div><span>路径</span><strong>{{ selectedPath }}</strong></div>
+        <div><span>资源</span><strong>{{ selectedResource }}</strong></div>
+        <div><span>示例数</span><strong>{{ selectedExamples.length }}</strong></div>
         <div><span>展开分支</span><strong>{{ expandedCount }}</strong></div>
       </div>
     </section>
@@ -834,7 +860,7 @@ onMounted(() => {
 
 .intent-hero-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -861,6 +887,57 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.intent-tree-summary {
+  display: grid;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.intent-tree-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.intent-tree-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.intent-tree-summary__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.intent-tree-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.intent-tree-summary__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.intent-tree-summary__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intent-tree-summary__item strong {
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .admin-tree-item-title strong {
   display: block;
   color: var(--admin-ink, #1e293b);
@@ -874,6 +951,10 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
+  .intent-tree-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .intent-hero-grid {
     grid-template-columns: 1fr 1fr;
   }

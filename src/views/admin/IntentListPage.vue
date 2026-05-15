@@ -107,8 +107,19 @@ const latestRowLabel = computed(() => {
   if (!latestRow.value) return "--";
   return `${latestRow.value.name || latestRow.value.intentCode || "--"} · ${resolveLevelLabel(latestRow.value.level)}`;
 });
+const focusRowLabel = computed(() => {
+  if (!focusRow.value) return "--";
+  return `${focusRow.value.name || focusRow.value.intentCode || "--"} · ${resolveKindLabel(focusRow.value.kind)}`;
+});
 const pageSummaryLabel = computed(() => `当前页 ${currentPage.value}/${totalPages.value} · 共 ${total.value}`);
 const selectedSummaryLabel = computed(() => (selectedRows.value.length > 0 ? `已选 ${selectedRows.value.length} 项` : "未选择"));
+const intentListHeroSummary = computed(() => [
+  { label: "当前筛选", value: currentFilterSummary.value },
+  { label: "当前页", value: pageSummaryLabel.value },
+  { label: "已选中", value: selectedSummaryLabel.value },
+  { label: "焦点节点", value: focusRowLabel.value },
+  { label: "最新节点", value: latestRowLabel.value }
+]);
 
 const stats = computed(() => [
   {
@@ -289,6 +300,7 @@ onMounted(() => {
           <span class="admin-badge is-muted">筛选：{{ activeFilterCount }} 项</span>
           <span class="admin-badge is-muted">当前页：{{ pageRows.length }}</span>
           <span class="admin-badge is-muted">已选中：{{ selectedRows.length }}</span>
+          <span class="admin-badge is-muted">焦点：{{ focusRowLabel }}</span>
           <span class="admin-badge is-muted">首项：{{ latestRowLabel }}</span>
         </div>
       </template>
@@ -325,7 +337,25 @@ onMounted(() => {
         </div>
         <div>
           <span>当前页首项</span>
+          <strong>{{ focusRowLabel }}</strong>
+        </div>
+        <div>
+          <span>最新节点</span>
           <strong>{{ latestRowLabel }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-detail-card intent-list-summary">
+      <div class="intent-list-summary__copy">
+        <p class="trace-hero-tag">Intent Summary</p>
+        <h2>节点状态概览</h2>
+        <p>对齐 frontend 的管理页节奏，先给出筛选、分页和选择状态，再进入表格处理具体节点。</p>
+      </div>
+      <div class="intent-list-summary__grid">
+        <div v-for="item in intentListHeroSummary" :key="item.label" class="intent-list-summary__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </div>
       </div>
     </section>
@@ -552,7 +582,7 @@ onMounted(() => {
 
 .intent-list-hero__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -579,8 +609,63 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.intent-list-summary {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.intent-list-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.intent-list-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.intent-list-summary__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.intent-list-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.intent-list-summary__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.intent-list-summary__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intent-list-summary__item strong {
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 @media (max-width: 960px) {
   .intent-list-hero__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .intent-list-summary__grid {
     grid-template-columns: 1fr 1fr;
   }
 }

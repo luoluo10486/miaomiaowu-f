@@ -143,6 +143,12 @@ const traceSummaryRows = computed(() => [
   { label: "平均耗时", value: formatDuration(nodeStats.value.avgDuration) },
   { label: "最慢节点", value: slowestNodeLabel.value }
 ]);
+const traceDetailSummary = computed(() => [
+  { label: "Trace ID", value: headerMetaTraceId.value },
+  { label: "状态", value: traceStatus.value },
+  { label: "节点数", value: String(nodeStats.value.total) },
+  { label: "总耗时", value: formatDuration(run.value.durationMs ?? undefined) }
+]);
 
 const timeline = computed(() => {
   const source = Array.isArray(nodes.value) ? nodes.value : [];
@@ -296,6 +302,20 @@ onMounted(() => {
         <div class="trace-hero-cardline">
           <span class="trace-hero-cardlabel">Slowest</span>
           <strong>{{ slowestNodeLabel }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-detail-card trace-detail-summary">
+      <div class="trace-detail-summary__copy">
+        <p class="trace-hero-tag">Trace Summary</p>
+        <h2>运行摘要</h2>
+        <p>对齐 frontend 的详情层级，先看链路主信息，再下探请求响应、错误和节点时间线。</p>
+      </div>
+      <div class="trace-detail-summary__grid">
+        <div v-for="item in traceDetailSummary" :key="item.label" class="trace-detail-summary__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </div>
       </div>
     </section>
@@ -521,6 +541,58 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.trace-detail-summary {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.trace-detail-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.trace-detail-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.trace-detail-summary__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-detail-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trace-detail-summary__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.trace-detail-summary__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.trace-detail-summary__item strong {
+  color: var(--admin-ink);
+  font-size: 16px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
 .trace-hero-side {
   flex: 0 0 240px;
   display: grid;
@@ -603,6 +675,10 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
+  .trace-detail-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .trace-hero-card {
     flex-direction: column;
   }

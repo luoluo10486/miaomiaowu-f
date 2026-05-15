@@ -88,6 +88,15 @@ const activeFilterLabel = computed(() =>
     ? `${activeFilterCount.value} 项筛选`
     : "全部链路"
 );
+const traceHeroSummary = computed(() => [
+  { label: "当前筛选", value: activeFilterLabel.value },
+  { label: "本页结果", value: String(runs.value.length) },
+  { label: "总数", value: String(total.value) },
+  {
+    label: "最新记录",
+    value: latestRun.value ? formatDurationLabel(latestRun.value.durationMs) : "--"
+  }
+]);
 
 function formatDurationLabel(value) {
   const duration = Number(value ?? 0);
@@ -190,6 +199,20 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <section class="admin-detail-card trace-list-hero">
+      <div class="trace-list-hero__copy">
+        <p class="trace-hero-tag">Trace Overview</p>
+        <h2>链路追踪列表</h2>
+        <p>对齐 frontend 的追踪管理页结构，先看筛选摘要和运行概览，再进入列表逐条定位异常链路。</p>
+      </div>
+      <div class="trace-list-hero__grid">
+        <div v-for="item in traceHeroSummary" :key="item.label" class="trace-list-hero__item">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </section>
 
     <section class="admin-detail-card trace-hero-card">
       <div class="trace-hero-copy">
@@ -348,6 +371,58 @@ onMounted(() => {
   gap: 20px;
 }
 
+.trace-list-hero {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.trace-list-hero__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.trace-list-hero__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.trace-list-hero__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-list-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trace-list-hero__item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.trace-list-hero__item span {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.trace-list-hero__item strong {
+  color: var(--admin-ink);
+  font-size: 16px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
 .trace-hero-copy {
   min-width: 0;
   flex: 1 1 auto;
@@ -479,6 +554,10 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
+  .trace-list-hero__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .trace-hero-card {
     flex-direction: column;
   }
