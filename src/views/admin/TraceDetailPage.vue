@@ -21,8 +21,11 @@ const loading = ref(false);
 const errorText = ref("");
 const detail = ref(null);
 const nodes = ref([]);
+const detailRequestId = ref(0);
 
 const run = computed(() => detail.value?.run || {});
+const traceName = computed(() => run.value.traceName || "未命名链路");
+const traceStatus = computed(() => statusLabel(run.value.status));
 
 function pickFirstDefined(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== "");
@@ -52,6 +55,13 @@ function statusTone(status) {
   if (normalized === "failed" || normalized === "timeout") return "amber";
   if (normalized === "running") return "cyan";
   return "emerald";
+}
+
+function copyTraceId() {
+  if (!traceId.value || !navigator?.clipboard?.writeText) return;
+  navigator.clipboard.writeText(traceId.value).catch(() => {
+    // Ignore clipboard failures in restricted environments.
+  });
 }
 
 const traceRequest = computed(() =>
@@ -120,7 +130,8 @@ const nodeStats = computed(() => {
     total > 0
       ? Math.round(nodes.value.reduce((sum, node) => sum + resolveNodeDuration(node), 0) / total)
       : 0;
-  return { total, success, failed, running, avgDuration };
+  const sorted = [...nodes.value].sort((a, b) => resolveNodeDuration(b) - resolveNodeDuration(a));
+  return { total, success, failed, running, avgDuration, topSlowestId: sorted[0]?.nodeId || "" };
 });
 
 const timeline = computed(() => {
@@ -179,6 +190,7 @@ async function loadTraceDetail() {
     return;
   }
 
+  const requestId = ++detailRequestId.value;
   loading.value = true;
   errorText.value = "";
   try {
@@ -186,23 +198,17 @@ async function loadTraceDetail() {
       getRagTraceDetail(traceId.value),
       getRagTraceNodes(traceId.value)
     ]);
+    if (detailRequestId.value !== requestId) return;
     detail.value = detailData;
     nodes.value = Array.isArray(nodesData) ? nodesData : Array.isArray(detailData?.nodes) ? detailData.nodes : [];
   } catch (error) {
+    if (detailRequestId.value !== requestId) return;
     errorText.value = error?.message || "加载 trace 详情失败，请稍后重试。";
     detail.value = null;
     nodes.value = [];
   } finally {
+    if (detailRequestId.value !== requestId) return;
     loading.value = false;
-  }
-}
-
-async function copyTraceId() {
-  if (!traceId.value || !navigator?.clipboard?.writeText) return;
-  try {
-    await navigator.clipboard.writeText(traceId.value);
-  } catch {
-    // Ignore clipboard failures in restricted environments.
   }
 }
 
@@ -236,6 +242,40 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <section class="admin-detail-card trace-hero-card">
+      <div class="trace-hero-copy">
+        <p class="trace-hero-tag">Trace Overview</p>
+        <div class="trace-hero-title-row">
+          <h2>{{ traceName }}</h2>
+          <span :class="['admin-badge', statusBadgeClass(run.status)]">{{ traceStatus }}</span>
+        </div>
+        <p class="trace-hero-subtitle">
+          <button class="trace-id-chip" type="button" :disabled="!traceId" @click="copyTraceId">
+            {{ traceId || "--" }}
+          </button>
+        </p>
+        <div class="trace-hero-meta">
+          <span>用户 {{ run.userName || run.username || run.userId || "--" }}</span>
+          <span>开始 {{ formatDateTime(run.startTime) }}</span>
+          <span>结束 {{ formatDateTime(run.endTime) }}</span>
+        </div>
+      </div>
+      <div class="trace-hero-side">
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">会话</span>
+          <strong>{{ run.conversationId || "--" }}</strong>
+        </div>
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">任务</span>
+          <strong>{{ run.taskId || "--" }}</strong>
+        </div>
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">总耗时</span>
+          <strong>{{ formatDuration(run.durationMs ?? undefined) }}</strong>
+        </div>
+      </div>
+    </section>
 
     <div class="admin-stat-grid">
       <StatCard
@@ -278,6 +318,16 @@ onMounted(() => {
             <span class="admin-info-item-label">结束时间</span>
             <span class="admin-info-item-value">{{ formatDateTime(run.endTime) }}</span>
           </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Trace Name</span>
+            <span class="admin-info-item-value">{{ run.traceName || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">状态</span>
+            <span class="admin-info-item-value">
+              <span :class="['admin-badge', statusBadgeClass(run.status)]">{{ traceStatus }}</span>
+            </span>
+          </div>
         </div>
       </article>
 
@@ -288,7 +338,7 @@ onMounted(() => {
           <div class="admin-info-item">
             <span class="admin-info-item-label">状态</span>
             <span class="admin-info-item-value">
-              <span :class="['admin-badge', statusBadgeClass(run.status)]">{{ statusLabel(run.status) }}</span>
+              <span :class="['admin-badge', statusBadgeClass(run.status)]">{{ traceStatus }}</span>
             </span>
           </div>
           <div class="admin-info-item">
@@ -312,6 +362,10 @@ onMounted(() => {
           <div class="admin-info-item">
             <span class="admin-info-item-label">开始时间</span>
             <span class="admin-info-item-value">{{ formatDateTime(run.startTime) }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">最慢节点</span>
+            <span class="admin-info-item-value admin-code">{{ nodeStats.topSlowestId || "--" }}</span>
           </div>
         </div>
       </article>
@@ -415,6 +469,101 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.trace-hero-card {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.trace-hero-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.trace-hero-tag {
+  margin: 0 0 8px;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.trace-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.trace-hero-title-row h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  color: var(--admin-ink);
+}
+
+.trace-hero-subtitle {
+  margin: 12px 0 0;
+}
+
+.trace-id-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--admin-ink-soft);
+  font-family: var(--admin-mono);
+  font-size: 12px;
+  word-break: break-all;
+  cursor: pointer;
+}
+
+.trace-id-chip:hover:not(:disabled) {
+  border-color: var(--admin-line-strong);
+  color: var(--admin-ink);
+}
+
+.trace-id-chip:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.trace-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-top: 14px;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.trace-hero-side {
+  flex: 0 0 240px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.95));
+}
+
+.trace-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.trace-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .trace-section-title {
   margin: 0 0 10px;
   font-size: 13px;
@@ -461,6 +610,15 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
+  .trace-hero-card {
+    flex-direction: column;
+  }
+
+  .trace-hero-side {
+    flex-basis: auto;
+    width: 100%;
+  }
+
   .trace-meta-grid {
     grid-template-columns: 1fr;
   }

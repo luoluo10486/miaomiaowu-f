@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { computed } from "vue";
+
+const props = defineProps({
   groups: {
     type: Array,
     default: () => []
@@ -24,262 +26,471 @@ defineProps({
     type: String,
     default: "U"
   },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+  isOpen: {
+    type: Boolean,
+    default: true
+  },
   formatTime: {
     type: Function,
     default: (value) => value || "刚刚"
   }
 });
 
-const emit = defineEmits(["update:search", "create", "select", "delete", "rename"]);
+const emit = defineEmits([
+  "update:search",
+  "create",
+  "select",
+  "delete",
+  "rename",
+  "logout",
+  "open-admin",
+  "close"
+]);
+
+const hasGroups = computed(() => Array.isArray(props.groups) && props.groups.length > 0);
 
 function updateSearch(event) {
   emit("update:search", event.target.value);
 }
+
 </script>
 
 <template>
-  <aside class="sidebar-card">
-    <div class="sidebar-card__header">
-      <div>
-        <p class="sidebar-card__eyebrow">会话</p>
-        <h2>聊天记录</h2>
-      </div>
-      <button class="new-chat-button" type="button" title="新建对话" @click="$emit('create')">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </button>
-    </div>
+  <div class="sidebar-shell">
+    <div
+      v-if="isOpen"
+      class="sidebar-shell__overlay"
+      aria-hidden="true"
+      @click="emit('close')"
+    />
 
-    <div class="sidebar-search">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
-      </svg>
-      <input
-        :value="search"
-        type="search"
-        placeholder="搜索会话..."
-        @input="updateSearch"
-      />
-    </div>
-
-    <div v-if="loading" class="panel-state">
-      <div class="state-dots">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-    </div>
-
-    <div v-else-if="groups.length === 0" class="panel-state panel-state--compact">
-      暂无会话记录
-    </div>
-
-    <div v-else class="session-list">
-      <section v-for="group in groups" :key="group.key" class="session-group">
-        <div class="session-group__header">
-          <h3>{{ group.label }}</h3>
-          <span>{{ group.count ?? group.items?.length ?? 0 }}</span>
+    <aside class="sidebar" :class="{ 'is-open': isOpen }">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3c4.97 0 9 3.58 9 8 0 4.1-3.52 7.54-8 7.95L8 21v-2.76A8.69 8.69 0 0 1 3 11c0-4.42 4.03-8 9-8Z" />
+          </svg>
         </div>
-        <ul>
-          <li v-for="session in group.items" :key="session.id">
-            <button
-              type="button"
-              :class="['session-item', { 'is-active': currentSessionId === session.id }]"
-              @click="$emit('select', session)"
-            >
-              <span class="session-item__title">{{ session.title }}</span>
-              <span class="session-item__time">{{ formatTime(session.lastTime) }}</span>
-            </button>
-            <button
-              class="session-item__delete"
-              type="button"
-              title="删除会话"
-              @click="$emit('delete', session.id)"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-            <button
-              class="session-item__edit"
-              type="button"
-              title="重命名会话"
-              @click="$emit('rename', session)"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 20h16" />
-                <path d="M5 15.5 15.5 5a2.1 2.1 0 0 1 3 3L8 18.5 4 20z" />
-              </svg>
-            </button>
-          </li>
-        </ul>
-      </section>
-    </div>
-
-    <div class="sidebar-footer">
-      <div class="user-pill">
-        <span class="user-pill__avatar">{{ userInitial }}</span>
-        <span class="user-pill__name">{{ currentUserName }}</span>
+        <div class="sidebar__brand-copy">
+          <p>Ragent AI 智能问答</p>
+          <small>Powered by knowledge retrieval</small>
+        </div>
       </div>
-    </div>
-  </aside>
+
+      <div class="sidebar__quick">
+        <div class="sidebar__quick-head">
+          <span>快速开始</span>
+          <span class="sidebar__quick-tag">新内容</span>
+        </div>
+        <button type="button" class="sidebar__new" @click="emit('create')">
+          <span class="sidebar__new-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+          <span>
+            <strong>新建会话</strong>
+            <small>从空白开始提问</small>
+          </span>
+        </button>
+        <button
+          v-if="isAdmin"
+          type="button"
+          class="sidebar__admin"
+          @click="emit('open-admin')"
+        >
+          管理后台
+        </button>
+      </div>
+
+      <div class="sidebar__search">
+        <div class="sidebar__search-head">
+          <span>搜索对话</span>
+          <span class="sidebar__search-hint">Ctrl / Cmd + K</span>
+        </div>
+        <div class="sidebar__search-box">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
+          </svg>
+          <input
+            :value="search"
+            type="search"
+            placeholder="搜索会话..."
+            @input="updateSearch"
+          />
+        </div>
+      </div>
+
+      <div class="sidebar__list-wrap">
+        <div v-if="loading" class="sidebar__state">
+          <div class="sidebar__dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+
+        <div v-else-if="!hasGroups" class="sidebar__state sidebar__state--empty">
+          暂无会话记录
+        </div>
+
+        <div v-else class="sidebar__list">
+          <section v-for="group in groups" :key="group.key" class="sidebar__group">
+            <div class="sidebar__group-head">
+              <h3>{{ group.label }}</h3>
+              <span>{{ group.count ?? group.items?.length ?? 0 }}</span>
+            </div>
+
+            <ul>
+              <li v-for="session in group.items" :key="session.id">
+                <button
+                  type="button"
+                  class="sidebar__item"
+                  :class="{ 'is-active': currentSessionId === session.id }"
+                  @click="
+                    emit('select', session);
+                    emit('close');
+                  "
+                >
+                  <span class="sidebar__item-title">{{ session.title }}</span>
+                  <span class="sidebar__item-time">{{ formatTime(session.lastTime) }}</span>
+                </button>
+
+                <div class="sidebar__item-actions">
+                  <button
+                    type="button"
+                    class="sidebar__action"
+                    title="重命名"
+                    @click="emit('rename', session)"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h16" />
+                      <path d="M5 15.5 15.5 5a2.1 2.1 0 0 1 3 3L8 18.5 4 20z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="sidebar__action is-danger"
+                    title="删除"
+                    @click="emit('delete', session.id)"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+              </li>
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      <div class="sidebar__footer">
+        <div class="sidebar__user">
+          <div class="sidebar__avatar">{{ userInitial }}</div>
+          <div class="sidebar__user-copy">
+            <strong>{{ currentUserName }}</strong>
+            <small>{{ isAdmin ? "管理员" : "当前用户" }}</small>
+          </div>
+        </div>
+
+        <div class="sidebar__footer-actions">
+          <button v-if="isAdmin" type="button" class="sidebar__footer-btn" @click="emit('open-admin')">
+            后台入口
+          </button>
+          <button type="button" class="sidebar__footer-btn is-ghost" @click="emit('logout')">
+            退出登录
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
 </template>
 
 <style scoped>
-.sidebar-card {
+.sidebar-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.sidebar-shell__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  height: 100%;
+  min-width: 0;
+  min-height: calc(100vh - 36px);
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
+  background: rgba(250, 250, 250, 0.95);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(18px);
+}
+
+.sidebar__brand,
+.sidebar__quick,
+.sidebar__search,
+.sidebar__footer {
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.sidebar__brand {
+  display: flex;
+  gap: 12px;
   padding: 16px;
 }
 
-.sidebar-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 14px;
+.sidebar__brand-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: #fff;
+  flex-shrink: 0;
 }
 
-.sidebar-card__eyebrow {
-  margin: 0 0 2px;
-  color: var(--text-muted);
+.sidebar__brand-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.sidebar__brand-copy p {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sidebar__brand-copy small {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.sidebar__quick {
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.sidebar__quick-head,
+.sidebar__search-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #94a3b8;
   font-size: 11px;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.sidebar-card__header h2 {
-  margin: 0;
-  color: var(--text);
-  font-family: var(--serif);
-  font-size: 20px;
-  letter-spacing: 0.04em;
+.sidebar__quick-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+  letter-spacing: normal;
 }
 
-.new-chat-button {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
+.sidebar__new {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.new-chat-button svg {
+.sidebar__new:hover {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.9);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.sidebar__new-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.sidebar__new-icon svg {
   width: 16px;
   height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.new-chat-button:hover {
-  color: var(--accent);
-  background: rgba(107, 127, 90, 0.08);
+.sidebar__new strong {
+  display: block;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.sidebar-search {
+.sidebar__new small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.sidebar__admin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  margin-top: 10px;
+  padding: 0 12px;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.86);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar__search {
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.sidebar__search-hint {
+  color: #cbd5e1;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.sidebar__search-box {
   position: relative;
-  margin-bottom: 14px;
+  margin-top: 12px;
 }
 
-.sidebar-search svg {
+.sidebar__search-box svg {
   position: absolute;
   left: 12px;
   top: 50%;
   width: 15px;
   height: 15px;
   fill: none;
-  stroke: var(--text-muted);
+  stroke: #94a3b8;
   stroke-width: 2;
   stroke-linecap: round;
+  stroke-linejoin: round;
   transform: translateY(-50%);
   pointer-events: none;
 }
 
-.sidebar-search input {
+.sidebar__search-box input {
   width: 100%;
-  height: 38px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: 0 12px 0 34px;
-  background: transparent;
-  color: var(--text);
+  height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #1f2937;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
-.sidebar-search input:focus {
-  border-color: rgba(103, 83, 49, 0.3);
+.sidebar__search-box input:focus {
+  border-color: rgba(147, 197, 253, 0.9);
+  background: #fff;
 }
 
-.sidebar-search input::placeholder {
-  color: var(--text-muted);
+.sidebar__list-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.84);
+  overflow: hidden;
 }
 
-.panel-state {
+.sidebar__state {
   display: grid;
   place-items: center;
-  min-height: 80px;
-  color: var(--text-muted);
+  min-height: 180px;
+  color: #94a3b8;
   font-size: 13px;
 }
 
-.panel-state--compact {
-  min-height: 100px;
+.sidebar__state--empty {
+  padding: 24px;
 }
 
-.state-dots {
+.sidebar__dots {
   display: flex;
   gap: 6px;
 }
 
-.state-dots span {
-  width: 6px;
-  height: 6px;
+.sidebar__dots span {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--text-muted);
-  animation: dotPulse 1.2s ease-in-out infinite;
+  background: #2563eb;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
-.state-dots span:nth-child(2) {
+.sidebar__dots span:nth-child(2) {
   animation-delay: 0.15s;
 }
 
-.state-dots span:nth-child(3) {
+.sidebar__dots span:nth-child(3) {
   animation-delay: 0.3s;
 }
 
-.session-list {
-  flex: 1;
-  min-height: 0;
+.sidebar__list {
+  max-height: calc(100vh - 430px);
   overflow-y: auto;
+  padding: 12px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(139, 111, 61, 0.2) transparent;
+  scrollbar-color: rgba(37, 99, 235, 0.2) transparent;
 }
 
-.session-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.session-list::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(139, 111, 61, 0.2);
-}
-
-.session-group + .session-group {
+.sidebar__group + .sidebar__group {
   margin-top: 16px;
 }
 
-.session-group__header {
+.sidebar__group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -287,21 +498,21 @@ function updateSearch(event) {
   margin-bottom: 8px;
 }
 
-.session-group__header h3 {
+.sidebar__group-head h3 {
   margin: 0;
-  color: var(--text-muted);
+  color: #94a3b8;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.session-group__header span {
-  color: var(--text-muted);
+.sidebar__group-head span {
+  color: #94a3b8;
   font-size: 11px;
 }
 
-.session-group ul {
+.sidebar__group ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -309,16 +520,15 @@ function updateSearch(event) {
   gap: 8px;
 }
 
-.session-group li {
+.sidebar__group li {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 6px;
   align-items: center;
 }
 
-.session-item {
-  grid-column: 1 / 2;
+.sidebar__item {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -326,60 +536,68 @@ function updateSearch(event) {
   min-width: 0;
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 14px;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 
-.session-item:hover {
-  border-color: rgba(107, 127, 90, 0.14);
-  background: rgba(107, 127, 90, 0.05);
+.sidebar__item:hover {
+  border-color: rgba(191, 219, 254, 0.9);
+  background: rgba(37, 99, 235, 0.05);
 }
 
-.session-item.is-active {
-  border-color: rgba(107, 127, 90, 0.25);
-  background: rgba(107, 127, 90, 0.08);
+.sidebar__item.is-active {
+  border-color: rgba(191, 219, 254, 0.95);
+  background: rgba(219, 234, 254, 0.82);
 }
 
-.session-item__title {
+.sidebar__item-title {
   overflow: hidden;
-  color: var(--text);
+  color: #1f2937;
   font-size: 13px;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-item__time {
-  color: var(--text-muted);
+.sidebar__item-time {
+  color: #94a3b8;
   font-size: 11px;
 }
 
-.session-item__delete,
-.session-item__edit {
-  width: 30px;
-  height: 30px;
+.sidebar__item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.sidebar__action {
   display: grid;
   place-items: center;
+  width: 28px;
+  height: 28px;
   border: 1px solid transparent;
-  border-radius: 50%;
+  border-radius: 999px;
   background: transparent;
-  color: var(--text-muted);
+  color: #94a3b8;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.16s ease;
 }
 
-.session-item__delete:hover,
-.session-item__edit:hover {
-  border-color: rgba(107, 127, 90, 0.12);
-  background: rgba(107, 127, 90, 0.06);
-  color: var(--accent);
+.sidebar__action:hover {
+  border-color: rgba(191, 219, 254, 0.9);
+  background: rgba(37, 99, 235, 0.06);
+  color: #2563eb;
 }
 
-.session-item__delete svg,
-.session-item__edit svg {
+.sidebar__action.is-danger:hover {
+  border-color: rgba(254, 202, 202, 0.9);
+  background: rgba(254, 242, 242, 0.92);
+  color: #ef4444;
+}
+
+.sidebar__action svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -389,39 +607,85 @@ function updateSearch(event) {
   stroke-linejoin: round;
 }
 
-.sidebar-footer {
-  padding-top: 14px;
+.sidebar__rename {
+  grid-column: 1 / -1;
 }
 
-.user-pill {
+.sidebar__rename input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  border-radius: 12px;
+  background: #fff;
+  color: #1f2937;
+  font-size: 13px;
+  outline: none;
+}
+
+.sidebar__footer {
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.sidebar__user {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  background: rgba(255, 252, 246, 0.45);
+  gap: 12px;
 }
 
-.user-pill__avatar {
-  width: 34px;
-  height: 34px;
+.sidebar__avatar {
   display: grid;
   place-items: center;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6b7f5a, #8b9f72);
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
   color: #fff;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
-.user-pill__name {
-  color: var(--text);
+.sidebar__user-copy strong {
+  display: block;
+  color: #111827;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
-@keyframes dotPulse {
+.sidebar__user-copy small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.sidebar__footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sidebar__footer-btn {
+  flex: 1;
+  height: 32px;
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.9);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar__footer-btn.is-ghost {
+  border-color: rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  color: #64748b;
+}
+
+@keyframes pulse {
   0%,
   100% {
     opacity: 0.4;
@@ -431,6 +695,37 @@ function updateSearch(event) {
   50% {
     opacity: 1;
     transform: scale(1.1);
+  }
+}
+
+@media (max-width: 1024px) {
+  .sidebar-shell__overlay {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 16px auto 16px 16px;
+    z-index: 31;
+    width: min(320px, calc(100vw - 32px));
+    min-height: calc(100vh - 32px);
+    transform: translateX(-110%);
+    transition: transform 0.22s ease;
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+}
+
+@media (min-width: 1025px) {
+  .sidebar-shell__overlay {
+    display: none;
+  }
+
+  .sidebar {
+    position: sticky;
+    transform: none !important;
   }
 }
 </style>

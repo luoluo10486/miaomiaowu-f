@@ -14,10 +14,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  thinkingMessage: {
-    type: Object,
-    default: null
-  },
   placeholder: {
     type: String,
     default: "输入你的问题，Enter 发送，Shift+Enter 换行"
@@ -28,9 +24,10 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["update:draft", "toggle-thinking", "send", "keydown", "input"]);
-
+const emit = defineEmits(["update:draft", "toggle-thinking", "send", "keydown"]);
 const localTextareaRef = ref(null);
+const isFocused = ref(false);
+const isComposingRef = ref(false);
 
 function bindTextareaRef(el) {
   localTextareaRef.value = el;
@@ -56,12 +53,23 @@ function resizeTextarea() {
 
 function updateDraft(event) {
   emit("update:draft", event.target.value);
-  emit("input", event);
   resizeTextarea();
+}
+
+function handleCompositionStart() {
+  isComposingRef.value = true;
+}
+
+function handleCompositionEnd() {
+  isComposingRef.value = false;
 }
 
 function handleKeydown(event) {
   emit("keydown", event);
+}
+
+function submit() {
+  emit("send");
 }
 
 watch(
@@ -76,39 +84,56 @@ onMounted(() => {
 
 <template>
   <footer class="composer">
-    <div v-if="thinkingMessage" class="thinking-tip">
-      <span class="thinking-dot thinking-dot--pulse"></span>
-      深度思考中
-    </div>
+    <div class="composer__card" :class="{ 'is-focused': isFocused }">
+      <div class="composer__input-wrap">
+        <textarea
+          :ref="bindTextareaRef"
+          :value="draft"
+          :placeholder="placeholder"
+          class="composer__input"
+          rows="1"
+          aria-label="聊天输入框"
+          @focus="isFocused = true"
+          @blur="isFocused = false"
+          @compositionstart="handleCompositionStart"
+          @compositionend="handleCompositionEnd"
+          @input="updateDraft"
+          @keydown="
+            (event) => {
+              handleKeydown(event);
+              if (event.key === 'Enter' && !event.shiftKey) {
+                const nativeEvent = event.nativeEvent || event;
+                if (nativeEvent.isComposing || isComposingRef.value || nativeEvent.keyCode === 229) {
+                  return;
+                }
+                event.preventDefault();
+                submit();
+              }
+            }
+          "
+        />
+        <div class="composer__fade" aria-hidden="true" />
+      </div>
 
-    <div class="composer-box">
-      <textarea
-        :ref="bindTextareaRef"
-        :value="draft"
-        class="composer__input"
-        rows="2"
-        :placeholder="placeholder"
-        @input="updateDraft"
-        @keydown="handleKeydown"
-      />
-
-      <div class="composer__footer">
+      <div class="composer__actions">
         <button
           type="button"
-          :class="['thinking-toggle', { 'is-active': deepThinkingEnabled }]"
+          class="composer__thinking"
+          :class="{ 'is-active': deepThinkingEnabled }"
           :disabled="isStreaming"
           @click="$emit('toggle-thinking')"
         >
-          <span class="thinking-toggle__dot"></span>
-          <span>深度思考</span>
+          <span class="composer__thinking-dot" />
+          深度思考
         </button>
 
         <button
-          class="send-button"
-          :class="{ 'is-stop': isStreaming }"
           type="button"
-          @click="$emit('send')"
-          :title="isStreaming ? '停止生成' : '发送'"
+          class="composer__send"
+          :class="{ 'is-stop': isStreaming }"
+          :disabled="!draft.trim() && !isStreaming"
+          :aria-label="isStreaming ? '停止生成' : '发送消息'"
+          @click="submit"
         >
           <svg v-if="!isStreaming" viewBox="0 0 24 24" aria-hidden="true">
             <path d="m22 2-7 20-4-9-9-4 20-7Z" />
@@ -120,38 +145,41 @@ onMounted(() => {
         </button>
       </div>
     </div>
+
+    <p v-if="deepThinkingEnabled" class="composer__tip">
+      深度思考模式已开启，AI 会先进行更深入的分析再给出回答。
+    </p>
+
+    <p class="composer__hint">
+      <kbd>Enter</kbd> 发送
+      <span>·</span>
+      <kbd>Shift + Enter</kbd> 换行
+      <span v-if="isStreaming" class="composer__streaming">生成中...</span>
+    </p>
   </footer>
 </template>
 
 <style scoped>
 .composer {
   padding: 12px 16px 16px;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.thinking-tip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
+.composer__card {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.thinking-dot--pulse {
-  animation: pulseDot 1.5s ease-in-out infinite;
+.composer__card.is-focused {
+  border-color: rgba(191, 219, 254, 0.9);
+  box-shadow: 0 20px 42px rgba(37, 99, 235, 0.12);
 }
 
-.composer-box {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: rgba(255, 252, 246, 0.45);
-  transition: border-color 0.2s ease;
-}
-
-.composer-box:focus-within {
-  border-color: rgba(107, 127, 90, 0.35);
+.composer__input-wrap {
+  position: relative;
 }
 
 .composer__input {
@@ -161,83 +189,106 @@ onMounted(() => {
   max-height: 160px;
   resize: none;
   border: 0;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
   padding: 14px 16px 8px;
   background: transparent;
-  color: var(--text);
+  color: #1f2937;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.7;
   outline: none;
 }
 
 .composer__input::placeholder {
-  color: var(--text-muted);
+  color: #9ca3af;
 }
 
-.composer__footer {
+.composer__fade {
+  pointer-events: none;
+  position: absolute;
+  inset: auto 0 0;
+  height: 12px;
+  border-radius: 0 0 22px 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.94));
+}
+
+.composer__actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px 10px;
+  padding: 8px 10px 10px;
+  gap: 12px;
 }
 
-.thinking-toggle {
+.composer__thinking {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   height: 34px;
   padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: transparent;
-  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(245, 245, 245, 0.96);
+  color: #6b7280;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 
-.thinking-toggle:hover:not(:disabled) {
-  border-color: rgba(107, 127, 90, 0.3);
-  color: var(--text-secondary);
+.composer__thinking:hover:not(:disabled) {
+  background: rgba(238, 242, 255, 0.9);
+  color: #334155;
 }
 
-.thinking-toggle.is-active {
-  border-color: rgba(107, 127, 90, 0.4);
-  background: rgba(107, 127, 90, 0.08);
-  color: var(--accent);
+.composer__thinking.is-active {
+  border-color: rgba(191, 219, 254, 0.8);
+  background: rgba(219, 234, 254, 0.92);
+  color: #2563eb;
 }
 
-.thinking-toggle:disabled {
+.composer__thinking:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
-  opacity: 0.5;
 }
 
-.thinking-toggle__dot {
+.composer__thinking-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   border: 1.5px solid currentColor;
 }
 
-.thinking-toggle.is-active .thinking-toggle__dot {
-  background: var(--accent);
-  box-shadow: 0 0 6px rgba(107, 127, 90, 0.4);
+.composer__thinking.is-active .composer__thinking-dot {
+  background: #2563eb;
 }
 
-.send-button {
-  width: 38px;
-  height: 38px;
+.composer__send {
   display: grid;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--text);
-  color: var(--bg);
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
 }
 
-.send-button svg {
+.composer__send:hover:not(:disabled) {
+  transform: scale(1.04);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+
+.composer__send:disabled {
+  cursor: not-allowed;
+  background: rgba(229, 231, 235, 0.96);
+  color: #cbd5e1;
+}
+
+.composer__send.is-stop {
+  background: #ef4444;
+}
+
+.composer__send svg {
   width: 16px;
   height: 16px;
   fill: none;
@@ -247,35 +298,37 @@ onMounted(() => {
   stroke-linejoin: round;
 }
 
-.send-button:hover {
-  transform: scale(1.06);
-  box-shadow: 0 4px 16px rgba(44, 36, 24, 0.2);
+.composer__tip {
+  margin: 10px 0 0;
+  color: #2563eb;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.send-button:active {
-  transform: scale(0.96);
+.composer__hint {
+  margin: 10px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
 }
 
-.send-button.is-stop {
-  background: #a04030;
-  border-color: #a04030;
+.composer__hint kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #64748b;
+  font-size: 11px;
 }
 
-.send-button.is-stop:hover {
-  background: #8b3528;
-  box-shadow: 0 4px 16px rgba(160, 64, 48, 0.25);
+.composer__hint span {
+  padding: 0 8px;
 }
 
-@keyframes pulseDot {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(0.9);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
+.composer__streaming {
+  margin-left: 6px;
+  color: #2563eb;
 }
 </style>

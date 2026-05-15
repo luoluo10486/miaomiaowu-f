@@ -360,7 +360,7 @@ export function useRagChat() {
       return;
     }
 
-    router.push("/workspace");
+    router.push("/chat");
   }
 
   function closeRetrievalPanel() {

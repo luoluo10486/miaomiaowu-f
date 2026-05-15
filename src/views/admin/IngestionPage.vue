@@ -16,12 +16,40 @@ import {
   uploadIngestionTask
 } from "../../services/ingestionService";
 import { formatDateTime, pageRecords, pageTotal } from "./adminShared";
+import { getSystemSettings } from "../../services/settingsService";
 
 const route = useRoute();
 const router = useRouter();
 
 const PIPELINE_PAGE_SIZE = 10;
 const TASK_PAGE_SIZE = 10;
+
+const NODE_TYPE_OPTIONS = [
+  { value: "fetcher", label: "fetcher" },
+  { value: "parser", label: "parser" },
+  { value: "enhancer", label: "enhancer" },
+  { value: "chunker", label: "chunker" },
+  { value: "enricher", label: "enricher" },
+  { value: "indexer", label: "indexer" }
+];
+
+const CHUNK_STRATEGY_OPTIONS = [
+  { value: "fixed_size", label: "fixed_size" },
+  { value: "structure_aware", label: "structure_aware" }
+];
+
+const ENHANCER_TASK_OPTIONS = [
+  { value: "context_enhance", label: "context_enhance" },
+  { value: "keywords", label: "keywords" },
+  { value: "questions", label: "questions" },
+  { value: "metadata", label: "metadata" }
+];
+
+const ENRICHER_TASK_OPTIONS = [
+  { value: "keywords", label: "keywords" },
+  { value: "summary", label: "summary" },
+  { value: "metadata", label: "metadata" }
+];
 
 const loading = ref(false);
 const errorText = ref("");
@@ -48,12 +76,15 @@ const pipelineDialogMode = ref("create");
 const pipelineTarget = ref(null);
 const pipelineForm = ref({ name: "", description: "", nodesJson: "" });
 const pipelineSubmitting = ref(false);
+const pipelineNodeMode = ref("form");
+const pipelineNodeTypeDraft = ref("fetcher");
+const pipelineNodes = ref([]);
 
 const taskDialogOpen = ref(false);
 const taskDialogPipelineId = ref("");
 const taskForm = ref({
   pipelineId: "",
-  sourceType: "url",
+  sourceType: "file",
   location: "",
   fileName: "",
   credentialsJson: "",
@@ -61,6 +92,7 @@ const taskForm = ref({
 });
 const taskFile = ref(null);
 const taskSubmitting = ref(false);
+const maxFileSize = ref(50 * 1024 * 1024);
 
 const uploadDialogOpen = ref(false);
 const uploadPipelineId = ref("");
@@ -84,16 +116,46 @@ const taskRecords = computed(() => pageRecords(tasks.value));
 const pipelinePages = computed(() => Number(pipelines.value?.pages || 1));
 const taskPages = computed(() => Number(tasks.value?.pages || 1));
 
-const activePipelineCount = computed(() => pipelineRecords.value.length);
 const activeTaskCount = computed(
   () => taskRecords.value.filter((item) => normalizeTaskStatus(item.status) === "RUNNING").length
 );
 const failedTaskCount = computed(
   () => taskRecords.value.filter((item) => normalizeTaskStatus(item.status) === "FAILED").length
 );
-const successTaskCount = computed(
-  () => taskRecords.value.filter((item) => normalizeTaskStatus(item.status) === "SUCCESS").length
-);
+const taskFileSizeLabel = computed(() => formatBytes(maxFileSize.value));
+const showTaskCredentials = computed(() => {
+  const sourceType = String(taskForm.value.sourceType || "").toLowerCase();
+  return sourceType === "url" || sourceType === "feishu";
+});
+const taskSourceMeta = computed(() => {
+  switch (String(taskForm.value.sourceType || "").toLowerCase()) {
+    case "feishu":
+      return {
+        locationPlaceholder: "https://open.feishu.cn/...",
+        locationHint: "填写飞书文档链接",
+        credentialsHint: '{"tenantAccessToken":"..."} 或 {"app_id":"...","app_secret":"..."}'
+      };
+    case "s3":
+      return {
+        locationPlaceholder: "s3://bucket/key",
+        locationHint: "填写 S3 路径，例如 s3://biz/file.md",
+        credentialsHint: ""
+      };
+    case "url":
+      return {
+        locationPlaceholder: "https://example.com/file.pdf",
+        locationHint: "支持 http/https 链接",
+        credentialsHint: '{"token":"xxx"} 或 {"Authorization":"Bearer xxx"}'
+      };
+    case "file":
+    default:
+      return {
+        locationPlaceholder: "/path/to/file 或 file://path/to/file",
+        locationHint: "支持本地文件路径或 file:// 协议",
+        credentialsHint: ""
+      };
+  }
+});
 
 const pipelineStats = computed(() => [
   {
@@ -138,12 +200,14 @@ watch(
 watch(taskDialogOpen, (open) => {
   if (open) {
     resetTaskForm(taskDialogPipelineId.value);
+    void loadUploadLimit();
   }
 });
 
 watch(uploadDialogOpen, (open) => {
   if (open) {
     uploadFile.value = null;
+    void loadUploadLimit();
   }
 });
 
@@ -198,6 +262,311 @@ function formatNodeSettings(node) {
   return prettyJson(settings);
 }
 
+function formatBytes(value) {
+  const size = Number(value || 0);
+  if (!Number.isFinite(size) || size <= 0) return "--";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function createLocalId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function createPipelineTask(type = "context_enhance") {
+  return {
+    id: createLocalId(),
+    type,
+    systemPrompt: "",
+    userPromptTemplate: ""
+  };
+}
+
+function createPipelineNode(nodeType = "fetcher") {
+  return {
+    id: createLocalId(),
+    nodeId: "",
+    nodeType,
+    nextNodeId: "",
+    condition: "",
+    chunker: {
+      strategy: "structure_aware",
+      chunkSize: "",
+      overlapSize: "",
+      separator: ""
+    },
+    enhancer: {
+      modelId: "",
+      tasks: []
+    },
+    enricher: {
+      modelId: "",
+      attachDocumentMetadata: true,
+      tasks: []
+    },
+    parser: {
+      rulesJson: ""
+    },
+    indexer: {
+      embeddingModel: "",
+      metadataFields: ""
+    }
+  };
+}
+
+function mapPipelineTask(task) {
+  return {
+    id: createLocalId(),
+    type: String(task?.type || ""),
+    systemPrompt: String(task?.systemPrompt || ""),
+    userPromptTemplate: String(task?.userPromptTemplate || "")
+  };
+}
+
+function mapPipelineNode(node) {
+  const settings = node?.settings && typeof node.settings === "object" ? node.settings : {};
+  const nodeType = String(node?.nodeType || "fetcher");
+  const rawCondition = node?.condition;
+  const tasks = Array.isArray(settings.tasks) ? settings.tasks.map(mapPipelineTask) : [];
+
+  return {
+    id: createLocalId(),
+    nodeId: String(node?.nodeId || ""),
+    nodeType,
+    nextNodeId: String(node?.nextNodeId || ""),
+    condition:
+      rawCondition && typeof rawCondition === "object" ? JSON.stringify(rawCondition, null, 2) : String(rawCondition || ""),
+    chunker: {
+      strategy: String(settings.strategy || "structure_aware"),
+      chunkSize: settings.chunkSize != null ? String(settings.chunkSize) : "",
+      overlapSize: settings.overlapSize != null ? String(settings.overlapSize) : "",
+      separator: String(settings.separator || "")
+    },
+    enhancer: {
+      modelId: String(settings.modelId || ""),
+      tasks: nodeType === "enhancer" ? tasks : []
+    },
+    enricher: {
+      modelId: String(settings.modelId || ""),
+      attachDocumentMetadata: settings.attachDocumentMetadata ?? true,
+      tasks: nodeType === "enricher" ? tasks : []
+    },
+    parser: {
+      rulesJson: Array.isArray(settings.rules) ? JSON.stringify(settings.rules, null, 2) : ""
+    },
+    indexer: {
+      embeddingModel: String(settings.embeddingModel || ""),
+      metadataFields: Array.isArray(settings.metadataFields) ? settings.metadataFields.join(", ") : ""
+    }
+  };
+}
+
+function parsePipelineCondition(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    return JSON.parse(trimmed);
+  }
+  return trimmed;
+}
+
+function parsePipelineRules(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return null;
+  const parsed = JSON.parse(trimmed);
+  if (Array.isArray(parsed)) {
+    return { rules: parsed };
+  }
+  if (parsed && typeof parsed === "object" && Array.isArray(parsed.rules)) {
+    return { rules: parsed.rules };
+  }
+  throw new Error("解析规则必须是数组或包含 rules 字段的对象。");
+}
+
+function buildNodeSettings(node) {
+  switch (node.nodeType) {
+    case "chunker": {
+      if (!node.chunker.strategy) {
+        throw new Error("分块节点需要选择 strategy。");
+      }
+      const chunkSize = node.chunker.chunkSize.trim();
+      const overlapSize = node.chunker.overlapSize.trim();
+      const chunkSizeValue = chunkSize ? Number(chunkSize) : undefined;
+      const overlapSizeValue = overlapSize ? Number(overlapSize) : undefined;
+      if (chunkSizeValue !== undefined && Number.isNaN(chunkSizeValue)) {
+        throw new Error("chunkSize 必须是数字。");
+      }
+      if (overlapSizeValue !== undefined && Number.isNaN(overlapSizeValue)) {
+        throw new Error("overlapSize 必须是数字。");
+      }
+      return {
+        strategy: node.chunker.strategy,
+        chunkSize: chunkSizeValue,
+        overlapSize: overlapSizeValue,
+        separator: node.chunker.separator.trim() || undefined
+      };
+    }
+    case "enhancer": {
+      const tasks = node.enhancer.tasks
+        .filter((task) => task.type)
+        .map((task) => ({
+          type: task.type,
+          systemPrompt: task.systemPrompt.trim() || undefined,
+          userPromptTemplate: task.userPromptTemplate.trim() || undefined
+        }));
+      const payload = {};
+      if (node.enhancer.modelId.trim()) {
+        payload.modelId = node.enhancer.modelId.trim();
+      }
+      if (tasks.length > 0) {
+        payload.tasks = tasks;
+      }
+      return Object.keys(payload).length ? payload : undefined;
+    }
+    case "enricher": {
+      const tasks = node.enricher.tasks
+        .filter((task) => task.type)
+        .map((task) => ({
+          type: task.type,
+          systemPrompt: task.systemPrompt.trim() || undefined,
+          userPromptTemplate: task.userPromptTemplate.trim() || undefined
+        }));
+      const payload = {
+        attachDocumentMetadata: node.enricher.attachDocumentMetadata
+      };
+      if (node.enricher.modelId.trim()) {
+        payload.modelId = node.enricher.modelId.trim();
+      }
+      if (tasks.length > 0) {
+        payload.tasks = tasks;
+      }
+      return payload;
+    }
+    case "parser":
+      if (!node.parser.rulesJson.trim()) {
+        return undefined;
+      }
+      return parsePipelineRules(node.parser.rulesJson);
+    case "indexer": {
+      const fields = node.indexer.metadataFields
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const payload = {};
+      if (node.indexer.embeddingModel.trim()) {
+        payload.embeddingModel = node.indexer.embeddingModel.trim();
+      }
+      if (fields.length > 0) {
+        payload.metadataFields = fields;
+      }
+      return Object.keys(payload).length ? payload : undefined;
+    }
+    case "fetcher":
+    default:
+      return undefined;
+  }
+}
+
+function buildPipelineNodesPayload(sourceNodes) {
+  const result = [];
+  for (const node of sourceNodes) {
+    const nodeId = String(node.nodeId || "").trim();
+    const nodeType = String(node.nodeType || "").trim();
+    if (!nodeId) {
+      return { ok: false, message: "节点 ID 不能为空。" };
+    }
+    if (!nodeType) {
+      return { ok: false, message: "节点类型不能为空。" };
+    }
+
+    let settings;
+    let condition;
+    try {
+      settings = buildNodeSettings(node);
+      condition = parsePipelineCondition(node.condition);
+    } catch (error) {
+      return { ok: false, message: error?.message || "节点配置错误。" };
+    }
+
+    result.push({
+      nodeId,
+      nodeType,
+      settings: settings ?? null,
+      condition: condition ?? null,
+      nextNodeId: String(node.nextNodeId || "").trim() || null
+    });
+  }
+
+  return { ok: true, nodes: result };
+}
+
+function parsePipelineNodesJson(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { ok: true, nodes: [] };
+  try {
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) {
+      return { ok: false, message: "节点配置必须是 JSON 数组。" };
+    }
+    return { ok: true, nodes: parsed.map((item) => mapPipelineNode(item)) };
+  } catch {
+    return { ok: false, message: "节点配置 JSON 格式错误。" };
+  }
+}
+
+function syncPipelineMode(nextMode) {
+  if (nextMode === pipelineNodeMode.value) return;
+  if (nextMode === "json") {
+    const result = buildPipelineNodesPayload(pipelineNodes.value);
+    if (!result.ok) {
+      errorText.value = result.message;
+      return;
+    }
+    pipelineForm.value.nodesJson = JSON.stringify(result.nodes, null, 2);
+    pipelineNodeMode.value = "json";
+    return;
+  }
+
+  const parsed = parsePipelineNodesJson(pipelineForm.value.nodesJson);
+  if (!parsed.ok) {
+    errorText.value = parsed.message;
+    return;
+  }
+  pipelineNodes.value = parsed.nodes;
+  pipelineNodeMode.value = "form";
+}
+
+function addPipelineNode(nodeType = pipelineNodeTypeDraft.value) {
+  pipelineNodes.value.push(createPipelineNode(nodeType));
+}
+
+function removePipelineNode(nodeId) {
+  pipelineNodes.value = pipelineNodes.value.filter((node) => node.id !== nodeId);
+}
+
+function addPipelineTask(node, scope = "enhancer") {
+  const nextTask = createPipelineTask(scope === "enricher" ? "keywords" : "context_enhance");
+  if (scope === "enricher") {
+    node.enricher.tasks.push(nextTask);
+    return;
+  }
+  node.enhancer.tasks.push(nextTask);
+}
+
+async function loadUploadLimit() {
+  try {
+    const settings = await getSystemSettings();
+    const maxSize = Number(settings?.upload?.maxFileSize || 0);
+    if (Number.isFinite(maxSize) && maxSize > 0) {
+      maxFileSize.value = maxSize;
+    }
+  } catch {
+    // Keep the local fallback when system settings are unavailable.
+  }
+}
+
 function resetPipelineForm(item = null) {
   pipelineTarget.value = item;
   pipelineForm.value = {
@@ -205,6 +574,9 @@ function resetPipelineForm(item = null) {
     description: item?.description || "",
     nodesJson: item?.nodes?.length ? JSON.stringify(item.nodes, null, 2) : ""
   };
+  pipelineNodes.value = item?.nodes?.length ? item.nodes.map((node) => mapPipelineNode(node)) : [];
+  pipelineNodeMode.value = "form";
+  pipelineNodeTypeDraft.value = "fetcher";
 }
 
 function openPipelineDialog(mode, item = null) {
@@ -218,28 +590,6 @@ function closePipelineDialog() {
   pipelineTarget.value = null;
 }
 
-function parsePipelineNodes(raw) {
-  if (!raw || !String(raw).trim()) return [];
-  const parsed = safeJsonParse(raw, []);
-  if (!Array.isArray(parsed)) {
-    throw new Error("节点配置必须是 JSON 数组。");
-  }
-  return parsed.map((node) => {
-    const nodeId = String(node?.nodeId || "").trim();
-    const nodeType = String(node?.nodeType || "").trim();
-    if (!nodeId || !nodeType) {
-      throw new Error("每个节点都必须包含 nodeId 和 nodeType。");
-    }
-    return {
-      nodeId,
-      nodeType,
-      settings: node?.settings ?? null,
-      condition: node?.condition ?? null,
-      nextNodeId: node?.nextNodeId ? String(node.nextNodeId).trim() : null
-    };
-  });
-}
-
 async function handlePipelineSubmit() {
   const name = pipelineForm.value.name.trim();
   if (!name) return;
@@ -248,7 +598,25 @@ async function handlePipelineSubmit() {
   errorText.value = "";
 
   try {
-    const nodes = parsePipelineNodes(pipelineForm.value.nodesJson);
+    let nodes = [];
+    if (pipelineNodeMode.value === "json") {
+      const parsed = parsePipelineNodesJson(pipelineForm.value.nodesJson);
+      if (!parsed.ok) {
+        throw new Error(parsed.message);
+      }
+      const result = buildPipelineNodesPayload(parsed.nodes);
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      nodes = result.nodes;
+    } else {
+      const result = buildPipelineNodesPayload(pipelineNodes.value);
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      nodes = result.nodes;
+      pipelineForm.value.nodesJson = JSON.stringify(nodes, null, 2);
+    }
     const payload = {
       name,
       description: pipelineForm.value.description.trim() || "",
@@ -321,7 +689,7 @@ async function handleDeletePipeline() {
 function resetTaskForm(pipelineId = "") {
   taskForm.value = {
     pipelineId: pipelineId || pipelineOptions.value?.[0]?.id || pipelines.value?.records?.[0]?.id || "",
-    sourceType: "url",
+    sourceType: "file",
     location: "",
     fileName: "",
     credentialsJson: "",
@@ -385,6 +753,9 @@ async function handleCreateTask() {
       if (!taskFile.value) {
         throw new Error("请选择本地文件。");
       }
+      if (Number(taskFile.value.size || 0) > maxFileSize.value) {
+        throw new Error(`上传文件大小超过限制，最大允许 ${taskFileSizeLabel.value}。`);
+      }
       await uploadIngestionTask(pipelineId, taskFile.value);
       successText.value = "文件摄取任务已提交。";
     }
@@ -420,6 +791,11 @@ async function handleUploadChange(event) {
     event.target.value = "";
     return;
   }
+  if (Number(file.size || 0) > maxFileSize.value) {
+    errorText.value = `上传文件大小超过限制，最大允许 ${taskFileSizeLabel.value}。`;
+    event.target.value = "";
+    return;
+  }
 
   uploadSubmitting.value = true;
   errorText.value = "";
@@ -443,6 +819,10 @@ async function handleUploadSubmit() {
   }
   if (!uploadFile.value) {
     errorText.value = "请选择文件。";
+    return;
+  }
+  if (Number(uploadFile.value.size || 0) > maxFileSize.value) {
+    errorText.value = `上传文件大小超过限制，最大允许 ${taskFileSizeLabel.value}。`;
     return;
   }
 
@@ -795,7 +1175,7 @@ onMounted(() => {
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closePipelineDialog">&times;</button>
         <h3>{{ pipelineDialogMode === "edit" ? "编辑 Pipeline" : "新建 Pipeline" }}</h3>
-        <p>支持直接编辑 nodes 的 JSON 结构，和 frontend 一样保留完整节点配置能力。</p>
+        <p>对齐 frontend 的双模式节点编辑器，可在表单视图和 JSON 视图之间切换。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>名称</label>
@@ -805,15 +1185,237 @@ onMounted(() => {
             <label>描述</label>
             <input v-model="pipelineForm.description" class="admin-input" placeholder="可选" />
           </div>
-          <div class="admin-dialog-field">
+
+          <div class="admin-toolbar" style="margin: 4px 0 0;">
+            <div class="admin-toolbar-left">
+              <span class="admin-page-count">节点配置</span>
+            </div>
+            <div class="admin-toolbar-right">
+              <button class="admin-button--ghost" type="button" @click="syncPipelineMode('form')">表单配置</button>
+              <button class="admin-button--ghost" type="button" @click="syncPipelineMode('json')">JSON 配置</button>
+            </div>
+          </div>
+
+          <div v-if="pipelineNodeMode === 'json'" class="admin-dialog-field">
             <label>Nodes JSON</label>
             <textarea
               v-model="pipelineForm.nodesJson"
               class="admin-textarea"
-              rows="10"
+              rows="12"
               placeholder='[{"nodeId":"fetch-1","nodeType":"fetcher","settings":{}}]'
             />
+            <p class="admin-page-count">可以直接编辑 nodes JSON 数组，保存时会自动校验。</p>
           </div>
+
+          <template v-else>
+            <div v-if="pipelineNodes.length === 0" class="admin-empty">暂无节点，请先添加节点配置</div>
+
+            <article v-for="(node, index) in pipelineNodes" :key="node.id" class="admin-detail-card" style="margin-bottom: 16px;">
+              <div class="admin-toolbar" style="margin-bottom: 12px;">
+                <div class="admin-toolbar-left">
+                  <span class="admin-page-count">节点 {{ index + 1 }}</span>
+                  <span class="admin-badge is-muted">{{ node.nodeType }}</span>
+                </div>
+                <div class="admin-toolbar-right">
+                  <button class="admin-button--ghost" type="button" @click="removePipelineNode(node.id)">删除节点</button>
+                </div>
+              </div>
+
+              <div class="admin-info-grid is-2">
+                <div class="admin-dialog-field">
+                  <label>节点 ID</label>
+                  <input v-model="node.nodeId" class="admin-input" placeholder="例如：fetch-1" />
+                </div>
+                <div class="admin-dialog-field">
+                  <label>节点类型</label>
+                  <select v-model="node.nodeType" class="admin-select">
+                    <option v-for="option in NODE_TYPE_OPTIONS" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="admin-dialog-field">
+                  <label>下一节点 ID</label>
+                  <input v-model="node.nextNodeId" class="admin-input" placeholder="例如：parse-1" />
+                </div>
+                <div class="admin-dialog-field">
+                  <label>条件（可选）</label>
+                  <textarea v-model="node.condition" class="admin-textarea" rows="3" placeholder='{"if":"..."}' />
+                </div>
+              </div>
+
+              <div v-if="node.nodeType === 'parser'" class="admin-dialog-field" style="margin-top: 12px;">
+                <label>解析规则（JSON）</label>
+                <textarea v-model="node.parser.rulesJson" class="admin-textarea" rows="4" placeholder='[{"mimeType":"PDF","options":{}}]' />
+              </div>
+
+              <div v-if="node.nodeType === 'chunker'" class="admin-info-grid is-2" style="margin-top: 12px;">
+                <div class="admin-dialog-field">
+                  <label>分块策略</label>
+                  <select v-model="node.chunker.strategy" class="admin-select">
+                    <option v-for="option in CHUNK_STRATEGY_OPTIONS" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="admin-dialog-field">
+                  <label>Chunk Size</label>
+                  <input v-model="node.chunker.chunkSize" class="admin-input" type="number" placeholder="例如：512" />
+                </div>
+                <div class="admin-dialog-field">
+                  <label>Overlap Size</label>
+                  <input v-model="node.chunker.overlapSize" class="admin-input" type="number" placeholder="例如：128" />
+                </div>
+                <div class="admin-dialog-field">
+                  <label>自定义分隔符</label>
+                  <input v-model="node.chunker.separator" class="admin-input" placeholder="可选" />
+                </div>
+              </div>
+
+              <div v-if="node.nodeType === 'enhancer'" style="margin-top: 12px;">
+                <div class="admin-info-grid is-2">
+                  <div class="admin-dialog-field">
+                    <label>模型 ID</label>
+                    <input v-model="node.enhancer.modelId" class="admin-input" placeholder="可选" />
+                  </div>
+                </div>
+                <div class="admin-toolbar" style="margin: 12px 0;">
+                  <div class="admin-toolbar-left">
+                    <span class="admin-page-count">增强任务</span>
+                  </div>
+                  <div class="admin-toolbar-right">
+                    <button class="admin-button--ghost" type="button" @click="addPipelineTask(node, 'enhancer')">添加任务</button>
+                  </div>
+                </div>
+                <div v-if="node.enhancer.tasks.length === 0" class="admin-empty">暂无任务</div>
+                <template v-else>
+                  <div v-for="(nodeTask, taskIndex) in node.enhancer.tasks" :key="nodeTask.id" class="admin-detail-card" style="margin-bottom: 12px;">
+                    <div class="admin-toolbar" style="margin-bottom: 12px;">
+                      <div class="admin-toolbar-left">
+                        <span class="admin-page-count">任务 {{ taskIndex + 1 }}</span>
+                      </div>
+                      <div class="admin-toolbar-right">
+                        <button
+                          class="admin-button--ghost"
+                          type="button"
+                          @click="node.enhancer.tasks = node.enhancer.tasks.filter((item) => item.id !== nodeTask.id)"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                    <div class="admin-info-grid is-2">
+                      <div class="admin-dialog-field">
+                        <label>任务类型</label>
+                        <select v-model="nodeTask.type" class="admin-select">
+                          <option v-for="option in ENHANCER_TASK_OPTIONS" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </div>
+                      <div class="admin-dialog-field">
+                        <label>System Prompt</label>
+                        <textarea v-model="nodeTask.systemPrompt" class="admin-textarea" rows="3" placeholder="可选" />
+                      </div>
+                      <div class="admin-dialog-field" style="grid-column: 1 / -1;">
+                        <label>User Prompt 模板</label>
+                        <textarea v-model="nodeTask.userPromptTemplate" class="admin-textarea" rows="3" placeholder="可选" />
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div v-if="node.nodeType === 'enricher'" style="margin-top: 12px;">
+                <div class="admin-info-grid is-2">
+                  <div class="admin-dialog-field">
+                    <label>模型 ID</label>
+                    <input v-model="node.enricher.modelId" class="admin-input" placeholder="可选" />
+                  </div>
+                  <div class="admin-dialog-field">
+                    <label>附加文档元数据</label>
+                    <select
+                      class="admin-select"
+                      :value="node.enricher.attachDocumentMetadata ? 'true' : 'false'"
+                      @change="node.enricher.attachDocumentMetadata = $event.target.value === 'true'"
+                    >
+                      <option value="true">是</option>
+                      <option value="false">否</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="admin-toolbar" style="margin: 12px 0;">
+                  <div class="admin-toolbar-left">
+                    <span class="admin-page-count">富集任务</span>
+                  </div>
+                  <div class="admin-toolbar-right">
+                    <button class="admin-button--ghost" type="button" @click="addPipelineTask(node, 'enricher')">添加任务</button>
+                  </div>
+                </div>
+                <div v-if="node.enricher.tasks.length === 0" class="admin-empty">暂无任务</div>
+                <template v-else>
+                  <div v-for="(nodeTask, taskIndex) in node.enricher.tasks" :key="nodeTask.id" class="admin-detail-card" style="margin-bottom: 12px;">
+                    <div class="admin-toolbar" style="margin-bottom: 12px;">
+                      <div class="admin-toolbar-left">
+                        <span class="admin-page-count">任务 {{ taskIndex + 1 }}</span>
+                      </div>
+                      <div class="admin-toolbar-right">
+                        <button
+                          class="admin-button--ghost"
+                          type="button"
+                          @click="node.enricher.tasks = node.enricher.tasks.filter((item) => item.id !== nodeTask.id)"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                    <div class="admin-info-grid is-2">
+                      <div class="admin-dialog-field">
+                        <label>任务类型</label>
+                        <select v-model="nodeTask.type" class="admin-select">
+                          <option v-for="option in ENRICHER_TASK_OPTIONS" :key="option.value" :value="option.value">
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </div>
+                      <div class="admin-dialog-field">
+                        <label>System Prompt</label>
+                        <textarea v-model="nodeTask.systemPrompt" class="admin-textarea" rows="3" placeholder="可选" />
+                      </div>
+                      <div class="admin-dialog-field" style="grid-column: 1 / -1;">
+                        <label>User Prompt 模板</label>
+                        <textarea v-model="nodeTask.userPromptTemplate" class="admin-textarea" rows="3" placeholder="可选" />
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div v-if="node.nodeType === 'indexer'" class="admin-info-grid is-2" style="margin-top: 12px;">
+                <div class="admin-dialog-field">
+                  <label>Embedding Model</label>
+                  <input v-model="node.indexer.embeddingModel" class="admin-input" placeholder="可选" />
+                </div>
+                <div class="admin-dialog-field">
+                  <label>Metadata Fields</label>
+                  <input v-model="node.indexer.metadataFields" class="admin-input" placeholder="逗号分隔，例如 title, author" />
+                </div>
+              </div>
+            </article>
+
+            <div class="admin-toolbar" style="margin-top: 8px;">
+              <div class="admin-toolbar-left">
+                <select v-model="pipelineNodeTypeDraft" class="admin-select">
+                  <option v-for="option in NODE_TYPE_OPTIONS" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="admin-toolbar-right">
+                <button class="admin-button--ghost" type="button" @click="addPipelineNode(pipelineNodeTypeDraft)">添加节点</button>
+              </div>
+            </div>
+          </template>
         </div>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closePipelineDialog">取消</button>
@@ -828,7 +1430,7 @@ onMounted(() => {
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeTaskDialog">&times;</button>
         <h3>新建任务</h3>
-        <p>支持 file / url / feishu / s3 四类来源，文件上传任务则走独立上传入口。</p>
+        <p>支持 file / url / feishu / s3 四类来源，本地文件会直接上传，限制为 {{ taskFileSizeLabel }}。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>Pipeline</label>
@@ -851,19 +1453,26 @@ onMounted(() => {
           <div v-if="taskForm.sourceType === 'file'" class="admin-dialog-field">
             <label>本地文件</label>
             <input type="file" class="admin-input" @change="handleTaskFileChange" />
+            <p class="admin-page-count">上传大小上限 {{ taskFileSizeLabel }}</p>
           </div>
           <template v-else>
             <div class="admin-dialog-field">
               <label>来源地址</label>
-              <input v-model="taskForm.location" class="admin-input" placeholder="URL / path / s3 地址" />
+              <input v-model="taskForm.location" class="admin-input" :placeholder="taskSourceMeta.locationPlaceholder" />
+              <p class="admin-page-count">{{ taskSourceMeta.locationHint }}</p>
             </div>
             <div class="admin-dialog-field">
               <label>文件名</label>
               <input v-model="taskForm.fileName" class="admin-input" placeholder="可选" />
             </div>
-            <div class="admin-dialog-field">
+            <div v-if="showTaskCredentials" class="admin-dialog-field">
               <label>凭证 JSON</label>
-              <textarea v-model="taskForm.credentialsJson" class="admin-textarea" rows="4" placeholder='{"token":"xxx"}' />
+              <textarea
+                v-model="taskForm.credentialsJson"
+                class="admin-textarea"
+                rows="4"
+                :placeholder="taskSourceMeta.credentialsHint || '{&quot;token&quot;:&quot;xxx&quot;}'"
+              />
             </div>
           </template>
           <div class="admin-dialog-field">
@@ -884,7 +1493,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeUploadDialog">&times;</button>
         <h3>上传文件</h3>
-        <p>上传后会直接触发对应流水线的摄取任务。</p>
+        <p>上传后会直接触发对应流水线的摄取任务，文件限制为 {{ taskFileSizeLabel }}。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>Pipeline</label>
@@ -941,6 +1550,10 @@ onMounted(() => {
               <dd>{{ taskDetailTarget?.sourceLocation || taskDetailTarget?.sourceFileName || "--" }}</dd>
             </div>
             <div>
+              <dt>来源类型</dt>
+              <dd>{{ taskDetailTarget?.sourceType || "--" }}</dd>
+            </div>
+            <div>
               <dt>分块数</dt>
               <dd>{{ taskDetailTarget?.chunkCount ?? "--" }}</dd>
             </div>
@@ -948,10 +1561,19 @@ onMounted(() => {
               <dt>开始时间</dt>
               <dd>{{ formatDateTime(taskDetailTarget?.startedAt || taskDetailTarget?.createTime) }}</dd>
             </div>
+            <div>
+              <dt>结束时间</dt>
+              <dd>{{ formatDateTime(taskDetailTarget?.completedAt) }}</dd>
+            </div>
           </div>
 
           <div v-if="taskDetailTarget?.errorMessage" class="admin-notice is-error" style="margin-bottom: 16px;">
             {{ taskDetailTarget.errorMessage }}
+          </div>
+
+          <div v-if="taskDetailTarget?.metadata" class="admin-dialog-field" style="margin-bottom: 16px;">
+            <label>Metadata</label>
+            <pre class="admin-pre">{{ prettyJson(taskDetailTarget.metadata) }}</pre>
           </div>
 
           <h3 style="margin-top: 0;">Task Nodes</h3>

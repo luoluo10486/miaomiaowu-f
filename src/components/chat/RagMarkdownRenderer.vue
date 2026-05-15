@@ -32,14 +32,14 @@ const renderedHtml = computed(() =>
 
 <style scoped>
 .rag-markdown {
-  color: var(--text);
+  color: #0f172a;
   font-size: 14px;
   line-height: 1.75;
   word-break: break-word;
 }
 
 .rag-markdown :deep(p) {
-  margin: 0 0 0.85em;
+  margin: 0 0 0.9em;
 }
 
 .rag-markdown :deep(p:last-child) {
@@ -51,9 +51,9 @@ const renderedHtml = computed(() =>
 .rag-markdown :deep(h3),
 .rag-markdown :deep(h4) {
   margin: 1em 0 0.5em;
-  color: var(--text);
-  font-family: var(--serif);
+  color: #0f172a;
   line-height: 1.35;
+  font-weight: 700;
 }
 
 .rag-markdown :deep(ul),
@@ -69,18 +69,18 @@ const renderedHtml = computed(() =>
 .rag-markdown :deep(blockquote) {
   margin: 0.9em 0;
   padding: 0.8em 1em;
-  border-left: 3px solid rgba(107, 127, 90, 0.35);
-  border-radius: var(--radius-sm);
-  background: rgba(107, 127, 90, 0.06);
-  color: var(--text-secondary);
+  border-left: 3px solid rgba(37, 99, 235, 0.35);
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.06);
+  color: #334155;
 }
 
 .rag-markdown :deep(code) {
   padding: 0.15em 0.35em;
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.06);
-  color: #7a4d1e;
-  font-family: var(--mono);
+  color: #7c2d12;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.95em;
 }
 
@@ -88,11 +88,11 @@ const renderedHtml = computed(() =>
   overflow-x: auto;
   margin: 0.9em 0;
   padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   background: rgba(15, 23, 42, 0.94);
   color: #f8fafc;
-  font-family: var(--mono);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.7;
 }
@@ -115,18 +115,18 @@ const renderedHtml = computed(() =>
 .rag-markdown :deep(th),
 .rag-markdown :deep(td) {
   padding: 8px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   text-align: left;
 }
 
 .rag-markdown :deep(th) {
-  background: rgba(107, 127, 90, 0.08);
+  background: rgba(37, 99, 235, 0.08);
   font-weight: 600;
 }
 
 .rag-markdown :deep(hr) {
   margin: 1.1em 0;
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
 </style>

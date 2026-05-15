@@ -26,12 +26,12 @@ const IntentEditPage = () => import("../views/admin/IntentEditPage.vue");
 
 function resolveRedirectTarget(target) {
   if (typeof target !== "string") {
-    return "/";
+    return "/chat";
   }
 
   const normalizedTarget = target.trim();
-  if (!normalizedTarget.startsWith("/") || normalizedTarget.startsWith("/login")) {
-    return "/";
+  if (!normalizedTarget.startsWith("/") || normalizedTarget.startsWith("/login") || normalizedTarget.startsWith("/register")) {
+    return "/chat";
   }
 
   return normalizedTarget;
@@ -42,7 +42,7 @@ const router = createRouter({
   routes: [
     {
       path: "/",
-      redirect: "/workspace"
+      redirect: "/chat"
     },
     {
       path: "/workspace",
@@ -200,14 +200,6 @@ const router = createRouter({
     {
       path: "/register",
       redirect: { path: "/login", query: { mode: "register" } }
-    },
-    {
-      path: "/chat",
-      redirect: "/rag"
-    },
-    {
-      path: "/chat/:sessionId",
-      redirect: (to) => `/rag/${to.params.sessionId || ""}`
     },
     {
       path: "/articles",
