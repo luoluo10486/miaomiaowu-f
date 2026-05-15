@@ -45,12 +45,44 @@ const submitting = ref(false);
 const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
+const expandedMap = ref({});
 
-const rows = computed(() => flattenIntentTree(tree.value));
+const rows = computed(() =>
+  flattenIntentTree(tree.value).map((row) => ({
+    ...row,
+    hasChildren: Number(row.childCount ?? 0) > 0
+  }))
+);
+
+function buildVisibleRows(nodes, depth = 0, parentNames = [], parentCodes = [], result = []) {
+  nodes.forEach((node) => {
+    const currentNames = [...parentNames, node.name];
+    const currentCodes = [...parentCodes, node.intentCode];
+    const children = Array.isArray(node.children) ? node.children : [];
+    result.push({
+      ...node,
+      depth,
+      hasChildren: children.length > 0,
+      childCount: children.length,
+      exampleCount: parseExamples(node.examples).length,
+      pathText: currentNames.join(" > "),
+      pathNames: currentNames,
+      pathCodes: currentCodes
+    });
+
+    if (children.length > 0 && expandedMap.value[node.intentCode] !== false) {
+      buildVisibleRows(children, depth + 1, currentNames, currentCodes, result);
+    }
+  });
+
+  return result;
+}
+
+const visibleRows = computed(() => buildVisibleRows(tree.value));
 
 const filteredRows = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
-  if (!normalized) return rows.value;
+  if (!normalized) return visibleRows.value;
 
   return rows.value.filter((row) => {
     const searchable = [
@@ -75,6 +107,25 @@ const selectedNode = computed(() => {
 });
 
 const selectedExamples = computed(() => parseExamples(selectedNode.value?.examples));
+const expandedCount = computed(
+  () => Object.values(expandedMap.value).filter((value) => value !== false).length
+);
+const selectedPath = computed(() => selectedNode.value?.pathText || "--");
+const selectedResource = computed(() => {
+  if (!selectedNode.value) return "--";
+  if (selectedNode.value.kind === 0) return selectedNode.value.collectionName || "--";
+  if (selectedNode.value.kind === 2) return selectedNode.value.mcpToolId || "--";
+  return "系统意图";
+});
+const searchSummary = computed(() => (keyword.value ? `关键词: ${keyword.value}` : "全部节点"));
+const selectedNodeLabel = computed(() => {
+  if (!selectedNode.value) return "--";
+  return `${selectedNode.value.name || selectedNode.value.intentCode || "--"} · ${levelLabel(selectedNode.value.level)}`;
+});
+const selectedMetaSummary = computed(() => {
+  if (!selectedNode.value) return "--";
+  return `${selectedResource.value} · ${selectedExamples.value.length} examples`;
+});
 
 const stats = computed(() => {
   const allRows = rows.value;
@@ -134,6 +185,17 @@ function levelLabel(value) {
 function kindLabel(value) {
   const opt = KIND_OPTIONS.find((item) => item.value === value);
   return opt?.label ?? "--";
+}
+
+function isExpanded(intentCode) {
+  return expandedMap.value[intentCode] !== false;
+}
+
+function toggleExpanded(intentCode) {
+  expandedMap.value = {
+    ...expandedMap.value,
+    [intentCode]: !isExpanded(intentCode)
+  };
 }
 
 function parseExamples(value) {
@@ -343,6 +405,15 @@ onMounted(() => {
       title="意图树"
       description="从树形结构查看和维护意图节点，支持新建、编辑、启停和删除。"
     >
+      <template #meta>
+        <div class="intent-tree-header-meta">
+          <span class="admin-badge is-muted">节点：{{ rows.length }}</span>
+          <span class="admin-badge is-muted">展开：{{ expandedCount }}</span>
+          <span class="admin-badge is-muted">焦点：{{ selectedNodeLabel }}</span>
+          <span class="admin-badge is-muted">路径：{{ selectedPath }}</span>
+          <span class="admin-badge is-muted">搜索：{{ searchSummary }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="loadTree">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog()">新建根节点</button>
@@ -361,6 +432,20 @@ onMounted(() => {
         :tone="stat.tone"
       />
     </div>
+
+    <section class="admin-detail-card intent-hero-card">
+      <div class="intent-hero-copy">
+        <p class="trace-hero-tag">Intent Overview</p>
+        <h2>{{ selectedNode ? "当前树形焦点已定位" : "当前树形焦点未定位" }}</h2>
+        <p>先用树形结构定位节点，再在右侧补全路径、资源归属和 prompt 配置，编辑、创建和删除都保留原有工作流。</p>
+      </div>
+      <div class="intent-hero-grid">
+        <div><span>当前节点</span><strong>{{ selectedNodeLabel }}</strong></div>
+        <div><span>Intent Code</span><strong>{{ selectedNode?.intentCode || "--" }}</strong></div>
+        <div><span>路径</span><strong>{{ selectedPath }}</strong></div>
+        <div><span>展开分支</span><strong>{{ expandedCount }}</strong></div>
+      </div>
+    </section>
 
     <section class="admin-split">
       <article class="admin-table-card">
@@ -399,13 +484,25 @@ onMounted(() => {
             :class="['admin-tree-item', selectedNode?.id === item.id ? 'is-active' : '']"
           >
             <div class="admin-tree-item-header">
-              <button class="admin-tree-item-title" type="button" @click="selectNode(item)">
-                <span v-for="depthIndex in item.depth" :key="depthIndex" class="admin-tree-indent" />
-                <div>
-                  <strong>{{ item.name || item.intentCode }}</strong>
-                  <small class="is-code">{{ item.intentCode }}</small>
-                </div>
-              </button>
+              <div class="admin-tree-item-title-wrap">
+                <button
+                  v-if="item.hasChildren"
+                  class="admin-tree-expand"
+                  type="button"
+                  :aria-label="isExpanded(item.intentCode) ? '收起节点' : '展开节点'"
+                  :title="isExpanded(item.intentCode) ? '收起节点' : '展开节点'"
+                  @click.stop="toggleExpanded(item.intentCode)"
+                >
+                  {{ isExpanded(item.intentCode) ? "▾" : "▸" }}
+                </button>
+                <button class="admin-tree-item-title" type="button" @click="selectNode(item)">
+                  <span v-for="depthIndex in item.depth" :key="depthIndex" class="admin-tree-indent" />
+                  <div>
+                    <strong>{{ item.name || item.intentCode }}</strong>
+                    <small class="is-code">{{ item.intentCode }}</small>
+                  </div>
+                </button>
+              </div>
               <div class="admin-inline-actions">
                 <button class="admin-button--ghost" type="button" @click="openCreateDialog(item)">新建子节点</button>
                 <button class="admin-button--ghost" type="button" @click="openEditDialog(item)">编辑</button>
@@ -422,6 +519,7 @@ onMounted(() => {
                 {{ kindLabel(item.kind) }}
               </span>
               <span class="admin-badge is-muted">TopK {{ item.topK ?? "--" }}</span>
+              <span v-if="item.hasChildren" class="admin-badge is-muted">{{ item.childCount }} children</span>
               <span v-if="item.kind === 0 && item.collectionName" class="admin-badge is-success">
                 Collection: {{ item.collectionName }}
               </span>
@@ -440,6 +538,7 @@ onMounted(() => {
           <h3>节点详情</h3>
           <p class="admin-detail-card-desc">点击左侧节点后，在这里查看层级、来源资源和 prompt 配置。</p>
           <div v-if="selectedNode" class="admin-kv">
+            <div><dt>摘要</dt><dd>{{ selectedMetaSummary }}</dd></div>
             <div><dt>名称</dt><dd>{{ selectedNode.name || "--" }}</dd></div>
             <div><dt>Intent Code</dt><dd class="is-code">{{ selectedNode.intentCode }}</dd></div>
             <div><dt>层级</dt><dd>{{ levelLabel(selectedNode.level) }}</dd></div>
@@ -662,6 +761,106 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.admin-tree-item-title-wrap {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-tree-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--admin-ink-soft);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.admin-tree-expand:hover {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-bg-soft);
+  color: var(--admin-ink);
+}
+
+.intent-hero-card {
+  display: grid;
+  gap: 16px;
+}
+
+.intent-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.intent-hero-copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.intent-hero-copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intent-tree-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.intent-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.intent-hero-grid > div {
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.intent-hero-grid span {
+  display: block;
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intent-hero-grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .admin-tree-item-title strong {
   display: block;
   color: var(--admin-ink, #1e293b);
@@ -672,5 +871,11 @@ onMounted(() => {
 .admin-tree-item-title small {
   display: block;
   margin-top: 2px;
+}
+
+@media (max-width: 960px) {
+  .intent-hero-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 </style>

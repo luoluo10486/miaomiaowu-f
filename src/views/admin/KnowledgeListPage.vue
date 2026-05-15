@@ -50,6 +50,21 @@ const deleteSubmitting = ref(false);
 const deleteTarget = ref(null);
 
 const records = computed(() => pageRecords(page.value));
+const visibleKnowledgeBaseCount = computed(() => pageTotal(page.value));
+const currentKeywordLabel = computed(() => keyword.value || "全部");
+const latestKnowledgeBase = computed(() => records.value[0] || null);
+const latestKnowledgeBaseLabel = computed(() => {
+  if (!latestKnowledgeBase.value) return "--";
+  const name = latestKnowledgeBase.value.name || latestKnowledgeBase.value.id || "--";
+  const collection = latestKnowledgeBase.value.collectionName || "未设置 Collection";
+  return `${name} · ${collection}`;
+});
+const knowledgeSummaryLabel = computed(() => {
+  const parts = [];
+  parts.push(`搜索: ${currentKeywordLabel.value}`);
+  parts.push(`本页: ${visibleKnowledgeBaseCount.value}`);
+  return parts.join(" · ");
+});
 
 function getErrorMessage(error, fallback) {
   return error?.message || fallback;
@@ -286,6 +301,7 @@ onMounted(() => {
           <span class="admin-badge is-outline">Total {{ formatStatValue(stats.totalCount) }}</span>
           <span class="admin-badge is-outline">Docs {{ formatStatValue(stats.documentCount) }}</span>
           <span class="admin-badge is-outline">Active {{ formatStatValue(stats.activeCount) }}</span>
+          <span class="admin-badge is-outline">Query {{ currentKeywordLabel }}</span>
         </div>
       </template>
       <template #actions>
@@ -408,6 +424,8 @@ onMounted(() => {
           <div><dt>文档总数</dt><dd>{{ formatStatValue(stats.documentCount) }}</dd></div>
           <div><dt>活跃知识库</dt><dd>{{ formatStatValue(stats.activeCount) }}</dd></div>
           <div><dt>创建者数</dt><dd>{{ formatStatValue(stats.creatorCount) }}</dd></div>
+          <div><dt>当前搜索</dt><dd>{{ currentKeywordLabel }}</dd></div>
+          <div><dt>本页结果</dt><dd>{{ visibleKnowledgeBaseCount }}</dd></div>
         </div>
 
         <div class="admin-card-list" style="margin-top: 16px;">
@@ -420,8 +438,12 @@ onMounted(() => {
             <p>新建时可直接选择默认嵌入模型。</p>
           </div>
           <div class="admin-card-item">
-            <h3>Documents</h3>
-            <p>点击知识库名称进入文档和切片管理。</p>
+            <h3>最新知识库</h3>
+            <p>{{ latestKnowledgeBaseLabel }}</p>
+          </div>
+          <div class="admin-card-item">
+            <h3>当前结果概览</h3>
+            <p>{{ knowledgeSummaryLabel }}</p>
           </div>
         </div>
       </aside>

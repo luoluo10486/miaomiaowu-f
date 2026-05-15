@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
@@ -36,6 +36,21 @@ const selectedQuestion = computed(() => {
   }
   return questions.value[0] || null;
 });
+
+const latestQuestion = computed(() => questions.value[0] || null);
+const selectedQuestionLength = computed(() => selectedQuestion.value?.question?.length || 0);
+const activeFilterLabel = computed(() => (keyword.value ? keyword.value : "全部样例"));
+const visibleQuestionCount = computed(() => pageTotal(page.value));
+const currentPageLabel = computed(() => `${pageNo.value} / ${pageCount(page.value)}`);
+const latestQuestionLabel = computed(() => {
+  if (!latestQuestion.value) return "--";
+  return `${latestQuestion.value.title || "--"} · ${latestQuestion.value.question?.length || 0} 字`;
+});
+const selectedQuestionLabel = computed(() => {
+  if (!selectedQuestion.value) return "--";
+  return `${selectedQuestion.value.title || "--"} · ${selectedQuestion.value.question?.length || 0} 字`;
+});
+const questionSummaryLabel = computed(() => `筛选: ${activeFilterLabel.value} · 当前页: ${visibleQuestionCount.value}`);
 
 const stats = computed(() => [
   {
@@ -198,11 +213,6 @@ async function handleDelete() {
   }
 }
 
-watch(keyword, () => {
-  pageNo.value = 1;
-  void loadData();
-});
-
 onMounted(() => {
   void loadData();
 });
@@ -215,6 +225,14 @@ onMounted(() => {
       title="样例问题管理"
       description="维护首页或推荐区域展示的样例问题内容，支持搜索、编辑和删除。"
     >
+      <template #meta>
+        <div class="sample-header-meta">
+          <span class="admin-badge is-muted">筛选：{{ activeFilterLabel }}</span>
+          <span class="admin-badge is-muted">当前页：{{ questions.length }}</span>
+          <span class="admin-badge is-muted">选中：{{ selectedQuestionLabel }}</span>
+          <span class="admin-badge is-muted">最新：{{ latestQuestionLabel }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新增样例</button>
@@ -222,6 +240,22 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <section class="admin-detail-card sample-questions-hero">
+      <div class="sample-questions-hero__copy">
+        <p class="trace-hero-tag">Sample Question Overview</p>
+        <h2>{{ selectedQuestion?.title || "样例问题总览" }}</h2>
+        <p>
+          {{ selectedQuestion?.description || "在同一页面维护欢迎页和推荐位使用的示例问题内容，搜索、编辑和删除都保持在清晰的管理流程里。" }}
+        </p>
+      </div>
+      <div class="sample-questions-hero__grid">
+        <div><span>当前选中</span><strong>{{ selectedQuestion?.title || "--" }}</strong></div>
+        <div><span>问题长度</span><strong>{{ selectedQuestionLength }}</strong></div>
+        <div><span>当前页</span><strong>{{ currentPageLabel }}</strong></div>
+        <div><span>最新条目</span><strong>{{ latestQuestionLabel }}</strong></div>
+      </div>
+    </section>
 
     <section class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
@@ -306,6 +340,11 @@ onMounted(() => {
         <article class="admin-detail-card">
           <h3>问题预览</h3>
           <p class="admin-detail-card-desc">点击表格中的任意一行即可查看完整内容。</p>
+          <div class="admin-kv admin-kv--compact" style="margin-bottom: 16px;">
+            <div><dt>当前筛选</dt><dd>{{ activeFilterLabel }}</dd></div>
+            <div><dt>当前页结果</dt><dd>{{ visibleQuestionCount }}</dd></div>
+            <div><dt>最新条目</dt><dd>{{ latestQuestionLabel }}</dd></div>
+          </div>
           <div v-if="selectedQuestion" class="admin-card-list">
             <div class="admin-card-item">
               <h3>标题</h3>
@@ -374,6 +413,74 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sample-questions-hero {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.sample-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sample-questions-hero__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.sample-questions-hero__copy h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.sample-questions-hero__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sample-questions-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sample-questions-hero__grid > div {
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.sample-questions-hero__grid span {
+  display: block;
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sample-questions-hero__grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .is-active-row {
   background: rgba(79, 70, 229, 0.05);
 }
@@ -383,5 +490,11 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 960px) {
+  .sample-questions-hero__grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 </style>

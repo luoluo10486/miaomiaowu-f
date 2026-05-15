@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
@@ -33,11 +33,17 @@ const pageUsers = computed(() => pageRecords(page.value));
 const totalUsers = computed(() => pageTotal(page.value));
 const adminCount = computed(() => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length);
 const enabledCount = computed(() => pageUsers.value.filter((item) => item.enabled !== false).length);
+const activeFilterLabel = computed(() => (keyword.value ? keyword.value : "全部用户"));
 const selectedUser = computed(() => {
   if (selectedUserId.value) {
     return pageUsers.value.find((item) => item.id === selectedUserId.value) || pageUsers.value[0] || null;
   }
   return pageUsers.value[0] || null;
+});
+const currentPageLabel = computed(() => `${pageNo.value} / ${pageCount(page)}`);
+const selectedUserLabel = computed(() => {
+  if (!selectedUser.value) return "--";
+  return `${userDisplayName(selectedUser.value)} · ${roleLabel(selectedUser.value.role)}`;
 });
 
 const stats = computed(() => [
@@ -237,11 +243,6 @@ async function handleDelete() {
   }
 }
 
-watch(keyword, () => {
-  pageNo.value = 1;
-  void loadData();
-});
-
 onMounted(() => {
   void loadData();
 });
@@ -254,6 +255,14 @@ onMounted(() => {
       title="用户管理"
       description="管理后台账号、角色、启用状态和头像信息，支持新建、编辑、禁用与删除。"
     >
+      <template #meta>
+        <div class="admin-header-meta">
+          <span class="admin-badge is-muted">筛选：{{ activeFilterLabel }}</span>
+          <span class="admin-badge is-muted">总数：{{ totalUsers }}</span>
+          <span class="admin-badge is-muted">当前页：{{ pageUsers.length }}</span>
+          <span class="admin-badge is-muted">管理员：{{ adminCount }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新建用户</button>
@@ -264,6 +273,32 @@ onMounted(() => {
 
     <section class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
+    </section>
+
+    <section class="admin-detail-card users-hero">
+      <div class="users-hero-copy">
+        <p class="trace-hero-tag">User Center</p>
+        <h2>账号与权限概览</h2>
+        <p>快速检索后台账号，查看角色、状态和头像，并在右侧锁定当前选中用户的完整资料。</p>
+      </div>
+      <div class="users-hero-side">
+        <div class="users-hero-cardline">
+          <span class="users-hero-cardlabel">当前筛选</span>
+          <strong>{{ activeFilterLabel }}</strong>
+        </div>
+        <div class="users-hero-cardline">
+          <span class="users-hero-cardlabel">当前页</span>
+          <strong>{{ currentPageLabel }}</strong>
+        </div>
+        <div class="users-hero-cardline">
+          <span class="users-hero-cardlabel">选中用户</span>
+          <strong>{{ selectedUserLabel }}</strong>
+        </div>
+        <div class="users-hero-cardline">
+          <span class="users-hero-cardlabel">管理员 / 启用</span>
+          <strong>{{ adminCount }} / {{ enabledCount }}</strong>
+        </div>
+      </div>
     </section>
 
     <section class="admin-split">
@@ -376,6 +411,15 @@ onMounted(() => {
           <h3>用户预览</h3>
           <p class="admin-detail-card-desc">点击一行查看完整资料和账号状态。</p>
           <div v-if="selectedUser" class="admin-kv">
+            <div class="admin-user-preview">
+              <div class="admin-user-avatar">{{ userAvatarInitial(selectedUser) }}</div>
+              <div>
+                <p class="admin-cell-title">{{ userDisplayName(selectedUser) }}</p>
+                <p class="admin-cell-subtitle is-secondary">
+                  {{ roleLabel(selectedUser.role) }} · {{ selectedUser.enabled === false ? "已禁用" : "已启用" }}
+                </p>
+              </div>
+            </div>
             <div><dt>用户名</dt><dd>{{ selectedUser.username }}</dd></div>
             <div><dt>昵称</dt><dd>{{ selectedUser.nickname || "--" }}</dd></div>
             <div><dt>角色</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
@@ -467,9 +511,90 @@ onMounted(() => {
   background: rgba(79, 70, 229, 0.05);
 }
 
+.admin-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .admin-user-row {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.admin-user-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--admin-line);
+  border-radius: 14px;
+  background: var(--admin-bg-soft);
+}
+
+.users-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.users-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.users-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.users-hero-copy p,
+.users-hero-side p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.users-hero-side {
+  display: grid;
+  gap: 12px;
+  min-width: 280px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.users-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.users-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.users-hero-cardline strong {
+  color: var(--admin-ink);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
+  .users-hero {
+    flex-direction: column;
+  }
+
+  .users-hero-side {
+    min-width: 0;
+  }
 }
 </style>

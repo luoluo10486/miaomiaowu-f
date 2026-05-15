@@ -112,9 +112,21 @@ const uploadInputRef = ref(null);
 
 const pipelineRecords = computed(() => pageRecords(pipelines.value));
 const taskRecords = computed(() => pageRecords(tasks.value));
+const latestPipeline = computed(() => pipelineRecords.value[0] || null);
+const latestTask = computed(() => taskRecords.value[0] || null);
+const latestPipelineLabel = computed(() => {
+  if (!latestPipeline.value) return "--";
+  return `${latestPipeline.value.name || latestPipeline.value.id || "--"} · ${latestPipeline.value.nodeCount ?? 0} 节点`;
+});
+const latestTaskLabel = computed(() => {
+  if (!latestTask.value) return "--";
+  return `${latestTask.value.id || "--"} · ${normalizeTaskStatus(latestTask.value.status) || "--"}`;
+});
 
 const pipelinePages = computed(() => Number(pipelines.value?.pages || 1));
 const taskPages = computed(() => Number(tasks.value?.pages || 1));
+const currentTabLabel = computed(() => (activeTab.value === "pipelines" ? "Pipeline 管理" : "Task 管理"));
+const viewSummaryLabel = computed(() => `当前视图：${currentTabLabel.value} · Running ${activeTaskCount.value} · Failed ${failedTaskCount.value}`);
 
 const activeTaskCount = computed(
   () => taskRecords.value.filter((item) => normalizeTaskStatus(item.status) === "RUNNING").length
@@ -930,10 +942,12 @@ onMounted(() => {
     >
       <template #meta>
         <div class="admin-page-header-meta">
+          <span class="admin-badge is-outline">视图 {{ currentTabLabel }}</span>
           <span class="admin-badge is-outline">Pipelines {{ pageTotal(pipelines).toLocaleString("zh-CN") }}</span>
           <span class="admin-badge is-outline">Tasks {{ pageTotal(tasks).toLocaleString("zh-CN") }}</span>
           <span class="admin-badge is-outline">Running {{ activeTaskCount }}</span>
           <span class="admin-badge is-outline">Failed {{ failedTaskCount }}</span>
+          <span class="admin-badge is-outline">{{ viewSummaryLabel }}</span>
         </div>
       </template>
       <template #actions>
@@ -981,6 +995,24 @@ onMounted(() => {
         >
           Task 管理
         </button>
+      </div>
+      <div class="ingestion-hero-side">
+        <div class="ingestion-hero-cardline">
+          <span class="ingestion-hero-cardlabel">当前视图</span>
+          <strong>{{ currentTabLabel }}</strong>
+        </div>
+        <div class="ingestion-hero-cardline">
+          <span class="ingestion-hero-cardlabel">最新 Pipeline</span>
+          <strong>{{ latestPipelineLabel }}</strong>
+        </div>
+        <div class="ingestion-hero-cardline">
+          <span class="ingestion-hero-cardlabel">最新 Task</span>
+          <strong>{{ latestTaskLabel }}</strong>
+        </div>
+        <div class="ingestion-hero-cardline">
+          <span class="ingestion-hero-cardlabel">上传限制</span>
+          <strong>{{ taskFileSizeLabel }}</strong>
+        </div>
       </div>
     </section>
 
@@ -1673,9 +1705,9 @@ onMounted(() => {
 
 <style scoped>
 .ingestion-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 20px;
 }
 
@@ -1700,6 +1732,43 @@ onMounted(() => {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.ingestion-hero-side {
+  display: grid;
+  gap: 12px;
+  min-width: 220px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.ingestion-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.ingestion-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ingestion-hero-cardline strong {
+  color: var(--admin-ink);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .ingestion-tab {
@@ -1748,7 +1817,7 @@ onMounted(() => {
 
 @media (max-width: 960px) {
   .ingestion-hero {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .ingestion-layout {
@@ -1757,6 +1826,10 @@ onMounted(() => {
 
   .ingestion-aside {
     position: static;
+  }
+
+  .ingestion-hero-side {
+    min-width: 0;
   }
 }
 </style>

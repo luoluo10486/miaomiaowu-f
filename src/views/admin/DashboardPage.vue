@@ -230,6 +230,20 @@ const healthMeta = computed(() => {
   }
 });
 
+const dashboardHeaderMeta = computed(() => [
+  { label: `窗口：${WINDOW_LABEL_MAP[windowValue.value]}`, tone: "is-muted" },
+  { label: `健康：${healthMeta.value.label}`, tone: healthMeta.value.tone },
+  { label: `更新时间：${formatLastUpdated(lastUpdated.value)}`, tone: "is-muted" }
+]);
+
+const dashboardWindowLabel = computed(() => WINDOW_LABEL_MAP[windowValue.value]);
+const dashboardHeroSummary = computed(() => [
+  { label: "当前窗口", value: dashboardWindowLabel.value },
+  { label: "健康状态", value: healthMeta.value.label },
+  { label: "最近更新", value: formatLastUpdated(lastUpdated.value) },
+  { label: "平均响应", value: formatDuration(performance.value?.avgLatencyMs) }
+]);
+
 const kpiCards = computed(() => {
   const kpis = overview.value?.kpis || {};
   const sessionDepth =
@@ -466,6 +480,13 @@ onMounted(() => {
       title="后台总览"
       description="聚焦会话、消息、性能和知识召回，快速判断当前服务状态。"
     >
+      <template #meta>
+        <div class="dashboard-header-meta">
+          <span v-for="item in dashboardHeaderMeta" :key="item.label" :class="['admin-badge', item.tone]">
+            {{ item.label }}
+          </span>
+        </div>
+      </template>
       <template #actions>
         <div class="admin-window-tabs">
           <button
@@ -491,11 +512,16 @@ onMounted(() => {
     <section class="admin-detail-card dashboard-hero">
       <div class="dashboard-hero-copy">
         <p class="trace-hero-tag">Overview</p>
-        <h2>{{ WINDOW_LABEL_MAP[windowValue] }}</h2>
+        <h2>{{ dashboardWindowLabel }}</h2>
         <p>最后更新时间：{{ formatLastUpdated(lastUpdated) }}</p>
       </div>
       <div class="dashboard-hero-side">
-        <span :class="['admin-badge', healthMeta.tone]">{{ healthMeta.label }}</span>
+        <div class="admin-kv admin-kv--compact">
+          <div><dt>健康状态</dt><dd>{{ healthMeta.label }}</dd></div>
+          <div><dt>当前窗口</dt><dd>{{ dashboardWindowLabel }}</dd></div>
+          <div><dt>最近更新</dt><dd>{{ formatLastUpdated(lastUpdated) }}</dd></div>
+          <div><dt>平均响应</dt><dd>{{ formatDuration(performance?.avgLatencyMs) }}</dd></div>
+        </div>
         <p>{{ healthMeta.detail }}</p>
       </div>
     </section>
@@ -720,6 +746,13 @@ onMounted(() => {
   gap: 10px;
   align-content: start;
   min-width: 240px;
+}
+
+.dashboard-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .dashboard-chart-shell {

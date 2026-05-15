@@ -89,6 +89,26 @@ const somePageSelected = computed(() => !allPageSelected.value && pageRowIds.val
 const rangeStart = computed(() => (total.value === 0 ? 0 : startIndex.value + 1));
 const rangeEnd = computed(() => (total.value === 0 ? 0 : Math.min(startIndex.value + pageRows.value.length, total.value)));
 const focusRow = computed(() => pageRows.value[0] || filteredRows.value[0] || null);
+const latestRow = computed(() => rows.value[0] || null);
+const selectedRows = computed(() => rows.value.filter((row) => selectedIdSet.value.has(row.id)));
+const activeFilterCount = computed(
+  () => [keyword.value, levelFilter.value, kindFilter.value, statusFilter.value, parentFilter.value].filter((value) => value && value !== "ALL").length
+);
+const currentFilterSummary = computed(() => {
+  const parts = [];
+  if (keyword.value) parts.push(`关键词: ${keyword.value}`);
+  if (levelFilter.value !== "ALL") parts.push(`层级: ${resolveLevelLabel(Number(levelFilter.value))}`);
+  if (kindFilter.value !== "ALL") parts.push(`类型: ${resolveKindLabel(Number(kindFilter.value))}`);
+  if (statusFilter.value !== "ALL") parts.push(`状态: ${statusFilter.value}`);
+  if (parentFilter.value !== "ALL") parts.push(`父节点: ${parentFilter.value}`);
+  return parts.length > 0 ? parts.join(" · ") : "全部";
+});
+const latestRowLabel = computed(() => {
+  if (!latestRow.value) return "--";
+  return `${latestRow.value.name || latestRow.value.intentCode || "--"} · ${resolveLevelLabel(latestRow.value.level)}`;
+});
+const pageSummaryLabel = computed(() => `当前页 ${currentPage.value}/${totalPages.value} · 共 ${total.value}`);
+const selectedSummaryLabel = computed(() => (selectedRows.value.length > 0 ? `已选 ${selectedRows.value.length} 项` : "未选择"));
 
 const stats = computed(() => [
   {
@@ -260,10 +280,18 @@ onMounted(() => {
 <template>
   <section class="admin-page">
     <PageHeader
-      tag="Intent Tree"
+      tag="Intent List"
       title="意图列表"
       description="支持多维筛选、批量操作和快速定位到意图树节点。"
     >
+      <template #meta>
+        <div class="intent-list-header-meta">
+          <span class="admin-badge is-muted">筛选：{{ activeFilterCount }} 项</span>
+          <span class="admin-badge is-muted">当前页：{{ pageRows.length }}</span>
+          <span class="admin-badge is-muted">已选中：{{ selectedRows.length }}</span>
+          <span class="admin-badge is-muted">首项：{{ latestRowLabel }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="router.push('/admin/intent-tree')">返回树视图</button>
@@ -275,6 +303,32 @@ onMounted(() => {
     <div class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
     </div>
+
+    <section class="admin-detail-card intent-list-hero">
+      <div class="intent-list-hero__copy">
+        <p class="trace-hero-tag">Intent Overview</p>
+        <h2>当前筛选 {{ activeFilterCount }} 项</h2>
+        <p>先通过多维条件缩小意图节点范围，再用路径跳转进入树视图定位上下文，保留批量启停和删除工作流。</p>
+      </div>
+      <div class="intent-list-hero__grid">
+        <div>
+          <span>总数</span>
+          <strong>{{ total }}</strong>
+        </div>
+        <div>
+          <span>当前页</span>
+          <strong>{{ pageSummaryLabel }}</strong>
+        </div>
+        <div>
+          <span>已选中</span>
+          <strong>{{ selectedSummaryLabel }}</strong>
+        </div>
+        <div>
+          <span>当前页首项</span>
+          <strong>{{ latestRowLabel }}</strong>
+        </div>
+      </div>
+    </section>
 
     <section class="admin-split">
       <article class="admin-table-card">
@@ -415,6 +469,7 @@ onMounted(() => {
           <h3>筛选概览</h3>
           <p class="admin-detail-card-desc">当前筛选条件与结果数量。</p>
           <div class="admin-kv">
+            <div><dt>摘要</dt><dd>{{ currentFilterSummary }}</dd></div>
             <div><dt>关键词</dt><dd>{{ keyword || "--" }}</dd></div>
             <div><dt>层级</dt><dd>{{ levelFilter === "ALL" ? "全部" : resolveLevelLabel(Number(levelFilter)) }}</dd></div>
             <div><dt>类型</dt><dd>{{ kindFilter === "ALL" ? "全部" : resolveKindLabel(Number(kindFilter)) }}</dd></div>
@@ -455,3 +510,78 @@ onMounted(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.intent-list-hero {
+  display: grid;
+  gap: 16px;
+}
+
+.intent-list-hero__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.intent-list-hero__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.intent-list-hero__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intent-list-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.intent-list-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.intent-list-hero__grid > div {
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.intent-list-hero__grid span {
+  display: block;
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intent-list-hero__grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
+  .intent-list-hero__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+</style>

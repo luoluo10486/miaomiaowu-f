@@ -14,6 +14,13 @@ const queryRewrite = computed(() => settings.value?.rag?.queryRewrite || {});
 const rateLimit = computed(() => settings.value?.rag?.rateLimit?.global || {});
 const memory = computed(() => settings.value?.rag?.memory || {});
 const providerEntries = computed(() => Object.entries(settings.value?.ai?.providers || {}));
+const providerCount = computed(() => providerEntries.value.length);
+const modelCountLabel = computed(() => {
+  const chat = settings.value?.ai?.chat?.defaultModel || "--";
+  const embedding = settings.value?.ai?.embedding?.defaultModel || "--";
+  const rerank = settings.value?.ai?.rerank?.defaultModel || "--";
+  return `${chat} / ${embedding} / ${rerank}`;
+});
 const modelGroups = computed(() => [
   { label: "Chat", data: settings.value?.ai?.chat || {}, tone: "indigo" },
   { label: "Embedding", data: settings.value?.ai?.embedding || {}, tone: "cyan" },
@@ -71,6 +78,13 @@ onMounted(() => {
       title="系统设置"
       description="只读查看当前应用配置，便于排查模型、限流和记忆策略的运行状态。"
     >
+      <template #meta>
+        <div class="admin-header-meta">
+          <span class="admin-badge is-muted">Collection：{{ ragDefaults.collectionName || "--" }}</span>
+          <span class="admin-badge is-muted">Provider：{{ providerCount }}</span>
+          <span class="admin-badge is-muted">模型：{{ modelCountLabel }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button" type="button" :disabled="loading" @click="loadSettings">
           {{ loading ? "刷新中..." : "刷新" }}
@@ -81,8 +95,37 @@ onMounted(() => {
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
     <div class="admin-stat-grid">
-      <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
+      <StatCard
+        v-for="stat in stats"
+        :key="stat.title"
+        :title="stat.title"
+        :value="stat.value"
+        :hint="stat.hint"
+        :tone="stat.tone"
+      />
     </div>
+
+    <section class="admin-detail-card settings-hero">
+      <div class="settings-hero-copy">
+        <p class="trace-hero-tag">System Control</p>
+        <h2>配置总览与模型基线</h2>
+        <p>集中查看 RAG 默认值、查询改写、限流、记忆策略和模型提供方信息。</p>
+      </div>
+      <div class="settings-hero-side">
+        <div class="settings-hero-cardline">
+          <span class="settings-hero-cardlabel">Collection</span>
+          <strong>{{ ragDefaults.collectionName || "--" }}</strong>
+        </div>
+        <div class="settings-hero-cardline">
+          <span class="settings-hero-cardlabel">Providers</span>
+          <strong>{{ providerCount }}</strong>
+        </div>
+        <div class="settings-hero-cardline">
+          <span class="settings-hero-cardlabel">Chat / Embedding / Rerank</span>
+          <strong>{{ modelCountLabel }}</strong>
+        </div>
+      </div>
+    </section>
 
     <section class="admin-split">
       <article class="admin-table-card">
@@ -178,3 +221,74 @@ onMounted(() => {
     </section>
   </section>
 </template>
+
+<style scoped>
+.admin-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.settings-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.settings-hero-copy p,
+.settings-hero-side p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.settings-hero-side {
+  display: grid;
+  gap: 12px;
+  min-width: 280px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.settings-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.settings-hero-cardline strong {
+  color: var(--admin-ink);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
+  .settings-hero {
+    flex-direction: column;
+  }
+
+  .settings-hero-side {
+    min-width: 0;
+  }
+}
+</style>

@@ -61,6 +61,14 @@ function truncateContent(content, maxLen = 120) {
   return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text;
 }
 
+function formatDuration(duration) {
+  if (duration === null || duration === undefined) return "--";
+  const value = Number(duration);
+  if (!Number.isFinite(value)) return String(duration);
+  if (value < 1000) return `${value}ms`;
+  return `${(value / 1000).toFixed(2)}s`;
+}
+
 function statusDotClass(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "success") return "is-success";
@@ -72,6 +80,33 @@ function statusDotClass(status) {
 const chunks = computed(() => pageRecords(chunksPage.value));
 const selectedList = computed(() => Array.from(selectedIds.value));
 const recentLogs = computed(() => pageRecords(logsPage.value).slice(0, 3));
+const allSelected = computed(() => chunks.value.length > 0 && chunks.value.every((item) => selectedIds.value.has(String(item.id))));
+const latestLog = computed(() => recentLogs.value[0] || null);
+const latestChunk = computed(() => chunks.value[0] || null);
+const currentFilterLabel = computed(() => {
+  if (enabledFilter.value === "1") return "已启用";
+  if (enabledFilter.value === "0") return "已禁用";
+  return "全部";
+});
+const latestChunkLabel = computed(() => {
+  if (!latestChunk.value) return "--";
+  return latestChunk.value.chunkIndex ?? latestChunk.value.id ?? "--";
+});
+const latestChunkSummary = computed(() => {
+  if (!latestChunk.value) return "--";
+  return `${latestChunkLabel.value} · ${isEnabled(latestChunk.value) ? "启用" : "禁用"}`;
+});
+const latestLogSummary = computed(() => {
+  if (!latestLog.value) return "--";
+  return `${latestLog.value.status || "unknown"} · ${formatDuration(
+    latestLog.value.totalDuration ?? latestLog.value.chunkDuration ?? latestLog.value.extractDuration
+  )}`;
+});
+const averageChunkChars = computed(() => {
+  if (chunks.value.length === 0) return 0;
+  const total = chunks.value.reduce((sum, item) => sum + Number(item.charCount || 0), 0);
+  return Math.round(total / chunks.value.length);
+});
 
 const stats = computed(() => {
   const records = chunks.value;
@@ -161,8 +196,8 @@ function toggleSelect(id) {
 function toggleSelectAll() {
   const records = chunks.value;
   const next = new Set(selectedIds.value);
-  const allSelected = records.length > 0 && records.every((item) => next.has(String(item.id)));
-  if (allSelected) {
+  const everySelected = records.length > 0 && records.every((item) => next.has(String(item.id)));
+  if (everySelected) {
     records.forEach((item) => next.delete(String(item.id)));
   } else {
     records.forEach((item) => next.add(String(item.id)));
@@ -303,10 +338,18 @@ onMounted(() => {
 <template>
   <section class="admin-page admin-chunks">
     <PageHeader
-      tag="Knowledge Chunks"
+      tag="切片管理"
       :title="doc?.docName || '切片管理'"
       :description="`文档 ID: ${docId}${kbId ? ` · 知识库 ${kbId}` : ''}`"
     >
+      <template #meta>
+        <div class="admin-header-meta">
+          <span class="admin-badge is-muted">筛选：{{ currentFilterLabel }}</span>
+          <span class="admin-badge is-muted">已选：{{ selectedIds.size }}</span>
+          <span class="admin-badge is-muted">最新切片：{{ latestChunkSummary }}</span>
+          <span class="admin-badge is-muted">最近日志：{{ latestLogSummary }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="router.push(`/admin/knowledge/${kbId}`)">
           返回文档
@@ -336,8 +379,30 @@ onMounted(() => {
         <p>围绕文档切片进行预览、编辑、启停和批量操作。</p>
       </div>
       <div class="chunks-hero-side">
-        <span class="admin-badge is-outline">{{ doc?.docName || "当前文档" }}</span>
-        <p>通过筛选、批量处理和日志查看，快速掌握当前切片集状态。</p>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">当前文档</span>
+          <strong>{{ doc?.docName || "当前文档" }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">当前筛选</span>
+          <strong>{{ currentFilterLabel }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">已选数量</span>
+          <strong>{{ selectedIds.size }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">平均字符</span>
+          <strong>{{ averageChunkChars || "--" }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">最新切片</span>
+          <strong>{{ latestChunkSummary }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">最近日志</span>
+          <strong>{{ latestLogSummary }}</strong>
+        </div>
       </div>
     </section>
 
@@ -379,7 +444,7 @@ onMounted(() => {
                 <th class="w-[48px]">
                   <input
                     type="checkbox"
-                    :checked="chunks.length > 0 && chunks.every((item) => selectedIds.has(String(item.id)))"
+                    :checked="allSelected"
                     @change="toggleSelectAll"
                   />
                 </th>
@@ -452,17 +517,30 @@ onMounted(() => {
             <div><dt>切片数</dt><dd>{{ pageTotal(chunksPage) }}</dd></div>
             <div><dt>已启用</dt><dd>{{ chunks.filter((item) => isEnabled(item)).length }}</dd></div>
             <div><dt>已选中</dt><dd>{{ selectedIds.size }}</dd></div>
+            <div><dt>平均字符</dt><dd>{{ averageChunkChars || "--" }}</dd></div>
+            <div><dt>当前筛选</dt><dd>{{ currentFilterLabel }}</dd></div>
+            <div><dt>最新切片</dt><dd>{{ latestChunkSummary }}</dd></div>
           </div>
         </article>
 
         <article class="admin-detail-card">
           <h3>最近日志</h3>
           <p class="admin-detail-card-desc">切片执行记录会显示在这里。</p>
+          <div v-if="latestLog" class="admin-kv admin-kv--compact">
+            <div><dt>状态</dt><dd>{{ latestLog.status || "--" }}</dd></div>
+            <div><dt>切片数</dt><dd>{{ latestLog.chunkCount ?? "--" }}</dd></div>
+            <div>
+              <dt>耗时</dt>
+              <dd>{{ formatDuration(latestLog.totalDuration ?? latestLog.chunkDuration ?? latestLog.extractDuration) }}</dd>
+            </div>
+            <div><dt>备注</dt><dd>{{ latestLog.remark || latestLog.errorMessage || "--" }}</dd></div>
+          </div>
           <div v-if="recentLogs.length === 0" class="admin-empty-sm">暂无日志</div>
           <div v-else class="admin-card-list">
             <div v-for="item in recentLogs" :key="item.id" class="admin-card-item">
               <h3>{{ item.status || "unknown" }}</h3>
               <p>{{ item.chunkStrategy || item.processMode || "--" }}</p>
+              <p>切片数 {{ item.chunkCount ?? "--" }} · 耗时 {{ formatDuration(item.totalDuration ?? item.chunkDuration ?? item.extractDuration) }}</p>
               <p>{{ formatDateTime(item.createTime || item.startTime) }}</p>
               <p>{{ item.remark || item.errorMessage || "--" }}</p>
             </div>
@@ -482,6 +560,8 @@ onMounted(() => {
           <div class="admin-kv">
             <div><dt>字符数</dt><dd>{{ previewTarget.charCount ?? "--" }}</dd></div>
             <div><dt>Token</dt><dd>{{ previewTarget.tokenCount ?? "--" }}</dd></div>
+            <div><dt>哈希</dt><dd>{{ previewTarget.contentHash || "--" }}</dd></div>
+            <div><dt>创建时间</dt><dd>{{ formatDateTime(previewTarget.createTime || previewTarget.updateTime) }}</dd></div>
             <div>
               <dt>状态</dt>
               <dd><span :class="['admin-badge', enabledBadgeClass(previewTarget)]">{{ isEnabled(previewTarget) ? "启用" : "禁用" }}</span></dd>
@@ -559,11 +639,49 @@ onMounted(() => {
   line-height: 1.7;
 }
 
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .chunks-hero-side {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   align-content: start;
   min-width: 280px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.chunks-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.chunks-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chunks-hero-cardline strong {
+  color: var(--admin-ink);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.admin-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .admin-chunk-preview {
@@ -579,6 +697,10 @@ onMounted(() => {
 @media (max-width: 960px) {
   .chunks-hero {
     flex-direction: column;
+  }
+
+  .chunks-hero-side {
+    min-width: 0;
   }
 }
 </style>

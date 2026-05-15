@@ -79,6 +79,24 @@ const summaryCards = computed(() => [
   }
 ]);
 
+const latestRun = computed(() => runs.value[0] || null);
+const activeFilterCount = computed(() =>
+  [filters.value.traceId, filters.value.conversationId, filters.value.taskId, filters.value.status].filter(Boolean).length
+);
+const activeFilterLabel = computed(() =>
+  filters.value.traceId || filters.value.conversationId || filters.value.taskId || filters.value.status
+    ? `${activeFilterCount.value} 项筛选`
+    : "全部链路"
+);
+
+function formatDurationLabel(value) {
+  const duration = Number(value ?? 0);
+  if (!Number.isFinite(duration) || duration <= 0) return "--";
+  if (duration < 1000) return `${Math.round(duration)}ms`;
+  if (duration < 60_000) return `${(duration / 1000).toFixed(2)}s`;
+  return `${(duration / 60_000).toFixed(1)}m`;
+}
+
 async function loadRuns() {
   const requestId = ++runsRequestId.value;
   loading.value = true;
@@ -133,7 +151,7 @@ function goNextPage() {
 }
 
 function openRun(traceId) {
-  router.push(`/admin/traces/${traceId}`);
+  router.push(`/admin/traces/${encodeURIComponent(traceId)}`);
 }
 
 watch(
@@ -155,12 +173,60 @@ onMounted(() => {
       title="链路追踪"
       description="统一查看运行列表、筛选条件和耗时分布，点击任意一条记录可进入详情页查看节点执行轨迹。"
     >
+      <template #meta>
+        <div class="trace-header-meta">
+          <span class="admin-badge is-muted">筛选：{{ activeFilterLabel }}</span>
+          <span class="admin-badge is-muted">当前页：{{ runs.length }}</span>
+          <span class="admin-badge is-muted">总数：{{ total }}</span>
+          <span class="admin-badge is-muted">
+            最新：{{ latestRun?.traceName || latestRun?.traceId || "--" }}
+            <template v-if="latestRun">· {{ formatDurationLabel(latestRun.durationMs) }}</template>
+          </span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
       </template>
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <section class="admin-detail-card trace-hero-card">
+      <div class="trace-hero-copy">
+        <p class="trace-hero-tag">Trace Overview</p>
+        <div class="trace-hero-title-row">
+          <h2>链路追踪</h2>
+          <span class="admin-badge is-muted">Page {{ pageNo }} / {{ pages }}</span>
+        </div>
+        <p class="trace-hero-subtitle">查看当前筛选条件下的运行记录，并快速跳转到单次 Trace 详情。</p>
+        <div class="trace-hero-meta">
+          <span>Trace {{ filters.traceId || "--" }}</span>
+          <span>Conversation {{ filters.conversationId || "--" }}</span>
+          <span>Task {{ filters.taskId || "--" }}</span>
+          <span>Status {{ filters.status || "ALL" }}</span>
+        </div>
+      </div>
+
+      <div class="trace-hero-side">
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">Current</span>
+          <strong>{{ runs.length }}</strong>
+        </div>
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">Total</span>
+          <strong>{{ total }}</strong>
+        </div>
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">Pages</span>
+          <strong>{{ pages }}</strong>
+        </div>
+        <div v-if="latestRun" class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">Latest</span>
+          <strong>{{ latestRun.traceName || latestRun.traceId }}</strong>
+          <span class="trace-hero-cardmeta">{{ formatDurationLabel(latestRun.durationMs) }}</span>
+        </div>
+      </div>
+    </section>
 
     <div class="admin-stat-grid">
       <StatCard
@@ -172,6 +238,42 @@ onMounted(() => {
         :tone="card.tone"
       />
     </div>
+
+    <section class="admin-detail-card trace-filter-summary">
+      <div class="trace-filter-summary__copy">
+        <p class="trace-hero-tag">Trace Overview</p>
+        <h2>当前筛选 {{ activeFilterCount }} 项</h2>
+        <p>沿着筛选条件快速定位目标运行记录，再进入单条详情查看节点时间线、请求响应和错误信息。</p>
+      </div>
+      <div class="trace-filter-summary__grid">
+        <div>
+          <span class="trace-hero-cardlabel">Trace ID</span>
+          <strong>{{ filters.traceId || "--" }}</strong>
+        </div>
+        <div>
+          <span class="trace-hero-cardlabel">Conversation</span>
+          <strong>{{ filters.conversationId || "--" }}</strong>
+        </div>
+        <div>
+          <span class="trace-hero-cardlabel">Task</span>
+          <strong>{{ filters.taskId || "--" }}</strong>
+        </div>
+        <div>
+          <span class="trace-hero-cardlabel">Status</span>
+          <strong>{{ filters.status || "ALL" }}</strong>
+        </div>
+      </div>
+      <div v-if="latestRun" class="trace-filter-summary__latest">
+        <span class="trace-hero-cardlabel">Latest</span>
+        <strong>{{ latestRun.traceName || latestRun.traceId }}</strong>
+        <p>
+          {{ latestRun.conversationId || "--" }} ·
+          {{ latestRun.taskId || "--" }} ·
+          {{ latestRun.status || "--" }} ·
+          {{ formatDurationLabel(latestRun.durationMs) }}
+        </p>
+      </div>
+    </section>
 
     <section class="admin-split">
       <article class="admin-table-card">
@@ -237,3 +339,157 @@ onMounted(() => {
     </section>
   </section>
 </template>
+
+<style scoped>
+.trace-hero-card {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.trace-hero-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.trace-hero-tag {
+  margin: 0 0 8px;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.trace-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.trace-hero-title-row h2 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.trace-hero-subtitle {
+  margin: 12px 0 0;
+  color: var(--admin-ink-soft);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.trace-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 14px;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.trace-hero-side {
+  flex: 0 0 230px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.95));
+}
+
+.trace-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.trace-hero-cardmeta {
+  color: var(--admin-ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.trace-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.trace-filter-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.trace-filter-summary__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.trace-filter-summary__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.trace-filter-summary__copy p,
+.trace-filter-summary__latest p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-filter-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trace-filter-summary__grid > div,
+.trace-filter-summary__latest {
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.trace-filter-summary__grid strong,
+.trace-filter-summary__latest strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--admin-ink);
+  font-size: 15px;
+}
+
+.trace-filter-summary__latest {
+  display: grid;
+  gap: 4px;
+}
+
+.trace-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .trace-hero-card {
+    flex-direction: column;
+  }
+
+  .trace-hero-side {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .trace-filter-summary__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+</style>

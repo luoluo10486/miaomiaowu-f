@@ -34,6 +34,21 @@ const form = ref(buildEmptyForm());
 
 const rows = computed(() => flattenIntentTree(tree.value));
 const currentNode = computed(() => rows.value.find((row) => row.id === nodeId.value) || null);
+const nodeSummary = computed(() => {
+  if (!currentNode.value) return null;
+  const resource =
+    currentNode.value.kind === 0
+      ? currentNode.value.collectionName || "--"
+      : currentNode.value.kind === 2
+        ? currentNode.value.mcpToolId || "--"
+        : "系统意图";
+  return {
+    pathText: currentNode.value.pathText || "--",
+    childCount: currentNode.value.childCount ?? 0,
+    exampleCount: currentNode.value.exampleCount ?? parseExamples(currentNode.value.examples).length,
+    resource
+  };
+});
 
 const excludedCodes = computed(() => {
   if (!currentNode.value) return new Set();
@@ -140,8 +155,20 @@ async function loadTree() {
 
 async function handleSubmit() {
   if (!currentNode.value) return;
+  if (!form.value.name.trim()) {
+    errorText.value = "请输入节点名称。";
+    return;
+  }
+  if (form.value.name.trim().length > 50) {
+    errorText.value = "节点名称不能超过 50 个字符。";
+    return;
+  }
   if (form.value.kind === 2 && !form.value.mcpToolId.trim()) {
     errorText.value = "MCP 节点必须填写工具 ID。";
+    return;
+  }
+  if (form.value.topK !== undefined && Number(form.value.topK) < 1) {
+    errorText.value = "TopK 必须大于 0。";
     return;
   }
 
@@ -191,7 +218,7 @@ onMounted(async () => {
 <template>
   <section class="admin-page">
     <PageHeader
-      tag="Intent Tree"
+      tag="Intent Edit"
       title="编辑意图节点"
       :description="currentNode ? `${currentNode.name || '--'} · ${currentNode.intentCode || '--'}` : '选择一个节点继续编辑。'"
     >
@@ -202,6 +229,23 @@ onMounted(async () => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <section class="admin-detail-card intent-edit-hero">
+      <div class="intent-edit-hero__copy">
+        <p class="trace-hero-tag">Intent Overview</p>
+        <h2>{{ currentNode?.name || "--" }}</h2>
+        <p>
+          {{ nodeSummary?.pathText || "--" }} · {{ currentNode?.intentCode || "--" }} ·
+          {{ currentNode?.enabled === 1 || currentNode?.enabled === true ? "已启用" : "已禁用" }}
+        </p>
+      </div>
+      <div class="intent-edit-hero__grid">
+        <div><span>父节点</span><strong>{{ currentNode?.parentName || currentNode?.parentCode || "ROOT" }}</strong></div>
+        <div><span>资源</span><strong>{{ nodeSummary?.resource || "--" }}</strong></div>
+        <div><span>子节点</span><strong>{{ nodeSummary?.childCount ?? 0 }}</strong></div>
+        <div><span>示例</span><strong>{{ nodeSummary?.exampleCount ?? 0 }}</strong></div>
+      </div>
+    </section>
 
     <section class="admin-split">
       <article class="admin-table-card">
@@ -355,3 +399,72 @@ onMounted(async () => {
     </section>
   </section>
 </template>
+
+<style scoped>
+.intent-edit-hero {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.intent-edit-hero__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.intent-edit-hero__copy h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.intent-edit-hero__copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intent-edit-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.intent-edit-hero__grid > div {
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-md);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.intent-edit-hero__grid span {
+  display: block;
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intent-edit-hero__grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--admin-ink);
+  font-size: 15px;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
+  .intent-edit-hero__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+</style>

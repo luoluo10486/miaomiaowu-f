@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
@@ -30,11 +30,20 @@ const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
 
 const mappings = computed(() => pageRecords(page.value));
+const currentPageLabel = computed(() => `${pageNo.value} / ${pageCount(page.value)}`);
 const selectedMapping = computed(() => {
   if (selectedMappingId.value) {
     return mappings.value.find((item) => item.id === selectedMappingId.value) || mappings.value[0] || null;
   }
   return mappings.value[0] || null;
+});
+const latestMapping = computed(() => mappings.value[0] || null);
+const selectedMappingLabel = computed(() =>
+  selectedMapping.value ? `${selectedMapping.value.sourceTerm} → ${selectedMapping.value.targetTerm}` : "--"
+);
+const latestMappingLabel = computed(() => {
+  if (!latestMapping.value) return "--";
+  return `${latestMapping.value.sourceTerm} → ${latestMapping.value.targetTerm}`;
 });
 
 const stats = computed(() => [
@@ -206,11 +215,6 @@ async function handleDelete() {
   }
 }
 
-watch(keyword, () => {
-  pageNo.value = 1;
-  void loadData();
-});
-
 onMounted(() => {
   void loadData();
 });
@@ -223,6 +227,14 @@ onMounted(() => {
       title="关键词映射"
       description="管理查询归一化规则，支持搜索、编辑、启用和删除。"
     >
+      <template #meta>
+        <div class="admin-header-meta">
+          <span class="admin-badge is-muted">筛选：{{ keyword || "全部词条" }}</span>
+          <span class="admin-badge is-muted">当前页：{{ mappings.length }}</span>
+          <span class="admin-badge is-muted">选中：{{ selectedMappingLabel }}</span>
+          <span class="admin-badge is-muted">最新：{{ latestMappingLabel }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新增映射</button>
@@ -233,6 +245,32 @@ onMounted(() => {
 
     <section class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
+    </section>
+
+    <section class="admin-detail-card mappings-hero">
+      <div class="mappings-hero-copy">
+        <p class="trace-hero-tag">Query Normalization</p>
+        <h2>关键词映射总览</h2>
+        <p>维护原始词到目标词的映射规则，快速定位当前筛选、选中词条和最新规则。</p>
+      </div>
+      <div class="mappings-hero-side">
+        <div class="mappings-hero-cardline">
+          <span class="mappings-hero-cardlabel">当前筛选</span>
+          <strong>{{ keyword || "全部词条" }}</strong>
+        </div>
+        <div class="mappings-hero-cardline">
+          <span class="mappings-hero-cardlabel">当前页</span>
+          <strong>{{ currentPageLabel }}</strong>
+        </div>
+        <div class="mappings-hero-cardline">
+          <span class="mappings-hero-cardlabel">选中规则</span>
+          <strong>{{ selectedMappingLabel }}</strong>
+        </div>
+        <div class="mappings-hero-cardline">
+          <span class="mappings-hero-cardlabel">最新规则</span>
+          <strong>{{ latestMappingLabel }}</strong>
+        </div>
+      </div>
     </section>
 
     <section class="admin-split">
@@ -323,6 +361,10 @@ onMounted(() => {
           <h3>规则预览</h3>
           <p class="admin-detail-card-desc">点击任意一行查看映射规则的完整细节。</p>
           <div v-if="selectedMapping" class="admin-kv">
+            <div class="admin-mapping-preview">
+              <p class="admin-cell-title">{{ selectedMapping.sourceTerm }}</p>
+              <p class="admin-cell-subtitle is-secondary">→ {{ selectedMapping.targetTerm }}</p>
+            </div>
             <div><dt>原始词</dt><dd>{{ selectedMapping.sourceTerm }}</dd></div>
             <div><dt>目标词</dt><dd>{{ selectedMapping.targetTerm }}</dd></div>
             <div><dt>匹配类型</dt><dd>{{ selectedMapping.matchType }}</dd></div>
@@ -400,5 +442,83 @@ onMounted(() => {
 <style scoped>
 .is-active-row {
   background: rgba(79, 70, 229, 0.05);
+}
+
+.admin-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-mapping-preview {
+  grid-column: 1 / -1;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--admin-line);
+  border-radius: 14px;
+  background: var(--admin-bg-soft);
+}
+
+.mappings-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.mappings-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.mappings-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.mappings-hero-copy p,
+.mappings-hero-side p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.mappings-hero-side {
+  display: grid;
+  gap: 12px;
+  min-width: 280px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.mappings-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.mappings-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mappings-hero-cardline strong {
+  color: var(--admin-ink);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+@media (max-width: 960px) {
+  .mappings-hero {
+    flex-direction: column;
+  }
+
+  .mappings-hero-side {
+    min-width: 0;
+  }
 }
 </style>

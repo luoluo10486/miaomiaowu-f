@@ -18,11 +18,17 @@ import { getRagTraceDetail, getRagTraceNodes } from "../../services/ragTraceServ
 const route = useRoute();
 const router = useRouter();
 const traceId = computed(() => String(route.params.traceId || ""));
+const displayTraceId = computed(() => {
+  const value = traceId.value || "--";
+  if (value.length <= 28) return value;
+  return `${value.slice(0, 12)}...${value.slice(-8)}`;
+});
 const loading = ref(false);
 const errorText = ref("");
 const detail = ref(null);
 const nodes = ref([]);
 const detailRequestId = ref(0);
+const isInitialLoading = computed(() => loading.value && !detail.value);
 
 const run = computed(() => detail.value?.run || {});
 const traceName = computed(() => run.value.traceName || "未命名链路");
@@ -125,6 +131,18 @@ const nodeStats = computed(() => {
   const sorted = [...nodes.value].sort((a, b) => resolveNodeDuration(b) - resolveNodeDuration(a));
   return { total, success, failed, running, avgDuration, topSlowestId: sorted[0]?.nodeId || "" };
 });
+const headerMetaTraceId = computed(() => displayTraceId.value);
+const slowestNodeLabel = computed(() => {
+  if (!nodeStats.value.topSlowestId) return "--";
+  const target = nodes.value.find((node) => node.nodeId === nodeStats.value.topSlowestId);
+  return target?.nodeName || target?.nodeId || "--";
+});
+const traceSummaryRows = computed(() => [
+  { label: "节点总数", value: nodeStats.value.total },
+  { label: "成功 / 失败 / 运行中", value: `${nodeStats.value.success} / ${nodeStats.value.failed} / ${nodeStats.value.running}` },
+  { label: "平均耗时", value: formatDuration(nodeStats.value.avgDuration) },
+  { label: "最慢节点", value: slowestNodeLabel.value }
+]);
 
 const timeline = computed(() => {
   const source = Array.isArray(nodes.value) ? nodes.value : [];
@@ -220,9 +238,17 @@ onMounted(() => {
       :title="traceId ? `Trace ${traceId}` : 'Trace 详情'"
       description="查看链路运行摘要、请求响应、错误信息和节点时间线，快速定位异常与耗时瓶颈。"
     >
+      <template #meta>
+        <div class="trace-header-meta">
+          <span class="admin-badge is-muted">Trace：{{ headerMetaTraceId }}</span>
+          <span class="admin-badge is-muted">状态：{{ traceStatus }}</span>
+          <span class="admin-badge is-muted">节点：{{ nodeStats.total }}</span>
+          <span class="admin-badge is-muted">耗时：{{ formatDuration(run.durationMs ?? undefined) }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="router.push('/admin/traces')">返回列表</button>
-        <button class="admin-button--ghost" type="button" @click="copyTraceId" :disabled="!traceId">复制 ID</button>
+        <button class="admin-button--ghost" type="button" @click="copyTraceId" :disabled="!traceId">复制 Trace ID</button>
         <button class="admin-button" type="button" :disabled="loading" @click="loadTraceDetail">
           {{ loading ? "刷新中..." : "刷新" }}
         </button>
@@ -230,6 +256,11 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <div v-if="isInitialLoading" class="trace-loading-banner">
+      <span class="trace-loading-dot" />
+      <span>加载 Trace 详情中...</span>
+    </div>
 
     <section class="admin-detail-card trace-hero-card">
       <div class="trace-hero-copy">
@@ -240,7 +271,7 @@ onMounted(() => {
         </div>
         <p class="trace-hero-subtitle">
           <button class="trace-id-chip" type="button" :disabled="!traceId" @click="copyTraceId">
-            {{ traceId || "--" }}
+            {{ displayTraceId }}
           </button>
         </p>
         <div class="trace-hero-meta">
@@ -261,6 +292,10 @@ onMounted(() => {
         <div class="trace-hero-cardline">
           <span class="trace-hero-cardlabel">Duration</span>
           <strong>{{ formatDuration(run.durationMs ?? undefined) }}</strong>
+        </div>
+        <div class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">Slowest</span>
+          <strong>{{ slowestNodeLabel }}</strong>
         </div>
       </div>
     </section>
@@ -295,7 +330,7 @@ onMounted(() => {
           <div><dt>节点数</dt><dd>{{ nodeStats.total }}</dd></div>
           <div><dt>成功 / 失败 / 运行中</dt><dd>{{ nodeStats.success }} / {{ nodeStats.failed }} / {{ nodeStats.running }}</dd></div>
           <div><dt>节点平均耗时</dt><dd>{{ formatDuration(nodeStats.avgDuration) }}</dd></div>
-          <div><dt>最慢节点</dt><dd class="is-code">{{ nodeStats.topSlowestId || "--" }}</dd></div>
+          <div><dt>最慢节点</dt><dd>{{ slowestNodeLabel }}</dd></div>
         </div>
       </article>
     </section>
@@ -425,6 +460,27 @@ onMounted(() => {
   margin: 12px 0 0;
 }
 
+.trace-loading-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.trace-loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--admin-accent);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+  animation: tracePulse 1.4s ease-in-out infinite;
+}
+
 .trace-id-chip {
   display: inline-flex;
   align-items: center;
@@ -456,6 +512,13 @@ onMounted(() => {
   margin-top: 14px;
   color: var(--admin-muted);
   font-size: 13px;
+}
+
+.trace-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .trace-hero-side {
@@ -524,6 +587,19 @@ onMounted(() => {
 .admin-pre.is-error {
   color: #b91c1c;
   background: #fef2f2;
+}
+
+@keyframes tracePulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
 }
 
 @media (max-width: 960px) {

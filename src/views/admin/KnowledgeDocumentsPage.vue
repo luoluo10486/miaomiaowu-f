@@ -151,12 +151,24 @@ function buildConfigPayload(config, strategyValue) {
   return payload;
 }
 
+const latestLog = computed(() => recentLogs.value[0] || null);
+const detailSourceType = computed(() => String(detailTarget.value?.sourceType || "").toLowerCase());
+const detailIsUrlSource = computed(() => detailSourceType.value === "url");
+
 function formatSize(size) {
   if (size === null || size === undefined) return "--";
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
   return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function formatDuration(duration) {
+  if (duration === null || duration === undefined) return "--";
+  const value = Number(duration);
+  if (!Number.isFinite(value)) return String(duration);
+  if (value < 1000) return `${value}ms`;
+  return `${(value / 1000).toFixed(2)}s`;
 }
 
 function formatSourceLabel(sourceType) {
@@ -192,6 +204,19 @@ function statusDotClass(status) {
 }
 
 const documents = computed(() => pageRecords(page.value));
+const latestDocument = computed(() => documents.value[0] || null);
+const visibleDocumentCount = computed(() => pageTotal(page.value));
+const currentStatusLabel = computed(() => statusFilter.value || "全部");
+const currentFilterSummary = computed(() => {
+  const parts = [];
+  if (statusFilter.value) parts.push(`状态: ${statusFilter.value}`);
+  if (keyword.value) parts.push(`关键词: ${keyword.value}`);
+  return parts.length > 0 ? parts.join(" · ") : "全部";
+});
+const latestDocumentLabel = computed(() => {
+  if (!latestDocument.value) return "--";
+  return `${latestDocument.value.docName || latestDocument.value.id} · ${formatSourceLabel(latestDocument.value.sourceType)}`;
+});
 
 const stats = computed(() => {
   const records = documents.value;
@@ -309,14 +334,15 @@ function openDetailDialog(item) {
   getKnowledgeDocument(item.id)
     .then((detail) => {
       detailTarget.value = detail;
+      const isUrlSource = String(detail.sourceType || "").toLowerCase() === "url";
       detailForm.value = {
         docName: detail.docName || "",
         processMode: detail.processMode || "chunk",
         chunkStrategy: detail.chunkStrategy || "structure_aware",
         pipelineId: detail.pipelineId ? String(detail.pipelineId) : "",
-        sourceLocation: detail.sourceLocation || "",
-        scheduleEnabled: Boolean(detail.scheduleEnabled),
-        scheduleCron: detail.scheduleCron || ""
+        sourceLocation: isUrlSource ? detail.sourceLocation || "" : "",
+        scheduleEnabled: isUrlSource ? Boolean(detail.scheduleEnabled) : false,
+        scheduleCron: isUrlSource ? detail.scheduleCron || "" : ""
       };
       detailChunkConfig.value = parseChunkConfig(detail.chunkConfig);
       syncConfigDefaults(detailChunkConfig, detailForm.value.chunkStrategy, true);
@@ -339,12 +365,13 @@ function closeDetailDialog() {
 async function handleUploadSubmit() {
   const sourceType = String(uploadForm.value.sourceType || "file").toLowerCase();
   const processMode = String(uploadForm.value.processMode || "chunk").toLowerCase();
+  const isUrlSource = sourceType === "url";
 
   if (sourceType === "file" && !uploadFile.value) {
     errorText.value = "请选择要上传的文件。";
     return;
   }
-  if (sourceType === "url" && !uploadForm.value.sourceLocation.trim()) {
+  if (isUrlSource && !uploadForm.value.sourceLocation.trim()) {
     errorText.value = "请输入文档地址。";
     return;
   }
@@ -355,12 +382,12 @@ async function handleUploadSubmit() {
   try {
     const payload = {
       sourceType,
-      sourceLocation: uploadForm.value.sourceLocation.trim() || null,
+      sourceLocation: isUrlSource ? uploadForm.value.sourceLocation.trim() || null : null,
       processMode,
       chunkStrategy: processMode === "chunk" ? uploadForm.value.chunkStrategy : undefined,
       pipelineId: processMode === "pipeline" ? uploadForm.value.pipelineId || null : null,
-      scheduleEnabled: uploadForm.value.scheduleEnabled,
-      scheduleCron: uploadForm.value.scheduleEnabled ? uploadForm.value.scheduleCron.trim() || null : null
+      scheduleEnabled: isUrlSource && uploadForm.value.scheduleEnabled,
+      scheduleCron: isUrlSource && uploadForm.value.scheduleEnabled ? uploadForm.value.scheduleCron.trim() || null : null
     };
 
     if (sourceType === "file") {
@@ -401,9 +428,12 @@ async function handleDetailSave() {
       processMode: detailForm.value.processMode,
       chunkStrategy: detailForm.value.processMode === "chunk" ? detailForm.value.chunkStrategy : undefined,
       pipelineId: detailForm.value.processMode === "pipeline" ? detailForm.value.pipelineId || null : null,
-      sourceLocation: detailForm.value.sourceLocation.trim() || null,
-      scheduleEnabled: detailForm.value.scheduleEnabled,
-      scheduleCron: detailForm.value.scheduleEnabled ? detailForm.value.scheduleCron.trim() || null : null
+      sourceLocation: detailIsUrlSource.value ? detailForm.value.sourceLocation.trim() || null : null,
+      scheduleEnabled: detailIsUrlSource.value && detailForm.value.scheduleEnabled,
+      scheduleCron:
+        detailIsUrlSource.value && detailForm.value.scheduleEnabled
+          ? detailForm.value.scheduleCron.trim() || null
+          : null
     };
 
     if (detailForm.value.processMode === "chunk") {
@@ -553,10 +583,18 @@ onMounted(() => {
 <template>
   <section class="admin-page admin-documents">
     <PageHeader
-      tag="Knowledge Docs"
+      tag="知识文档"
       :title="kb?.name || '文档管理'"
       :description="`知识库 ${kbId}${kb?.collectionName ? ` · ${kb.collectionName}` : ''}`"
     >
+      <template #meta>
+        <div class="admin-header-meta">
+          <span class="admin-badge is-muted">Collection：{{ kb?.collectionName || "--" }}</span>
+          <span class="admin-badge is-muted">筛选：{{ currentFilterSummary }}</span>
+          <span class="admin-badge is-muted">文档：{{ visibleDocumentCount }}</span>
+          <span class="admin-badge is-muted">最新：{{ latestDocumentLabel }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="router.push('/admin/knowledge')">返回知识库</button>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
@@ -586,8 +624,22 @@ onMounted(() => {
         <p>在一个页面里完成上传、详情编辑、切片触发和日志追踪。</p>
       </div>
       <div class="docs-hero-side">
-        <span class="admin-badge is-outline">{{ kb?.collectionName || "未设置 Collection" }}</span>
-        <p>支持 file / URL 上传、chunk / pipeline 两种处理模式，以及定时同步配置。</p>
+        <div class="docs-hero-cardline">
+          <span class="docs-hero-cardlabel">Collection</span>
+          <strong>{{ kb?.collectionName || "未设置 Collection" }}</strong>
+        </div>
+        <div class="docs-hero-cardline">
+          <span class="docs-hero-cardlabel">当前筛选</span>
+          <strong>{{ currentFilterSummary }}</strong>
+        </div>
+        <div class="docs-hero-cardline">
+          <span class="docs-hero-cardlabel">文档总数</span>
+          <strong>{{ visibleDocumentCount }}</strong>
+        </div>
+        <div class="docs-hero-cardline">
+          <span class="docs-hero-cardlabel">最新文档</span>
+          <strong>{{ latestDocumentLabel }}</strong>
+        </div>
       </div>
     </section>
 
@@ -712,18 +764,31 @@ onMounted(() => {
             <div><dt>Collection</dt><dd>{{ kb?.collectionName || "--" }}</dd></div>
             <div><dt>文档数</dt><dd>{{ pageTotal(page) }}</dd></div>
             <div><dt>策略数</dt><dd>{{ metaLoading ? "--" : strategies.length }}</dd></div>
+            <div><dt>当前筛选</dt><dd>{{ currentFilterSummary }}</dd></div>
+            <div><dt>最近文档</dt><dd>{{ latestDocumentLabel }}</dd></div>
           </div>
         </article>
 
         <article class="admin-detail-card">
           <h3>最近日志</h3>
           <p class="admin-detail-card-desc">打开日志弹窗可以查看完整切片记录。</p>
+          <div v-if="latestLog" class="admin-kv admin-kv--compact">
+            <div><dt>状态</dt><dd>{{ latestLog.status || "--" }}</dd></div>
+            <div><dt>切片数</dt><dd>{{ latestLog.chunkCount ?? "--" }}</dd></div>
+            <div>
+              <dt>耗时</dt>
+              <dd>{{ formatDuration(latestLog.totalDuration ?? latestLog.chunkDuration ?? latestLog.extractDuration) }}</dd>
+            </div>
+            <div><dt>开始时间</dt><dd>{{ formatDateTime(latestLog.startTime || latestLog.createTime) }}</dd></div>
+          </div>
           <div v-if="recentLogs.length === 0" class="admin-empty-sm">暂无日志</div>
           <div v-else class="admin-card-list">
             <div v-for="item in recentLogs" :key="item.id" class="admin-card-item">
               <h3>{{ item.status || "unknown" }}</h3>
               <p>{{ item.chunkStrategy || item.processMode || "--" }}</p>
+              <p>切片数 {{ item.chunkCount ?? "--" }} · 耗时 {{ formatDuration(item.totalDuration ?? item.chunkDuration ?? item.extractDuration) }}</p>
               <p>{{ formatDateTime(item.createTime || item.startTime) }}</p>
+              <p>{{ item.remark || item.errorMessage || "--" }}</p>
             </div>
           </div>
         </article>
@@ -841,11 +906,17 @@ onMounted(() => {
               </option>
             </select>
           </div>
-          <div class="admin-dialog-field">
-            <label>源地址</label>
-            <input v-model="detailForm.sourceLocation" class="admin-input" placeholder="可选" />
+          <div class="admin-kv admin-kv--compact">
+            <div><dt>来源类型</dt><dd>{{ formatSourceLabel(detailTarget?.sourceType) }}</dd></div>
+            <div><dt>当前状态</dt><dd>{{ detailTarget?.status || "--" }}</dd></div>
+            <div><dt>处理模式</dt><dd>{{ detailForm.processMode || "--" }}</dd></div>
+            <div><dt>更新时间</dt><dd>{{ formatDate(detailTarget?.updateTime || detailTarget?.createTime) }}</dd></div>
           </div>
-          <div class="admin-form-grid-2">
+          <div v-if="detailIsUrlSource" class="admin-form-grid-2">
+            <div class="admin-dialog-field">
+              <label>源地址</label>
+              <input v-model="detailForm.sourceLocation" class="admin-input" placeholder="https://example.com/doc" />
+            </div>
             <div class="admin-dialog-field">
               <label>定时同步</label>
               <select v-model="detailForm.scheduleEnabled" class="admin-select">
@@ -858,6 +929,7 @@ onMounted(() => {
               <input v-model="detailForm.scheduleCron" class="admin-input" placeholder="0 0 * * ?" />
             </div>
           </div>
+          <div v-else class="admin-empty-sm">本地文件来源不展示 URL 和定时同步配置。</div>
           <div v-if="detailForm.processMode === 'chunk' && detailConfigFields.length > 0" class="admin-form-grid-2">
             <div v-for="([key, value]) in detailConfigFields" :key="key" class="admin-dialog-field">
               <label>{{ key }}</label>
@@ -962,16 +1034,58 @@ onMounted(() => {
   line-height: 1.7;
 }
 
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .docs-hero-side {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   align-content: start;
   min-width: 280px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.docs-hero-cardline {
+  display: grid;
+  gap: 4px;
+}
+
+.docs-hero-cardlabel {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.docs-hero-cardline strong {
+  color: var(--admin-ink);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.admin-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 960px) {
   .docs-hero {
     flex-direction: column;
+  }
+
+  .docs-hero-side {
+    min-width: 0;
   }
 }
 </style>
