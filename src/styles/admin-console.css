@@ -643,6 +643,7 @@
   font-size: 13px;
   font-weight: 500;
   font-family: var(--admin-sans);
+  text-decoration: none;
   cursor: pointer;
   transition: 0.15s ease;
   white-space: nowrap;

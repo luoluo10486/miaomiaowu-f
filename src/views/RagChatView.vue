@@ -17,10 +17,6 @@ const {
   deepThinkingEnabled,
   noticeText,
   noticeType,
-  streamTaskId,
-  streamingMessageId,
-  cancelRequested,
-  thinkingStartAt,
   messageScrollerRef,
   textareaRef,
   activeSession,
@@ -31,52 +27,34 @@ const {
   userInitial,
   sessionSearch,
   showRetrievalPanel,
-  setNotice,
-  syncRouteWithSession,
-  formatSessionTime,
   sortSessions,
-  upsertSession,
-  updateSessionTitle,
-  promptRenameSession,
-  computeThinkingDuration,
-  scrollToBottom,
-  focusComposer,
-  resizeComposer,
+  formatSessionTime,
   createConversation,
   goBack,
   closeRetrievalPanel,
-  loadSuggestions,
-  loadSessions,
-  selectSession,
-  removeSession,
-  updateStreamingMessage,
-  appendThinking,
-  appendContent,
-  finishStreamingMessage,
-  clearStreamingState,
-  interruptStreaming,
-  stopGeneration,
-  sendMessage,
   openSession,
+  removeSession,
   handleSessionRename,
   handleSuggestionClick,
   handleComposerKeydown,
   copyMessageContent,
   submitFeedback,
-  handleLogout
+  sendMessage
 } = useRagChat();
 
 const sessionGroups = computed(() => {
   const keyword = sessionSearch.value.trim().toLowerCase();
   const filtered = sortSessions(sessions.value).filter((session) => {
-    if (!keyword) return true;
+    if (!keyword) {
+      return true;
+    }
     return String(session.title || "").toLowerCase().includes(keyword);
   });
 
   const buckets = [
     { key: "today", label: "今天", items: [] },
-    { key: "week", label: "7 天内", items: [] },
-    { key: "month", label: "30 天内", items: [] },
+    { key: "week", label: "7天内", items: [] },
+    { key: "month", label: "30天内", items: [] },
     { key: "earlier", label: "更早", items: [] }
   ];
 
@@ -128,15 +106,8 @@ const summarySnippet = computed(() => {
   }
 
   const compact = content.replace(/\s+/g, " ").trim();
-  return compact.length > 180 ? `${compact.slice(0, 180)}…` : compact;
+  return compact.length > 180 ? `${compact.slice(0, 180)}...` : compact;
 });
-
-const panelStats = computed(() => [
-  { label: "消息总数", value: String(messages.value.length) },
-  { label: "完成回复", value: String(completedAnswerCount.value) },
-  { label: "会话状态", value: isStreaming.value ? "生成中" : "待机" },
-  { label: "深度思考", value: deepThinkingEnabled.value ? "开启" : "关闭" }
-]);
 
 const sessionIdLabel = computed(() => currentSessionId.value || "新会话");
 const sessionUpdatedAt = computed(() => {
@@ -145,25 +116,36 @@ const sessionUpdatedAt = computed(() => {
   }
   return formatSessionTime(activeSession.value.lastTime);
 });
+
+const panelStats = computed(() => [
+  { label: "消息总数", value: String(messages.value.length) },
+  { label: "完整回复", value: String(completedAnswerCount.value) },
+  { label: "会话状态", value: isStreaming.value ? "生成中" : "待机" },
+  { label: "深度思考", value: deepThinkingEnabled.value ? "开启" : "关闭" }
+]);
 </script>
 
 <template>
-  <section :class="['rag-shell', { 'is-retrieval-open': showRetrievalPanel }]">
-    <header class="rag-topbar">
-      <button class="back-button" type="button" @click="goBack">
+  <section class="chat-page" :class="{ 'is-panel-open': showRetrievalPanel }">
+    <header class="chat-page__topbar">
+      <button class="chat-back-button" type="button" @click="goBack">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M15 18 9 12l6-6" />
         </svg>
         <span>返回</span>
       </button>
 
-      <div class="rag-topbar__meta">
-        <span class="rag-topbar__eyebrow">RAG Chat</span>
+      <div class="chat-page__meta">
+        <span class="chat-page__eyebrow">RAG Chat</span>
         <strong>{{ currentUserName }}</strong>
       </div>
     </header>
 
-    <div class="rag-layout">
+    <div v-if="noticeText" :class="['chat-notice', `is-${noticeType}`]">
+      {{ noticeText }}
+    </div>
+
+    <div class="chat-page__layout">
       <RagSessionSidebar
         :groups="sessionGroups"
         :loading="loadingSessions"
@@ -185,30 +167,24 @@ const sessionUpdatedAt = computed(() => {
             <p class="chat-card__eyebrow">当前会话</p>
             <h1>{{ currentSessionTitle }}</h1>
           </div>
-          <div class="chat-card__header-actions">
-            <button
-              class="chat-card__rename"
-              type="button"
-              @click="handleSessionRename(activeSession || { id: currentSessionId })"
-            >
+          <div class="chat-card__actions">
+            <button class="chat-card__action" type="button" @click="handleSessionRename(activeSession || { id: currentSessionId })">
               重命名
             </button>
-            <button class="chat-card__rename is-secondary" type="button" @click="createConversation">
+            <button class="chat-card__action is-secondary" type="button" @click="createConversation">
               新会话
             </button>
-            <span class="chat-card__badge" v-if="isStreaming">生成中</span>
+            <span v-if="isStreaming" class="chat-card__badge">生成中</span>
           </div>
         </header>
-
-        <div v-if="noticeText" :class="['notice-bar', `notice-bar--${noticeType}`]">
-          {{ noticeText }}
-        </div>
 
         <section class="chat-card__body">
           <div ref="messageScrollerRef" class="message-stream-shell">
             <div v-if="loadingMessages" class="panel-state panel-state--body">
               <div class="state-dots">
-                <span></span><span></span><span></span>
+                <span></span>
+                <span></span>
+                <span></span>
               </div>
             </div>
 
@@ -216,7 +192,7 @@ const sessionUpdatedAt = computed(() => {
               <div v-if="!hasMessages" class="welcome-shell">
                 <div class="welcome-hero">
                   <h3>今天想问点什么？</h3>
-                  <p>基于知识库检索增强，提供可追溯、可复核的回答。</p>
+                  <p>基于知识库检索增强的问答工作区，支持可追溯、可复核的回答。</p>
                 </div>
 
                 <div class="suggestions-grid">
@@ -230,7 +206,7 @@ const sessionUpdatedAt = computed(() => {
                     <span class="suggestion-card__index">{{ String(index + 1).padStart(2, "0") }}</span>
                     <strong>{{ item.title }}</strong>
                     <small>{{ item.description }}</small>
-                    <span class="suggestion-card__arrow">&rarr;</span>
+                    <span class="suggestion-card__arrow">→</span>
                   </button>
                 </div>
               </div>
@@ -252,11 +228,7 @@ const sessionUpdatedAt = computed(() => {
           :is-streaming="isStreaming"
           :thinking-message="thinkingMessage"
           :input-ref="textareaRef"
-          :placeholder="
-            deepThinkingEnabled
-              ? '输入需要深度分析的问题...'
-              : '输入你的问题，Enter 发送，Shift+Enter 换行'
-          "
+          :placeholder="deepThinkingEnabled ? '输入需要深度分析的问题...' : '输入你的问题，Enter 发送，Shift+Enter 换行'"
           @update:draft="draft = $event"
           @toggle-thinking="deepThinkingEnabled = !deepThinkingEnabled"
           @send="sendMessage"
@@ -274,7 +246,7 @@ const sessionUpdatedAt = computed(() => {
           </button>
         </div>
 
-        <section class="insight-card insight-card--sources">
+        <section class="insight-card">
           <header>
             <h3>本次摘要</h3>
             <span class="insight-badge">{{ sessionIdLabel }}</span>
@@ -302,15 +274,15 @@ const sessionUpdatedAt = computed(() => {
 </template>
 
 <style scoped>
-.rag-shell {
-  --text: #1f1b16;
-  --text-secondary: #4f463d;
-  --text-muted: #7e7264;
-  --bg: #f5efe7;
-  --accent: #6b7f5a;
-  --accent-warm: #8b6f3d;
-  --border: rgba(93, 78, 58, 0.16);
-  --border-light: rgba(93, 78, 58, 0.1);
+.chat-page {
+  --text: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --bg: #f8fafc;
+  --accent: #2563eb;
+  --accent-warm: #0f172a;
+  --border: rgba(148, 163, 184, 0.24);
+  --border-light: rgba(148, 163, 184, 0.16);
   --radius-sm: 12px;
   --radius-md: 18px;
   --radius-lg: 24px;
@@ -330,31 +302,32 @@ const sessionUpdatedAt = computed(() => {
   padding: 20px;
   color: var(--text);
   background:
-    radial-gradient(circle at top right, rgba(139, 111, 61, 0.16), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(107, 127, 90, 0.14), transparent 28%),
-    linear-gradient(180deg, #fbf8f3 0%, #f5efe7 100%);
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.16), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(15, 23, 42, 0.12), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   font-family: var(--sans);
 }
 
-.rag-shell::before {
+.chat-page::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.28) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.24) 1px, transparent 1px);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
   background-size: 120px 120px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.16), transparent 60%);
-  opacity: 0.55;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.14), transparent 58%);
+  opacity: 0.5;
 }
 
-.rag-topbar,
-.rag-layout {
+.chat-page__topbar,
+.chat-page__layout {
   position: relative;
   z-index: 1;
 }
 
-.rag-topbar {
+.chat-page__topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -362,20 +335,20 @@ const sessionUpdatedAt = computed(() => {
   margin-bottom: 16px;
 }
 
-.back-button {
+.chat-back-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.84);
   color: var(--text);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.back-button svg {
+.chat-back-button svg {
   width: 16px;
   height: 16px;
   fill: none;
@@ -385,47 +358,75 @@ const sessionUpdatedAt = computed(() => {
   stroke-linejoin: round;
 }
 
-.back-button:hover {
+.chat-back-button:hover {
   transform: translateY(-1px);
-  border-color: rgba(107, 127, 90, 0.28);
-  box-shadow: 0 10px 24px rgba(37, 31, 23, 0.08);
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
-.rag-topbar__meta {
+.chat-page__meta {
   display: grid;
   justify-items: end;
   gap: 2px;
   text-align: right;
 }
 
-.rag-topbar__eyebrow {
-  color: var(--accent-warm);
+.chat-page__eyebrow {
+  color: var(--accent);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.rag-topbar__meta strong {
+.chat-page__meta strong {
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
 }
 
-.rag-layout {
+.chat-notice {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.84);
+  font-size: 14px;
+}
+
+.chat-notice.is-success {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: rgba(236, 253, 245, 0.85);
+  color: #047857;
+}
+
+.chat-notice.is-error {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: rgba(254, 242, 242, 0.85);
+  color: #b91c1c;
+}
+
+.chat-notice.is-info {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: rgba(239, 246, 255, 0.85);
+  color: #1d4ed8;
+}
+
+.chat-page__layout {
   display: grid;
   grid-template-columns: minmax(270px, 0.95fr) minmax(0, 1.6fr) minmax(300px, 0.88fr);
   gap: 16px;
-  min-height: calc(100vh - 76px);
+  min-height: calc(100vh - 86px);
 }
 
-.sidebar-card,
 .chat-card,
 .insight-stack {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 20px 48px rgba(31, 27, 22, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(18px);
 }
 
@@ -434,7 +435,6 @@ const sessionUpdatedAt = computed(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.82);
 }
 
 .chat-card__header {
@@ -463,7 +463,7 @@ const sessionUpdatedAt = computed(() => {
   font-weight: 700;
 }
 
-.chat-card__header-actions {
+.chat-card__actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -471,23 +471,23 @@ const sessionUpdatedAt = computed(() => {
   justify-content: flex-end;
 }
 
-.chat-card__rename {
+.chat-card__action {
   padding: 9px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.84);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.chat-card__rename:hover {
-  border-color: rgba(107, 127, 90, 0.26);
-  background: rgba(107, 127, 90, 0.07);
+.chat-card__action:hover {
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.06);
   color: var(--accent);
 }
 
-.chat-card__rename.is-secondary {
+.chat-card__action.is-secondary {
   color: var(--text-muted);
 }
 
@@ -497,32 +497,10 @@ const sessionUpdatedAt = computed(() => {
   height: 30px;
   padding: 0 12px;
   border-radius: var(--radius-full);
-  background: rgba(107, 127, 90, 0.12);
+  background: rgba(37, 99, 235, 0.1);
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
-}
-
-.notice-bar {
-  margin: 0 24px;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-}
-
-.notice-bar--info {
-  background: rgba(139, 111, 61, 0.1);
-  color: var(--accent-warm);
-}
-
-.notice-bar--success {
-  background: rgba(107, 127, 90, 0.12);
-  color: #4a6b3a;
-}
-
-.notice-bar--error {
-  background: rgba(180, 60, 50, 0.1);
-  color: #a04030;
 }
 
 .chat-card__body {
@@ -538,7 +516,7 @@ const sessionUpdatedAt = computed(() => {
   overflow-y: auto;
   padding: 18px 0 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(107, 127, 90, 0.22) transparent;
+  scrollbar-color: rgba(37, 99, 235, 0.22) transparent;
 }
 
 .message-stream-shell::-webkit-scrollbar {
@@ -547,7 +525,7 @@ const sessionUpdatedAt = computed(() => {
 
 .message-stream-shell::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(107, 127, 90, 0.22);
+  background: rgba(37, 99, 235, 0.22);
 }
 
 .panel-state {
@@ -624,7 +602,7 @@ const sessionUpdatedAt = computed(() => {
   padding: 20px 18px 28px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.64);
   text-align: left;
   cursor: pointer;
   transition: all 0.24s ease;
@@ -633,9 +611,9 @@ const sessionUpdatedAt = computed(() => {
 
 .suggestion-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(107, 127, 90, 0.34);
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: 0 14px 30px rgba(37, 31, 23, 0.08);
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
 }
 
 .suggestion-card__index {
@@ -715,8 +693,8 @@ const sessionUpdatedAt = computed(() => {
 
 .insight-close-button:hover {
   color: var(--accent);
-  border-color: rgba(107, 127, 90, 0.24);
-  background: rgba(107, 127, 90, 0.07);
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.06);
 }
 
 .insight-close-button svg {
@@ -733,7 +711,7 @@ const sessionUpdatedAt = computed(() => {
   padding: 16px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .insight-card > header {
@@ -758,7 +736,7 @@ const sessionUpdatedAt = computed(() => {
   height: 24px;
   padding: 0 10px;
   border-radius: var(--radius-full);
-  background: rgba(107, 127, 90, 0.12);
+  background: rgba(37, 99, 235, 0.1);
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
@@ -768,7 +746,7 @@ const sessionUpdatedAt = computed(() => {
   padding: 14px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  background: rgba(255, 252, 246, 0.72);
+  background: rgba(248, 250, 252, 0.82);
 }
 
 .citation-box strong {
@@ -798,7 +776,7 @@ const sessionUpdatedAt = computed(() => {
   padding: 12px 14px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  background: rgba(255, 252, 246, 0.66);
+  background: rgba(248, 250, 252, 0.82);
 }
 
 .request-stats dt {
@@ -830,7 +808,7 @@ const sessionUpdatedAt = computed(() => {
 }
 
 @media (max-width: 1280px) {
-  .rag-layout {
+  .chat-page__layout {
     grid-template-columns: minmax(250px, 0.9fr) minmax(0, 1.1fr);
   }
 
@@ -847,18 +825,12 @@ const sessionUpdatedAt = computed(() => {
 }
 
 @media (max-width: 1024px) {
-  .rag-shell {
+  .chat-page {
     padding: 16px;
   }
 
-  .rag-layout {
+  .chat-page__layout {
     grid-template-columns: 1fr;
-  }
-
-  .sidebar-card,
-  .chat-card,
-  .insight-stack {
-    min-height: auto;
   }
 
   .suggestions-grid {
@@ -867,12 +839,12 @@ const sessionUpdatedAt = computed(() => {
 }
 
 @media (max-width: 640px) {
-  .rag-topbar {
+  .chat-page__topbar {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .rag-topbar__meta {
+  .chat-page__meta {
     justify-items: start;
     text-align: left;
   }
@@ -884,10 +856,6 @@ const sessionUpdatedAt = computed(() => {
 
   .chat-card__body {
     padding: 0 18px 10px;
-  }
-
-  .notice-bar {
-    margin: 0 18px;
   }
 }
 </style>

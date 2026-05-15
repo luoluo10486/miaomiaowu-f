@@ -1,15 +1,15 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import Avatar from "../../components/common/Avatar.vue";
 import { adminNavGroups } from "./adminShared";
 import { clearStoredAuth, getStoredAuthUser } from "../../utils/auth";
-import {
-  changeCurrentUserPassword,
-} from "../../services/userService";
+import { changeCurrentUserPassword } from "../../services/userService";
 import { getKnowledgeBases, searchKnowledgeDocuments } from "../../services/knowledgeService";
 
 const route = useRoute();
 const router = useRouter();
+
 const currentUser = ref(getStoredAuthUser());
 const collapsed = ref(false);
 const openGroups = ref({});
@@ -18,25 +18,21 @@ const searchFocused = ref(false);
 const kbOptions = ref([]);
 const docOptions = ref([]);
 const searchLoading = ref(false);
-let searchTimeout = null;
+const starCount = ref(null);
 
 const passwordOpen = ref(false);
 const passwordSubmitting = ref(false);
 const passwordErrorText = ref("");
-const passwordForm = ref({ currentPassword: "", newPassword: "", confirmPassword: "" });
+const passwordForm = ref({
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: ""
+});
 
-const currentUserName = computed(() => {
-  const user = currentUser.value;
-  return user?.displayName || user?.username || user?.email || "Admin";
-});
-const currentUserRole = computed(() => {
-  const role = currentUser.value?.role || "member";
-  return role === "admin" ? "管理员" : "成员";
-});
-const avatarInitial = computed(() => {
-  const name = currentUserName.value;
-  return name ? name.charAt(0).toUpperCase() : "A";
-});
+const noticeText = ref("");
+const noticeTone = ref("info");
+
+let searchTimeout = null;
 
 const breadcrumbMap = {
   dashboard: "Dashboard",
@@ -51,22 +47,47 @@ const breadcrumbMap = {
   users: "用户管理"
 };
 
+const currentUserName = computed(() => {
+  const user = currentUser.value;
+  return user?.displayName || user?.username || user?.email || "Admin";
+});
+
+const currentUserRole = computed(() => {
+  const role = String(currentUser.value?.role || "").trim().toLowerCase();
+  return role === "admin" ? "管理员" : "成员";
+});
+
+const avatarSrc = computed(() => String(currentUser.value?.avatar || "").trim());
+
+const starLabel = computed(() => {
+  if (starCount.value === null) return "--";
+  if (starCount.value < 1000) return String(starCount.value);
+  const rounded = Math.round((starCount.value / 1000) * 10) / 10;
+  return `${String(rounded).replace(/\.0$/, "")}k`;
+});
+
 const breadcrumbs = computed(() => {
   const segments = route.path.split("/").filter(Boolean);
   const items = [{ label: "首页", to: "/admin/dashboard" }];
 
-  if (segments[0] !== "admin") return items;
+  if (segments[0] !== "admin") {
+    return items;
+  }
+
   const section = segments[1];
+  if (!section) {
+    return items;
+  }
 
   if (section === "intent-tree" || section === "intent-list") {
     items.push({ label: "意图管理", to: "/admin/intent-tree" });
-    if (section === "intent-list" && segments.length > 2) {
+    if (section === "intent-list" && route.path.includes("/edit")) {
       items.push({ label: "意图列表", to: "/admin/intent-list" });
       items.push({ label: "编辑节点" });
     } else {
       items.push({ label: breadcrumbMap[section] || section });
     }
-  } else if (section) {
+  } else {
     items.push({
       label: breadcrumbMap[section] || section,
       to: `/admin/${section}`
@@ -75,52 +96,59 @@ const breadcrumbs = computed(() => {
 
   if (section === "ingestion") {
     const tab = route.query?.tab;
-    if (tab === "tasks") items.push({ label: "流水线任务" });
-    else if (tab === "pipelines") items.push({ label: "流水线管理" });
+    if (tab === "tasks") {
+      items.push({ label: "流水线任务" });
+    } else if (tab === "pipelines") {
+      items.push({ label: "流水线管理" });
+    }
   }
-  if (section === "knowledge" && segments.length > 2) items.push({ label: "文档管理" });
-  if (section === "knowledge" && segments.includes("docs")) items.push({ label: "切片管理" });
-  if (section === "traces" && segments.length > 2) items.push({ label: "链路详情" });
+
+  if (section === "knowledge" && route.path.includes("/docs/")) {
+    items.push({ label: "文档管理" });
+  }
+
+  if (section === "knowledge" && route.path.includes("/docs/") && route.path.split("/").length > 4) {
+    items.push({ label: "切片管理" });
+  }
+
+  if (section === "traces" && segments.length > 2) {
+    items.push({ label: "链路详情" });
+  }
 
   return items;
 });
 
-const activePath = computed(() => route.path);
+const showSuggest = computed(() => searchFocused.value && kbQuery.value.trim().length > 0);
+
+function setNotice(message, tone = "info") {
+  noticeText.value = message;
+  noticeTone.value = tone;
+}
 
 function isActive(path) {
-  return activePath.value === path || activePath.value.startsWith(`${path}/`);
+  return route.path === path || route.path.startsWith(`${path}/`);
 }
 
 function isItemActive(item) {
   if (item.children?.length) {
     return item.children.some((child) => {
       const childPath = child.to.split("?")[0];
-      return activePath.value === childPath || activePath.value.startsWith(`${childPath}/`);
+      return route.path === childPath || route.path.startsWith(`${childPath}/`);
     });
   }
+
   return isActive(item.to);
-}
-
-function toggleGroup(title) {
-  openGroups.value[title] = !openGroups.value[title];
-}
-
-function toggleNavGroup(groupId) {
-  openGroups.value[groupId] = !openGroups.value[groupId];
 }
 
 watch(
   () => route.path,
   () => {
     adminNavGroups.forEach((group) => {
-      if (group.items.some((item) => isItemActive(item)) && !openGroups.value[group.title]) {
+      if (group.items.some((item) => isItemActive(item))) {
         openGroups.value[group.title] = true;
       }
       group.items.forEach((item) => {
-        if (item.id && item.children?.some((child) => {
-          const childPath = child.to.split("?")[0];
-          return activePath.value === childPath || activePath.value.startsWith(`${childPath}/`);
-        })) {
+        if (item.id && item.children?.some((child) => isItemActive(child))) {
           openGroups.value[item.id] = true;
         }
       });
@@ -129,13 +157,35 @@ watch(
   { immediate: true }
 );
 
+onMounted(() => {
+  fetch("https://api.github.com/repos/nageoffer/ragent")
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      starCount.value = typeof data?.stargazers_count === "number" ? data.stargazers_count : null;
+    })
+    .catch(() => {
+      starCount.value = null;
+    });
+});
+
+onUnmounted(() => {
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  }
+});
+
 function logout() {
   clearStoredAuth();
   router.push("/login");
 }
 
 function handleSearchInput() {
-  if (searchTimeout) clearTimeout(searchTimeout);
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  }
+
   const keyword = kbQuery.value.trim();
   if (!keyword) {
     kbOptions.value = [];
@@ -143,6 +193,7 @@ function handleSearchInput() {
     searchLoading.value = false;
     return;
   }
+
   searchLoading.value = true;
   searchTimeout = setTimeout(async () => {
     try {
@@ -150,7 +201,8 @@ function handleSearchInput() {
         getKnowledgeBases(1, 6, keyword),
         searchKnowledgeDocuments(keyword, 6)
       ]);
-      kbOptions.value = Array.isArray(kbData?.records) ? kbData.records : (Array.isArray(kbData) ? kbData : []);
+
+      kbOptions.value = Array.isArray(kbData?.records) ? kbData.records : Array.isArray(kbData) ? kbData : [];
       docOptions.value = Array.isArray(docData) ? docData : [];
     } catch {
       kbOptions.value = [];
@@ -161,19 +213,22 @@ function handleSearchInput() {
   }, 200);
 }
 
-function handleSearchSelect(kb) {
-  searchFocused.value = false;
+function resetSearch() {
   kbQuery.value = "";
   kbOptions.value = [];
   docOptions.value = [];
+  searchLoading.value = false;
+}
+
+function handleSearchSelect(kb) {
+  searchFocused.value = false;
+  resetSearch();
   router.push(`/admin/knowledge/${kb.id}`);
 }
 
 function handleDocumentSelect(doc) {
   searchFocused.value = false;
-  kbQuery.value = "";
-  kbOptions.value = [];
-  docOptions.value = [];
+  resetSearch();
   router.push(`/admin/knowledge/${doc.kbId}/docs/${doc.id}`);
 }
 
@@ -184,21 +239,22 @@ function handleSearchKeyDown(event) {
       handleSearchSelect(kbOptions.value[0]);
       return;
     }
+
     if (docOptions.value.length > 0) {
       handleDocumentSelect(docOptions.value[0]);
       return;
     }
+
     if (keyword) {
       searchFocused.value = false;
       router.push(`/admin/knowledge?name=${encodeURIComponent(keyword)}`);
     }
   }
+
   if (event.key === "Escape") {
     searchFocused.value = false;
   }
 }
-
-const showSuggest = computed(() => searchFocused.value && kbQuery.value.trim().length > 0);
 
 function openPasswordDialog() {
   passwordErrorText.value = "";
@@ -211,22 +267,35 @@ function closePasswordDialog() {
 }
 
 async function handlePasswordSubmit() {
-  if (!passwordForm.value.currentPassword || !passwordForm.value.newPassword) return;
-  if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
-    passwordErrorText.value = "两次输入的新密码不一致";
+  if (!passwordForm.value.currentPassword || !passwordForm.value.newPassword) {
+    passwordErrorText.value = "请输入当前密码和新密码。";
     return;
   }
+
+  if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
+    passwordErrorText.value = "两次输入的新密码不一致。";
+    return;
+  }
+
   passwordErrorText.value = "";
   passwordSubmitting.value = true;
+
   try {
     await changeCurrentUserPassword({
       currentPassword: passwordForm.value.currentPassword,
       newPassword: passwordForm.value.newPassword
     });
+
+    setNotice("密码已更新。", "success");
     closePasswordDialog();
-    passwordForm.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
+    passwordForm.value = {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: ""
+    };
   } catch (error) {
-    passwordErrorText.value = error?.message || "修改密码失败";
+    passwordErrorText.value = error?.message || "修改密码失败。";
+    setNotice(passwordErrorText.value, "error");
   } finally {
     passwordSubmitting.value = false;
   }
@@ -241,7 +310,7 @@ async function handlePasswordSubmit() {
           <div class="admin-brand-logo">R</div>
           <template v-if="!collapsed">
             <div>
-              <h1>RAG Console</h1>
+              <h1>RAG 管理后台</h1>
               <small>Knowledge Console</small>
             </div>
           </template>
@@ -257,26 +326,28 @@ async function handlePasswordSubmit() {
                 <button
                   type="button"
                   :class="['admin-nav-item', 'admin-nav-item--group', { 'admin-nav-item--active': isItemActive(item) }]"
-                  @click="toggleNavGroup(item.id)"
+                  @click="openGroups[item.id] = !openGroups[item.id]"
                 >
                   <span :class="['admin-nav-item-indicator', { 'is-active': isItemActive(item) }]" />
-                  <span class="admin-nav-item-icon">{{ item.icon || "●" }}</span>
+                  <span class="admin-nav-item-icon">{{ item.icon || "•" }}</span>
                   <span v-if="!collapsed" class="admin-nav-item-label">{{ item.label }}</span>
                   <span v-if="!collapsed" class="admin-nav-item-arrow">{{ openGroups[item.id] ? "▾" : "▸" }}</span>
                 </button>
+
                 <template v-if="openGroups[item.id] && !collapsed">
                   <RouterLink
                     v-for="child in item.children"
                     :key="child.to"
                     :to="child.to"
-                    :class="['admin-nav-item', 'admin-nav-item--child', { 'admin-nav-item--active': activePath === child.to.split('?')[0] }]"
+                    :class="['admin-nav-item', 'admin-nav-item--child', { 'admin-nav-item--active': isActive(child.to.split('?')[0]) }]"
                   >
-                    <span :class="['admin-nav-item-indicator', { 'is-active': activePath === child.to.split('?')[0] }]" />
-                    <span class="admin-nav-item-icon">{{ child.icon || "●" }}</span>
+                    <span :class="['admin-nav-item-indicator', { 'is-active': isActive(child.to.split('?')[0]) }]" />
+                    <span class="admin-nav-item-icon">{{ child.icon || "•" }}</span>
                     <span>{{ child.label }}</span>
                   </RouterLink>
                 </template>
               </template>
+
               <template v-else>
                 <RouterLink
                   :to="item.to"
@@ -284,7 +355,7 @@ async function handlePasswordSubmit() {
                   :class="['admin-nav-item', { 'admin-nav-item--active': isActive(item.to) }]"
                 >
                   <span :class="['admin-nav-item-indicator', { 'is-active': isActive(item.to) }]" />
-                  <span class="admin-nav-item-icon">{{ item.icon || "●" }}</span>
+                  <span class="admin-nav-item-icon">{{ item.icon || "•" }}</span>
                   <span v-if="!collapsed">{{ item.label }}</span>
                 </RouterLink>
               </template>
@@ -295,10 +366,12 @@ async function handlePasswordSubmit() {
 
       <div class="admin-sidebar-footer">
         <button type="button" class="admin-collapse-btn" @click="collapsed = !collapsed">
-          {{ collapsed ? "»" : "« 收起侧边栏" }}
+          {{ collapsed ? "›" : "收起侧边栏" }}
         </button>
         <div class="admin-user-card">
-          <div class="admin-user-avatar">{{ avatarInitial }}</div>
+          <div class="admin-user-avatar">
+            <Avatar :name="currentUserName" :src="avatarSrc" :alt="currentUserName" />
+          </div>
           <div v-if="!collapsed" class="admin-user-info">
             <strong>{{ currentUserName }}</strong>
             <span>{{ currentUserRole }}</span>
@@ -308,11 +381,11 @@ async function handlePasswordSubmit() {
           <button class="admin-button--sidebar" type="button" @click="router.push('/workspace')">
             {{ collapsed ? "W" : "Workspace" }}
           </button>
-          <button class="admin-button--sidebar" type="button" @click="router.push('/rag')">
+          <button class="admin-button--sidebar" type="button" @click="router.push('/chat')">
             {{ collapsed ? "C" : "Chat" }}
           </button>
           <button class="admin-button--sidebar-logout" type="button" @click="logout">
-            {{ collapsed ? "✕" : "退出登录" }}
+            {{ collapsed ? "×" : "退出登录" }}
           </button>
         </div>
       </div>
@@ -326,15 +399,19 @@ async function handlePasswordSubmit() {
               <input
                 v-model="kbQuery"
                 class="admin-topbar-search-input"
-                placeholder="筛选知识库..."
+                placeholder="搜索知识库或文档..."
                 @input="handleSearchInput"
-                @focus="searchFocused=true"
-                @blur="setTimeout(()=>{searchFocused=false},150)"
+                @focus="searchFocused = true"
+                @blur="setTimeout(() => { searchFocused = false; }, 150)"
                 @keydown="handleSearchKeyDown"
               />
               <span class="admin-topbar-kbd">Ctrl K</span>
+
               <div v-if="showSuggest" class="admin-topbar-suggest" @mousedown.prevent>
-                <div v-if="searchLoading && kbOptions.length===0 && docOptions.length===0" class="admin-topbar-suggest-item admin-muted">搜索中...</div>
+                <div v-if="searchLoading && kbOptions.length === 0 && docOptions.length === 0" class="admin-topbar-suggest-item admin-muted">
+                  搜索中...
+                </div>
+
                 <template v-if="kbOptions.length > 0">
                   <div class="admin-topbar-suggest-group">知识库</div>
                   <button
@@ -348,6 +425,7 @@ async function handlePasswordSubmit() {
                     <small class="admin-muted">{{ kb.collectionName || "未设置 Collection" }}</small>
                   </button>
                 </template>
+
                 <template v-if="docOptions.length > 0">
                   <div class="admin-topbar-suggest-group">文档</div>
                   <button
@@ -361,15 +439,30 @@ async function handlePasswordSubmit() {
                     <small class="admin-muted">{{ doc.kbName || `知识库 ${doc.kbId}` }}</small>
                   </button>
                 </template>
-                <div v-if="!searchLoading && kbOptions.length===0 && docOptions.length===0" class="admin-topbar-suggest-item admin-muted">暂无匹配结果</div>
+
+                <div v-if="!searchLoading && kbOptions.length === 0 && docOptions.length === 0" class="admin-topbar-suggest-item admin-muted">
+                  暂无匹配结果
+                </div>
               </div>
             </div>
           </div>
+
           <div class="admin-topbar-actions">
-            <button class="admin-button--ghost" type="button" @click="router.push('/rag')">返回聊天</button>
+            <button class="admin-button--ghost" type="button" @click="router.push('/chat')">返回聊天</button>
+            <a
+              class="admin-button--ghost"
+              href="https://github.com/nageoffer/ragent"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub Star
+              <span class="admin-badge is-outline">{{ starLabel }}</span>
+            </a>
             <button class="admin-button--ghost" type="button" @click="openPasswordDialog">修改密码</button>
             <div class="admin-topbar-user">
-              <div class="admin-topbar-avatar">{{ avatarInitial }}</div>
+              <div class="admin-topbar-avatar">
+                <Avatar :name="currentUserName" :src="avatarSrc" :alt="currentUserName" />
+              </div>
               <span>{{ currentUserName }}</span>
             </div>
           </div>
@@ -387,6 +480,9 @@ async function handlePasswordSubmit() {
       </nav>
 
       <div class="admin-content">
+        <p v-if="noticeText" :class="['admin-notice', noticeTone === 'error' ? 'is-error' : noticeTone === 'success' ? 'is-success' : '']">
+          {{ noticeText }}
+        </p>
         <RouterView />
       </div>
     </main>
@@ -413,7 +509,12 @@ async function handlePasswordSubmit() {
         </div>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closePasswordDialog">取消</button>
-          <button class="admin-button" type="button" :disabled="passwordSubmitting || !passwordForm.currentPassword || !passwordForm.newPassword" @click="handlePasswordSubmit">
+          <button
+            class="admin-button"
+            type="button"
+            :disabled="passwordSubmitting || !passwordForm.currentPassword || !passwordForm.newPassword"
+            @click="handlePasswordSubmit"
+          >
             {{ passwordSubmitting ? "保存中..." : "保存" }}
           </button>
         </div>

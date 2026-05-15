@@ -7,7 +7,7 @@ const active = computed(() => route.name);
 
 const navLinks = [
   { name: "workspace-home", label: "工作台", to: "/workspace" },
-  { name: "rag-chat", label: "RAG 问答", to: "/rag" },
+  { name: "rag-chat", label: "RAG 问答", to: "/chat" },
   { name: "rag-admin", label: "后台管理", to: "/admin" }
 ];
 </script>

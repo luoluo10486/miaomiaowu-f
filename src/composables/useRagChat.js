@@ -159,7 +159,7 @@ export function useRagChat() {
   }
 
   function syncRouteWithSession(sessionId, replace = false) {
-    const target = sessionId ? `/rag/${sessionId}` : "/rag";
+    const target = sessionId ? `/chat/${sessionId}` : "/chat";
     if (route.fullPath === target) {
       return;
     }
@@ -844,7 +844,7 @@ export function useRagChat() {
   watch(
     () => route.fullPath,
     (nextPath) => {
-      if (!nextPath.startsWith("/rag")) {
+      if (!nextPath.startsWith("/chat") && !nextPath.startsWith("/rag")) {
         return;
       }
 

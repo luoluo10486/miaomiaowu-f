@@ -1,5 +1,7 @@
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { onMounted, ref, watch, computed } from "vue";
+import PageHeader from "../../components/admin/PageHeader.vue";
+import StatCard from "../../components/admin/StatCard.vue";
 import {
   createQueryTermMapping,
   deleteQueryTermMapping,
@@ -14,7 +16,7 @@ const keyword = ref("");
 const searchInput = ref("");
 const pageNo = ref(1);
 const pageSize = 10;
-const page = ref({ records: [], total: 0 });
+const page = ref({ records: [], total: 0, pages: 1, current: 1, size: pageSize });
 
 const dialogOpen = ref(false);
 const dialogMode = ref("create");
@@ -33,6 +35,28 @@ const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
 
+const mappings = computed(() => pageRecords(page.value));
+const mappingStats = computed(() => [
+  {
+    title: "Mappings",
+    value: pageTotal(page.value),
+    hint: "当前规则总数",
+    tone: "indigo"
+  },
+  {
+    title: "Enabled",
+    value: mappings.value.filter((item) => item.enabled).length,
+    hint: "当前页启用规则数",
+    tone: "emerald"
+  },
+  {
+    title: "Disabled",
+    value: mappings.value.filter((item) => !item.enabled).length,
+    hint: "当前页禁用规则数",
+    tone: "amber"
+  }
+]);
+
 async function loadData() {
   loading.value = true;
   errorText.value = "";
@@ -48,32 +72,39 @@ async function loadData() {
 function handleSearch() {
   pageNo.value = 1;
   keyword.value = searchInput.value.trim();
-  loadData();
+  void loadData();
 }
 
 function handleRefresh() {
   pageNo.value = 1;
-  loadData();
+  void loadData();
 }
 
 function goPrev() {
   if (pageNo.value > 1) {
-    pageNo.value--;
-    loadData();
+    pageNo.value -= 1;
+    void loadData();
   }
 }
 
 function goNext() {
   if (pageNo.value < pageCount(page.value)) {
-    pageNo.value++;
-    loadData();
+    pageNo.value += 1;
+    void loadData();
   }
 }
 
 function openCreateDialog() {
   dialogMode.value = "create";
   dialogTarget.value = null;
-  form.value = { sourceTerm: "", targetTerm: "", matchType: "EXACT", enabled: true, priority: 0, remark: "" };
+  form.value = {
+    sourceTerm: "",
+    targetTerm: "",
+    matchType: "EXACT",
+    enabled: true,
+    priority: 0,
+    remark: ""
+  };
   dialogOpen.value = true;
 }
 
@@ -99,6 +130,7 @@ function closeDialog() {
 async function handleSubmit() {
   if (!form.value.sourceTerm.trim() || !form.value.targetTerm.trim()) return;
   submitting.value = true;
+  errorText.value = "";
   try {
     const payload = {
       sourceTerm: form.value.sourceTerm.trim(),
@@ -137,10 +169,10 @@ function closeDeleteDialog() {
 async function handleDelete() {
   if (!deleteTarget.value) return;
   deleteSubmitting.value = true;
+  errorText.value = "";
   try {
     await deleteQueryTermMapping(deleteTarget.value.id);
-    deleteDialogOpen.value = false;
-    deleteTarget.value = null;
+    closeDeleteDialog();
     pageNo.value = 1;
     await loadData();
   } catch (error) {
@@ -152,7 +184,7 @@ async function handleDelete() {
 
 watch(keyword, () => {
   pageNo.value = 1;
-  loadData();
+  void loadData();
 });
 
 onMounted(() => {
@@ -162,31 +194,51 @@ onMounted(() => {
 
 <template>
   <section class="admin-page">
-    <header class="admin-page-header">
-      <div>
-        <span class="admin-page-eyebrow">Query Term Mapping</span>
-        <h2 class="admin-page-title">关键词映射管理</h2>
-        <p class="admin-page-subtitle">配置查询归一化的关键词映射规则</p>
-      </div>
-      <div class="admin-page-actions">
-        <input
-          v-model="searchInput"
-          class="admin-input"
-          type="search"
-          placeholder="搜索原始词/目标词"
-          @keydown.enter.prevent="handleSearch"
-        />
-        <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
-        <button class="admin-button--ghost" type="button" @click="handleRefresh">刷新</button>
+    <PageHeader
+      tag="Query Term Mapping"
+      title="关键映射"
+      description="用于配置查询归一化的关键映射规则，支持搜索、编辑、启用状态和删除。"
+    >
+      <template #actions>
+        <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新增映射</button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
+    <section class="admin-stat-grid">
+      <StatCard
+        v-for="stat in mappingStats"
+        :key="stat.title"
+        :title="stat.title"
+        :value="stat.value"
+        :hint="stat.hint"
+        :tone="stat.tone"
+      />
+    </section>
+
     <article class="admin-table-card">
-      <div v-if="loading && pageRecords(page).length === 0" class="admin-empty">加载中...</div>
-      <div v-else-if="pageRecords(page).length === 0" class="admin-empty">暂无映射规则，点击上方按钮新增</div>
+      <div class="admin-toolbar" style="margin-bottom: 16px;">
+        <div class="admin-toolbar-left">
+          <input
+            v-model="searchInput"
+            class="admin-input"
+            type="search"
+            placeholder="搜索原始词 / 目标词"
+            @keydown.enter.prevent="handleSearch"
+          />
+          <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
+        </div>
+        <div class="admin-toolbar-right">
+          <span class="admin-page-count">共 {{ pageTotal(page).toLocaleString("zh-CN") }} 条</span>
+          <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
+          <button class="admin-button" type="button" @click="openCreateDialog">新增映射</button>
+        </div>
+      </div>
+
+      <div v-if="loading && mappings.length === 0" class="admin-empty">加载中...</div>
+      <div v-else-if="mappings.length === 0" class="admin-empty">暂无映射规则</div>
       <div v-else class="admin-table-wrap">
         <table class="admin-table">
           <thead>
@@ -197,13 +249,12 @@ onMounted(() => {
               <th>优先级</th>
               <th>状态</th>
               <th>备注</th>
-              <th>创建时间</th>
               <th>更新时间</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in pageRecords(page)" :key="item.id">
+            <tr v-for="item in mappings" :key="item.id">
               <td>{{ item.sourceTerm }}</td>
               <td>{{ item.targetTerm }}</td>
               <td>
@@ -216,8 +267,7 @@ onMounted(() => {
                 </span>
               </td>
               <td>{{ item.remark || "--" }}</td>
-              <td>{{ formatDateTime(item.createTime) }}</td>
-              <td>{{ formatDateTime(item.updateTime) }}</td>
+              <td>{{ formatDateTime(item.updateTime || item.createTime) }}</td>
               <td>
                 <div class="admin-inline-actions">
                   <button class="admin-button--ghost" type="button" @click="openEditDialog(item)">编辑</button>
@@ -229,8 +279,8 @@ onMounted(() => {
         </table>
       </div>
 
-      <div v-if="pageRecords(page).length > 0" class="admin-pagination">
-        <span>共 {{ pageTotal(page) }} 条</span>
+      <div v-if="mappings.length > 0" class="admin-pagination">
+        <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
         <div class="admin-pagination-controls">
           <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
           <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
@@ -243,7 +293,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDialog">&times;</button>
         <h3>{{ dialogMode === "create" ? "新增映射规则" : "编辑映射规则" }}</h3>
-        <p>{{ dialogMode === "create" ? "配置查询归一化的关键词映射规则" : "修改映射规则" }}</p>
+        <p>{{ dialogMode === "create" ? "配置查询归一化的关键映射规则。" : "修改映射规则内容。" }}</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>原始词</label>
@@ -265,7 +315,7 @@ onMounted(() => {
             <input v-model.number="form.priority" class="admin-input" type="number" min="0" />
           </div>
           <div class="admin-dialog-field">
-            <label>启用</label>
+            <label>状态</label>
             <select v-model="form.enabled" class="admin-select">
               <option :value="true">启用</option>
               <option :value="false">禁用</option>

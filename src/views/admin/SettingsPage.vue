@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { getSystemSettings } from "../../services/settingsService";
+import PageHeader from "../../components/admin/PageHeader.vue";
+import StatCard from "../../components/admin/StatCard.vue";
 import { normalizeBooleanLabel } from "./adminShared";
 
 const loading = ref(false);
@@ -12,7 +14,6 @@ const queryRewrite = computed(() => settings.value?.rag?.queryRewrite || {});
 const rateLimit = computed(() => settings.value?.rag?.rateLimit?.global || {});
 const memory = computed(() => settings.value?.rag?.memory || {});
 const providerEntries = computed(() => Object.entries(settings.value?.ai?.providers || {}));
-
 const modelGroups = computed(() => [
   { label: "Chat", data: settings.value?.ai?.chat || {} },
   { label: "Embedding", data: settings.value?.ai?.embedding || {} },
@@ -25,7 +26,7 @@ async function loadSettings() {
   try {
     settings.value = await getSystemSettings();
   } catch (error) {
-    errorText.value = error?.message || "加载 settings 失败，请稍后重试。";
+    errorText.value = error?.message || "加载系统设置失败，请稍后重试。";
   } finally {
     loading.value = false;
   }
@@ -38,137 +39,153 @@ onMounted(() => {
 
 <template>
   <section class="admin-page">
-    <header class="admin-page-header">
-      <div>
-        <span class="admin-page-eyebrow">Settings</span>
-        <h2 class="admin-page-title">系统配置</h2>
-        <p class="admin-page-subtitle">只读展示当前 application 配置</p>
-      </div>
-      <div class="admin-page-actions">
+    <PageHeader
+      tag="Settings"
+      title="系统设置"
+      description="只读查看当前应用配置，帮助排查模型、限流和记忆策略的运行状态。"
+    >
+      <template #actions>
         <button class="admin-button" type="button" :disabled="loading" @click="loadSettings">
           {{ loading ? "刷新中..." : "刷新" }}
         </button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <article class="admin-panel">
-      <h3>RAG 默认配置</h3>
-      <p class="admin-detail-card-desc">向量空间与检索基础参数</p>
-      <div class="admin-info-grid is-3">
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Collection</span>
-          <span class="admin-info-item-value">{{ ragDefaults.collectionName || "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Dimension</span>
-          <span class="admin-info-item-value">{{ ragDefaults.dimension ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Metric Type</span>
-          <span class="admin-info-item-value">{{ ragDefaults.metricType || "--" }}</span>
-        </div>
-      </div>
-    </article>
+    <div class="admin-stat-grid">
+      <StatCard title="RAG 默认配置" :value="ragDefaults.collectionName || '--'" tone="indigo">
+        <template #icon>R</template>
+      </StatCard>
+      <StatCard title="查询改写" :value="normalizeBooleanLabel(queryRewrite.enabled)" tone="cyan">
+        <template #icon>Q</template>
+      </StatCard>
+      <StatCard title="全局限流" :value="normalizeBooleanLabel(rateLimit.enabled)" tone="emerald">
+        <template #icon>L</template>
+      </StatCard>
+      <StatCard title="记忆策略" :value="normalizeBooleanLabel(memory.summaryEnabled)" tone="amber">
+        <template #icon>M</template>
+      </StatCard>
+    </div>
 
-    <article class="admin-panel">
-      <h3>查询改写</h3>
-      <p class="admin-detail-card-desc">历史上下文压缩与改写策略</p>
-      <div class="admin-info-grid is-3">
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Enabled</span>
-          <span class="admin-info-item-value">
-            <span :class="['admin-badge', queryRewrite.enabled ? 'is-success' : 'is-muted']">
-              {{ normalizeBooleanLabel(queryRewrite.enabled) }}
+    <section class="admin-panel-grid">
+      <article class="admin-panel">
+        <h3>RAG 默认配置</h3>
+        <p class="admin-detail-card-desc">向量空间与检索基础参数</p>
+        <div class="admin-info-grid is-3">
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Collection</span>
+            <span class="admin-info-item-value">{{ ragDefaults.collectionName || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Dimension</span>
+            <span class="admin-info-item-value">{{ ragDefaults.dimension ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Metric Type</span>
+            <span class="admin-info-item-value">{{ ragDefaults.metricType || "--" }}</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="admin-panel">
+        <h3>查询改写</h3>
+        <p class="admin-detail-card-desc">历史上下文压缩与改写策略</p>
+        <div class="admin-info-grid is-3">
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Enabled</span>
+            <span class="admin-info-item-value">
+              <span :class="['admin-badge', queryRewrite.enabled ? 'is-success' : 'is-outline']">
+                {{ normalizeBooleanLabel(queryRewrite.enabled) }}
+              </span>
             </span>
-          </span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Max History Messages</span>
+            <span class="admin-info-item-value">{{ queryRewrite.maxHistoryMessages ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Max History Chars</span>
+            <span class="admin-info-item-value">{{ queryRewrite.maxHistoryChars ?? "--" }}</span>
+          </div>
         </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Max History Messages</span>
-          <span class="admin-info-item-value">{{ queryRewrite.maxHistoryMessages ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Max History Chars</span>
-          <span class="admin-info-item-value">{{ queryRewrite.maxHistoryChars ?? "--" }}</span>
-        </div>
-      </div>
-    </article>
+      </article>
 
-    <article class="admin-panel">
-      <h3>全局限流</h3>
-      <p class="admin-detail-card-desc">并发与租约控制</p>
-      <div class="admin-info-grid is-3">
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Enabled</span>
-          <span class="admin-info-item-value">
-            <span :class="['admin-badge', rateLimit.enabled ? 'is-success' : 'is-muted']">
-              {{ normalizeBooleanLabel(rateLimit.enabled) }}
+      <article class="admin-panel">
+        <h3>全局限流</h3>
+        <p class="admin-detail-card-desc">并发与租约控制</p>
+        <div class="admin-info-grid is-3">
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Enabled</span>
+            <span class="admin-info-item-value">
+              <span :class="['admin-badge', rateLimit.enabled ? 'is-success' : 'is-outline']">
+                {{ normalizeBooleanLabel(rateLimit.enabled) }}
+              </span>
             </span>
-          </span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Max Concurrent</span>
+            <span class="admin-info-item-value">{{ rateLimit.maxConcurrent ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Max Wait Seconds</span>
+            <span class="admin-info-item-value">{{ rateLimit.maxWaitSeconds ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Lease Seconds</span>
+            <span class="admin-info-item-value">{{ rateLimit.leaseSeconds ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Poll Interval (ms)</span>
+            <span class="admin-info-item-value">{{ rateLimit.pollIntervalMs ?? "--" }}</span>
+          </div>
         </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Max Concurrent</span>
-          <span class="admin-info-item-value">{{ rateLimit.maxConcurrent ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Max Wait Seconds</span>
-          <span class="admin-info-item-value">{{ rateLimit.maxWaitSeconds ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Lease Seconds</span>
-          <span class="admin-info-item-value">{{ rateLimit.leaseSeconds ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Poll Interval (ms)</span>
-          <span class="admin-info-item-value">{{ rateLimit.pollIntervalMs ?? "--" }}</span>
-        </div>
-      </div>
-    </article>
+      </article>
 
-    <article class="admin-panel">
-      <h3>记忆管理</h3>
-      <p class="admin-detail-card-desc">摘要与上下文保留策略</p>
-      <div class="admin-info-grid is-3">
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">History Keep Turns</span>
-          <span class="admin-info-item-value">{{ memory.historyKeepTurns ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Summary Start Turns</span>
-          <span class="admin-info-item-value">{{ memory.summaryStartTurns ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Summary Enabled</span>
-          <span class="admin-info-item-value">
-            <span :class="['admin-badge', memory.summaryEnabled ? 'is-success' : 'is-muted']">
-              {{ normalizeBooleanLabel(memory.summaryEnabled) }}
+      <article class="admin-panel">
+        <h3>记忆管理</h3>
+        <p class="admin-detail-card-desc">摘要与上下文保留策略</p>
+        <div class="admin-info-grid is-3">
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">History Keep Turns</span>
+            <span class="admin-info-item-value">{{ memory.historyKeepTurns ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Summary Start Turns</span>
+            <span class="admin-info-item-value">{{ memory.summaryStartTurns ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Summary Enabled</span>
+            <span class="admin-info-item-value">
+              <span :class="['admin-badge', memory.summaryEnabled ? 'is-success' : 'is-outline']">
+                {{ normalizeBooleanLabel(memory.summaryEnabled) }}
+              </span>
             </span>
-          </span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">TTL Minutes</span>
+            <span class="admin-info-item-value">{{ memory.ttlMinutes ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Summary Max Chars</span>
+            <span class="admin-info-item-value">{{ memory.summaryMaxChars ?? "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Title Max Length</span>
+            <span class="admin-info-item-value">{{ memory.titleMaxLength ?? "--" }}</span>
+          </div>
         </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">TTL Minutes</span>
-          <span class="admin-info-item-value">{{ memory.ttlMinutes ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Summary Max Chars</span>
-          <span class="admin-info-item-value">{{ memory.summaryMaxChars ?? "--" }}</span>
-        </div>
-        <div class="admin-info-item">
-          <span class="admin-info-item-label">Title Max Length</span>
-          <span class="admin-info-item-value">{{ memory.titleMaxLength ?? "--" }}</span>
-        </div>
-      </div>
-    </article>
+      </article>
+    </section>
 
-    <article class="admin-table-card">
-      <div class="admin-toolbar">
-        <div class="admin-toolbar-left">
-          <h3>模型服务提供方</h3>
+    <section class="admin-table-card">
+      <div class="admin-table-card__header">
+        <div>
+          <h2>模型服务提供方</h2>
+          <p>查看当前 AI Provider 与端点配置。</p>
         </div>
-        <div class="admin-page-count">{{ providerEntries.length }} provider(s)</div>
+        <span class="admin-page-count">{{ providerEntries.length }} provider(s)</span>
       </div>
-      <p class="admin-detail-card-desc">接入地址与端点配置</p>
 
       <div v-if="providerEntries.length === 0" class="admin-empty">暂无 provider 配置</div>
       <div v-else class="admin-table-wrap">
@@ -185,7 +202,7 @@ onMounted(() => {
               <td>{{ name }}</td>
               <td class="is-code">{{ provider?.url || "--" }}</td>
               <td>
-                <div v-for="(val, key) in (provider?.endpoints || {})" :key="key" class="is-code" style="font-size: 11px;">
+                <div v-for="(val, key) in (provider?.endpoints || {})" :key="key" class="is-code admin-table-small-row">
                   {{ key }}: {{ val }}
                 </div>
                 <span v-if="!Object.keys(provider?.endpoints || {}).length">--</span>
@@ -194,12 +211,12 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
-    </article>
+    </section>
 
     <article v-for="group in modelGroups" :key="group.label" class="admin-panel">
       <h3>{{ group.label }} 模型配置</h3>
       <p class="admin-detail-card-desc">默认模型与候选列表</p>
-      <div class="admin-info-grid is-2" style="margin-bottom: 16px;">
+      <div class="admin-info-grid is-2">
         <div class="admin-info-item">
           <span class="admin-info-item-label">Default Model</span>
           <span class="admin-info-item-value">{{ group.data?.defaultModel || "--" }}</span>

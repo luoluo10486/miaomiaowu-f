@@ -1,18 +1,192 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { getRagTraceDetail, getRagTraceNodes } from "../../services/ragTraceService";
-import { formatDateTime, formatRelativeStatus, safeArray } from "./adminShared";
+import PageHeader from "../../components/admin/PageHeader.vue";
+import StatCard from "../../components/admin/StatCard.vue";
+import {
+  clamp,
+  formatDateTime,
+  formatDuration,
+  normalizeStatus,
+  statusBadgeClass,
+  statusLabel,
+  toTimestamp
+} from "./traceUtils";
 
 const route = useRoute();
 const router = useRouter();
-const traceId = computed(() => route.params.traceId);
+const traceId = computed(() => String(route.params.traceId || ""));
 const loading = ref(false);
 const errorText = ref("");
 const detail = ref(null);
 const nodes = ref([]);
 
+const run = computed(() => detail.value?.run || {});
+
+function pickFirstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
+function resolveNodeDuration(node) {
+  const durationMs = Number(node?.durationMs ?? 0);
+  if (Number.isFinite(durationMs) && durationMs > 0) return durationMs;
+  const start = toTimestamp(node?.startTime);
+  const end = toTimestamp(node?.endTime);
+  if (start !== null && end !== null && end >= start) return end - start;
+  return 0;
+}
+
+function stringifyJson(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function statusTone(status) {
+  const normalized = normalizeStatus(status);
+  if (normalized === "failed" || normalized === "timeout") return "amber";
+  if (normalized === "running") return "cyan";
+  return "emerald";
+}
+
+const traceRequest = computed(() =>
+  pickFirstDefined(
+    detail.value?.request,
+    detail.value?.requestPayload,
+    detail.value?.requestBody,
+    run.value.request,
+    run.value.requestPayload,
+    run.value.requestBody
+  )
+);
+
+const traceResponse = computed(() =>
+  pickFirstDefined(
+    detail.value?.response,
+    detail.value?.responsePayload,
+    detail.value?.responseBody,
+    run.value.response,
+    run.value.responsePayload,
+    run.value.responseBody
+  )
+);
+
+const traceMetadata = computed(() =>
+  pickFirstDefined(
+    detail.value?.metadata,
+    detail.value?.requestMetadata,
+    run.value.metadata
+  )
+);
+
+const traceError = computed(() =>
+  pickFirstDefined(
+    run.value.errorMessage,
+    detail.value?.errorMessage,
+    detail.value?.error
+  )
+);
+
+const overviewCards = computed(() => [
+  {
+    title: "状态",
+    value: statusLabel(run.value.status),
+    tone: statusTone(run.value.status),
+    icon: "S"
+  },
+  {
+    title: "耗时",
+    value: formatDuration(run.value.durationMs ?? undefined),
+    tone: "indigo",
+    icon: "D"
+  },
+  {
+    title: "用户",
+    value: run.value.userName || run.value.username || run.value.userId || "--",
+    tone: "cyan",
+    icon: "U"
+  },
+  {
+    title: "开始时间",
+    value: formatDateTime(run.value.startTime),
+    tone: "amber",
+    icon: "T"
+  }
+]);
+
+const nodeStats = computed(() => {
+  const total = nodes.value.length;
+  const success = nodes.value.filter((node) => normalizeStatus(node.status) === "success").length;
+  const failed = nodes.value.filter((node) => normalizeStatus(node.status) === "failed").length;
+  const running = nodes.value.filter((node) => normalizeStatus(node.status) === "running").length;
+  const avgDuration =
+    total > 0
+      ? Math.round(nodes.value.reduce((sum, node) => sum + resolveNodeDuration(node), 0) / total)
+      : 0;
+  return { total, success, failed, running, avgDuration };
+});
+
+const timeline = computed(() => {
+  const source = Array.isArray(nodes.value) ? nodes.value : [];
+  if (source.length === 0) {
+    return { totalWindowMs: 0, rows: [] };
+  }
+
+  const normalized = source.map((node) => {
+    const startTs = toTimestamp(node.startTime);
+    const endTs = toTimestamp(node.endTime);
+    const resolvedDurationMs = resolveNodeDuration(node);
+    const depthValue = Math.max(0, Number(node.depth ?? node.level ?? 0));
+    const resolvedStartTs = startTs ?? 0;
+    const resolvedEndTs = endTs ?? (resolvedStartTs > 0 ? resolvedStartTs + resolvedDurationMs : 0);
+    return {
+      ...node,
+      depthValue,
+      resolvedDurationMs,
+      startTs: resolvedStartTs,
+      endTs: resolvedEndTs
+    };
+  });
+
+  const withTime = normalized.filter((item) => item.startTs > 0);
+  const baseStart = withTime.length
+    ? withTime.reduce((min, item) => Math.min(min, item.startTs), withTime[0].startTs)
+    : Date.now();
+  const maxEnd = withTime.length
+    ? withTime.reduce((max, item) => Math.max(max, item.endTs || item.startTs), withTime[0].endTs || withTime[0].startTs)
+    : baseStart;
+  const runDuration = Number(run.value.durationMs ?? 0);
+  const windowDuration = Math.max(runDuration > 0 ? runDuration : maxEnd - baseStart, 1);
+
+  const rows = normalized
+    .sort((a, b) => a.startTs - b.startTs || a.depthValue - b.depthValue)
+    .map((node) => {
+      const offsetMs = node.startTs > 0 ? Math.max(0, node.startTs - baseStart) : 0;
+      const leftPercent = clamp((offsetMs / windowDuration) * 100, 0, 99.2);
+      const widthPercent = clamp(
+        (Math.max(node.resolvedDurationMs, 1) / windowDuration) * 100,
+        0.8,
+        100 - leftPercent
+      );
+      return { ...node, offsetMs, leftPercent, widthPercent };
+    });
+
+  return { totalWindowMs: windowDuration, rows };
+});
+
 async function loadTraceDetail() {
+  if (!traceId.value) {
+    detail.value = null;
+    nodes.value = [];
+    errorText.value = "";
+    return;
+  }
+
   loading.value = true;
   errorText.value = "";
   try {
@@ -21,13 +195,28 @@ async function loadTraceDetail() {
       getRagTraceNodes(traceId.value)
     ]);
     detail.value = detailData;
-    nodes.value = Array.isArray(nodesData) ? nodesData : safeArray(detailData?.nodes);
+    nodes.value = Array.isArray(nodesData) ? nodesData : Array.isArray(detailData?.nodes) ? detailData.nodes : [];
   } catch (error) {
-    errorText.value = error?.message || "加载 trace 详情失败。";
+    errorText.value = error?.message || "加载 trace 详情失败，请稍后重试。";
+    detail.value = null;
+    nodes.value = [];
   } finally {
     loading.value = false;
   }
 }
+
+async function copyTraceId() {
+  if (!traceId.value || !navigator?.clipboard?.writeText) return;
+  try {
+    await navigator.clipboard.writeText(traceId.value);
+  } catch {
+    // Ignore clipboard failures in restricted environments.
+  }
+}
+
+watch(traceId, () => {
+  void loadTraceDetail();
+});
 
 onMounted(() => {
   void loadTraceDetail();
@@ -36,71 +225,143 @@ onMounted(() => {
 
 <template>
   <section class="admin-page">
-    <header class="admin-page-header">
-      <div>
-        <span class="admin-page-eyebrow">Trace Detail</span>
-        <h2 class="admin-page-title">Trace {{ traceId }}</h2>
-        <p class="admin-page-subtitle">查看 trace run 摘要和节点级执行明细，方便排查超时、报错和节点链路问题。</p>
-      </div>
-      <div class="admin-page-actions">
-        <button class="admin-button--ghost" type="button" @click="router.push('/admin/traces')">返回</button>
+    <PageHeader
+      tag="Trace Detail"
+      :title="traceId ? `Trace ${traceId}` : 'Trace 详情'"
+      description="查看链路运行摘要、请求响应、错误信息和节点时间线，帮助快速定位异常与耗时瓶颈。"
+    >
+      <template #actions>
+        <button class="admin-button--ghost" type="button" @click="router.push('/admin/traces')">
+          返回列表
+        </button>
+        <button class="admin-button--ghost" type="button" @click="copyTraceId" :disabled="!traceId">
+          复制 ID
+        </button>
         <button class="admin-button" type="button" :disabled="loading" @click="loadTraceDetail">
           {{ loading ? "刷新中..." : "刷新" }}
         </button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
     <div class="admin-stat-grid">
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-emerald"><span>S</span></div>
-          <div>
-            <span class="admin-stat-label">状态</span>
-            <span class="admin-stat-value">{{ formatRelativeStatus(detail?.run?.status) }}</span>
+      <StatCard
+        v-for="card in overviewCards"
+        :key="card.title"
+        :title="card.title"
+        :value="card.value"
+        :tone="card.tone"
+      >
+        <template #icon>{{ card.icon }}</template>
+      </StatCard>
+    </div>
+
+    <div class="admin-split">
+      <article class="admin-detail-card">
+        <h3>基础信息</h3>
+        <p class="admin-detail-card-desc">Trace 标识、会话、任务与时间范围</p>
+        <div class="admin-info-grid is-2">
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Trace ID</span>
+            <span class="admin-info-item-value admin-code">{{ traceId || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Trace Name</span>
+            <span class="admin-info-item-value">{{ run.traceName || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Conversation ID</span>
+            <span class="admin-info-item-value admin-code">{{ run.conversationId || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">Task ID</span>
+            <span class="admin-info-item-value admin-code">{{ run.taskId || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">用户名</span>
+            <span class="admin-info-item-value">{{ run.userName || run.username || run.userId || "--" }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">结束时间</span>
+            <span class="admin-info-item-value">{{ formatDateTime(run.endTime) }}</span>
           </div>
         </div>
-        <p class="admin-stat-note">{{ detail?.run?.errorMessage || "无错误" }}</p>
       </article>
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-indigo"><span>D</span></div>
-          <div>
-            <span class="admin-stat-label">耗时</span>
-            <span class="admin-stat-value">{{ detail?.run?.durationMs ? `${detail.run.durationMs} ms` : "--" }}</span>
+
+      <article class="admin-detail-card">
+        <h3>运行概览</h3>
+        <p class="admin-detail-card-desc">状态、耗时与节点统计</p>
+        <div class="admin-info-grid is-2">
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">状态</span>
+            <span class="admin-info-item-value">
+              <span :class="['admin-badge', statusBadgeClass(run.status)]">{{ statusLabel(run.status) }}</span>
+            </span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">总耗时</span>
+            <span class="admin-info-item-value">{{ formatDuration(run.durationMs ?? undefined) }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">节点数</span>
+            <span class="admin-info-item-value">{{ nodeStats.total }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">平均节点耗时</span>
+            <span class="admin-info-item-value">{{ formatDuration(nodeStats.avgDuration) }}</span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">成功 / 失败 / 运行中</span>
+            <span class="admin-info-item-value">
+              {{ nodeStats.success }} / {{ nodeStats.failed }} / {{ nodeStats.running }}
+            </span>
+          </div>
+          <div class="admin-info-item">
+            <span class="admin-info-item-label">开始时间</span>
+            <span class="admin-info-item-value">{{ formatDateTime(run.startTime) }}</span>
           </div>
         </div>
-        <p class="admin-stat-note">{{ detail?.run?.entryMethod || "--" }}</p>
-      </article>
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-cyan"><span>U</span></div>
-          <div>
-            <span class="admin-stat-label">用户</span>
-            <span class="admin-stat-value">{{ detail?.run?.userName || detail?.run?.username || "--" }}</span>
-          </div>
-        </div>
-        <p class="admin-stat-note">{{ detail?.run?.userId || "--" }}</p>
-      </article>
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-amber"><span>T</span></div>
-          <div>
-            <span class="admin-stat-label">开始时间</span>
-            <span class="admin-stat-value">{{ formatDateTime(detail?.run?.startTime) }}</span>
-          </div>
-        </div>
-        <p class="admin-stat-note">{{ detail?.run?.taskId || "--" }}</p>
       </article>
     </div>
 
-    <article class="admin-table-card">
-      <div class="admin-toolbar">
-        <div class="admin-toolbar-left">
-          <h3>节点执行明细</h3>
+    <section class="admin-detail-card">
+      <h3>请求 / 响应 / 元数据</h3>
+      <p class="admin-detail-card-desc">如果后端返回了原始载荷，这里会同步展示出来，方便排查链路上下文。</p>
+      <div class="admin-split">
+        <div>
+          <h4 class="trace-section-title">Request</h4>
+          <pre v-if="traceRequest" class="admin-pre">{{ stringifyJson(traceRequest) }}</pre>
+          <div v-else class="admin-empty">暂无请求内容</div>
         </div>
-        <div class="admin-page-count">{{ nodes.length }} node(s)</div>
+        <div>
+          <h4 class="trace-section-title">Response</h4>
+          <pre v-if="traceResponse" class="admin-pre">{{ stringifyJson(traceResponse) }}</pre>
+          <div v-else class="admin-empty">暂无响应内容</div>
+        </div>
+      </div>
+
+      <div class="trace-meta-grid">
+        <div>
+          <h4 class="trace-section-title">Error</h4>
+          <pre v-if="traceError" class="admin-pre is-error">{{ stringifyJson(traceError) }}</pre>
+          <div v-else class="admin-empty">暂无错误信息</div>
+        </div>
+        <div>
+          <h4 class="trace-section-title">Metadata</h4>
+          <pre v-if="traceMetadata" class="admin-pre">{{ stringifyJson(traceMetadata) }}</pre>
+          <div v-else class="admin-empty">暂无元数据</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-table-card">
+      <div class="admin-table-card__header">
+        <div>
+          <h2>节点执行时间线</h2>
+          <p>共 {{ nodeStats.total }} 个节点，成功 {{ nodeStats.success }}，失败 {{ nodeStats.failed }}，运行中 {{ nodeStats.running }}。</p>
+        </div>
+        <span class="admin-page-count">{{ formatDuration(timeline.totalWindowMs) }}</span>
       </div>
 
       <div v-if="loading && nodes.length === 0" class="admin-empty">加载中...</div>
@@ -112,30 +373,98 @@ onMounted(() => {
               <th>节点</th>
               <th>类型</th>
               <th>状态</th>
+              <th>时间线</th>
               <th>耗时</th>
               <th>开始时间</th>
+              <th>结束时间</th>
               <th>错误信息</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in nodes" :key="item.nodeId">
+            <tr v-for="item in timeline.rows" :key="item.nodeId">
               <td>
-                <p>{{ item.nodeName || item.nodeId }}</p>
-                <small class="admin-list-meta is-code">{{ item.parentNodeId || "--" }}</small>
+                <p class="admin-cell-title">{{ item.nodeName || item.nodeId }}</p>
+                <p class="admin-cell-subtitle is-secondary">{{ item.parentNodeId || "--" }}</p>
               </td>
               <td>{{ item.nodeType || item.className || "--" }}</td>
               <td>
-                <span :class="['admin-badge', item.status === 'FAILED' ? 'is-danger' : item.status === 'RUNNING' ? 'is-warn' : 'is-success']">
-                  {{ formatRelativeStatus(item.status) }}
+                <span :class="['admin-badge', statusBadgeClass(item.status)]">
+                  {{ statusLabel(item.status) }}
                 </span>
               </td>
-              <td>{{ item.durationMs ? `${item.durationMs} ms` : "--" }}</td>
+              <td>
+                <div class="trace-timeline">
+                  <div class="trace-timeline-track">
+                    <div
+                      class="trace-timeline-bar"
+                      :class="{
+                        'is-slowest':
+                          nodeStats.avgDuration > 0 && resolveNodeDuration(item) >= nodeStats.avgDuration * 1.2
+                      }"
+                      :style="{
+                        left: `${item.leftPercent}%`,
+                        width: `${Math.max(item.widthPercent, 0.8)}%`
+                      }"
+                    />
+                  </div>
+                </div>
+              </td>
+              <td>{{ formatDuration(item.resolvedDurationMs) }}</td>
               <td>{{ formatDateTime(item.startTime) }}</td>
+              <td>{{ formatDateTime(item.endTime) }}</td>
               <td>{{ item.errorMessage || "--" }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </article>
+    </section>
   </section>
 </template>
+
+<style scoped>
+.trace-section-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-ink-soft);
+}
+
+.trace-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.trace-timeline {
+  min-width: 260px;
+}
+
+.trace-timeline-track {
+  position: relative;
+  height: 20px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.5), rgba(241, 245, 249, 1));
+  overflow: hidden;
+}
+
+.trace-timeline-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4f46e5, #60a5fa);
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.18);
+}
+
+.trace-timeline-bar.is-slowest {
+  background: linear-gradient(90deg, #f59e0b, #fb7185);
+  box-shadow: 0 6px 14px rgba(245, 158, 11, 0.18);
+}
+
+@media (max-width: 960px) {
+  .trace-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

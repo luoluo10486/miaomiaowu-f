@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="story-panel story-panel--rag">
-          <button class="scene-label scene-label--button" type="button" @click="router.push('/rag')">
+          <button class="scene-label scene-label--button" type="button" @click="router.push('/chat')">
             RAG 问答
           </button>
           <img

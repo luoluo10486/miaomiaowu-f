@@ -7,6 +7,8 @@ import {
   getKnowledgeBases,
   renameKnowledgeBase
 } from "../../services/knowledgeService";
+import PageHeader from "../../components/admin/PageHeader.vue";
+import StatCard from "../../components/admin/StatCard.vue";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const router = useRouter();
@@ -16,7 +18,7 @@ const keyword = ref("");
 const searchInput = ref("");
 const pageNo = ref(1);
 const pageSize = 10;
-const page = ref({ records: [], total: 0 });
+const page = ref({ records: [], total: 0, size: pageSize });
 
 const createDialogOpen = ref(false);
 const createForm = ref({ name: "", collectionName: "", embeddingModel: "text-embedding-3-large" });
@@ -33,6 +35,8 @@ const deleteSubmitting = ref(false);
 
 const stats = ref({ totalCount: 0, documentCount: 0, activeCount: 0, creatorCount: 0 });
 const statsLoading = ref(false);
+
+const records = computed(() => pageRecords(page.value));
 
 async function loadKnowledgeBases() {
   loading.value = true;
@@ -51,12 +55,12 @@ async function loadStats() {
   statsLoading.value = true;
   try {
     const firstPage = await getKnowledgeBases(1, 200, keyword.value);
-    const records = Array.isArray(firstPage?.records) ? firstPage.records : [];
+    const recordsList = Array.isArray(firstPage?.records) ? firstPage.records : [];
     let documentTotal = 0;
     let activeTotal = 0;
     const creators = new Set();
 
-    records.forEach((kb) => {
+    recordsList.forEach((kb) => {
       const dc = kb.documentCount ?? 0;
       documentTotal += dc;
       if (dc > 0) activeTotal++;
@@ -64,7 +68,7 @@ async function loadStats() {
     });
 
     stats.value = {
-      totalCount: firstPage?.total ?? records.length,
+      totalCount: firstPage?.total ?? recordsList.length,
       documentCount: documentTotal,
       activeCount: activeTotal,
       creatorCount: creators.size
@@ -76,30 +80,35 @@ async function loadStats() {
   }
 }
 
+function formatStatValue(value) {
+  if (statsLoading.value) return "--";
+  return Number(value || 0).toLocaleString("zh-CN");
+}
+
 function handleSearch() {
   pageNo.value = 1;
   keyword.value = searchInput.value.trim();
-  loadKnowledgeBases();
-  loadStats();
+  void loadKnowledgeBases();
+  void loadStats();
 }
 
 function handleRefresh() {
   pageNo.value = 1;
-  loadKnowledgeBases();
-  loadStats();
+  void loadKnowledgeBases();
+  void loadStats();
 }
 
 function goPrev() {
   if (pageNo.value > 1) {
-    pageNo.value--;
-    loadKnowledgeBases();
+    pageNo.value -= 1;
+    void loadKnowledgeBases();
   }
 }
 
 function goNext() {
   if (pageNo.value < pageCount(page.value)) {
-    pageNo.value++;
-    loadKnowledgeBases();
+    pageNo.value += 1;
+    void loadKnowledgeBases();
   }
 }
 
@@ -118,7 +127,9 @@ async function handleCreate() {
   try {
     await createKnowledgeBase({
       name: createForm.value.name.trim(),
-      collectionName: createForm.value.collectionName.trim() || createForm.value.name.trim().replace(/\s+/g, "-").toLowerCase(),
+      collectionName:
+        createForm.value.collectionName.trim() ||
+        createForm.value.name.trim().replace(/\s+/g, "-").toLowerCase(),
       embeddingModel: createForm.value.embeddingModel.trim() || "text-embedding-3-large"
     });
     createDialogOpen.value = false;
@@ -185,14 +196,9 @@ async function handleDelete() {
   }
 }
 
-function formatStatValue(value) {
-  if (statsLoading.value) return "--";
-  return Number(value || 0).toLocaleString("zh-CN");
-}
-
 watch(keyword, () => {
   pageNo.value = 1;
-  loadKnowledgeBases();
+  void loadKnowledgeBases();
 });
 
 onMounted(() => {
@@ -203,17 +209,15 @@ onMounted(() => {
 
 <template>
   <section class="admin-page">
-    <header class="admin-page-header">
-      <div>
-        <span class="admin-page-eyebrow">Knowledge</span>
-        <h2 class="admin-page-title">知识库管理</h2>
-        <p class="admin-page-subtitle">管理所有知识库及其文档</p>
-      </div>
-
-      <div class="admin-page-actions">
+    <PageHeader
+      tag="Knowledge"
+      title="知识库管理"
+      description="管理所有知识库、集合名称和文档汇总，支持搜索、新建、重命名和删除。"
+    >
+      <template #actions>
         <input
           v-model="searchInput"
-          class="admin-input"
+          class="admin-input admin-page-header-search"
           type="search"
           placeholder="搜索知识库名称"
           @keydown.enter.prevent="handleSearch"
@@ -221,57 +225,37 @@ onMounted(() => {
         <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
         <button class="admin-button--ghost" type="button" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新建知识库</button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
     <div class="admin-stat-grid">
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-indigo"><span>库</span></div>
-          <div>
-            <span class="admin-stat-label">知识库</span>
-            <span class="admin-stat-value">{{ formatStatValue(stats.totalCount) }}</span>
-          </div>
-        </div>
-        <span class="admin-stat-scope admin-stat-scope--stamp">全部</span>
-      </article>
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-blue"><span>文</span></div>
-          <div>
-            <span class="admin-stat-label">文档数</span>
-            <span class="admin-stat-value">{{ formatStatValue(stats.documentCount) }}</span>
-          </div>
-        </div>
-        <span class="admin-stat-scope admin-stat-scope--stamp">全部</span>
-      </article>
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-emerald"><span>活</span></div>
-          <div>
-            <span class="admin-stat-label">含文档知识库</span>
-            <span class="admin-stat-value">{{ formatStatValue(stats.activeCount) }}</span>
-          </div>
-        </div>
-        <span class="admin-stat-scope admin-stat-scope--stamp">全部</span>
-      </article>
-      <article class="admin-stat-card">
-        <div class="admin-stat-card-left">
-          <div class="admin-stat-icon is-amber"><span>人</span></div>
-          <div>
-            <span class="admin-stat-label">创建用户数</span>
-            <span class="admin-stat-value">{{ formatStatValue(stats.creatorCount) }}</span>
-          </div>
-        </div>
-        <span class="admin-stat-scope admin-stat-scope--stamp">全部</span>
-      </article>
+      <StatCard title="知识库总数" :value="formatStatValue(stats.totalCount)" tone="indigo">
+        <template #icon>库</template>
+      </StatCard>
+      <StatCard title="文档总数" :value="formatStatValue(stats.documentCount)" tone="blue">
+        <template #icon>文</template>
+      </StatCard>
+      <StatCard title="有文档知识库" :value="formatStatValue(stats.activeCount)" tone="emerald">
+        <template #icon>活</template>
+      </StatCard>
+      <StatCard title="创建者数量" :value="formatStatValue(stats.creatorCount)" tone="amber">
+        <template #icon>人</template>
+      </StatCard>
     </div>
 
-    <article class="admin-table-card">
-      <div v-if="loading" class="admin-empty">加载中...</div>
-      <div v-else-if="pageRecords(page).length === 0" class="admin-empty">暂无知识库，点击上方按钮创建</div>
+    <section class="admin-table-card">
+      <div class="admin-table-card__header">
+        <div>
+          <h2>知识库列表</h2>
+          <p>查看知识库的集合、模型和文档汇总信息，点击名称可进入知识库详情。</p>
+        </div>
+        <span class="admin-page-count">{{ pageTotal(page) }} 条</span>
+      </div>
+
+      <div v-if="loading && records.length === 0" class="admin-empty">加载中...</div>
+      <div v-else-if="records.length === 0" class="admin-empty">暂无知识库，点击右上角按钮创建。</div>
       <div v-else class="admin-table-wrap">
         <table class="admin-table">
           <thead>
@@ -280,14 +264,14 @@ onMounted(() => {
               <th>Embedding 模型</th>
               <th>Collection</th>
               <th>文档数</th>
-              <th>负责人</th>
+              <th>创建者</th>
               <th>创建时间</th>
-              <th>修改时间</th>
+              <th>更新时间</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in pageRecords(page)" :key="item.id">
+            <tr v-for="item in records" :key="item.id">
               <td>
                 <button class="admin-link" type="button" @click="router.push(`/admin/knowledge/${item.id}`)">
                   {{ item.name || "--" }}
@@ -295,7 +279,7 @@ onMounted(() => {
               </td>
               <td class="is-code">{{ item.embeddingModel || "--" }}</td>
               <td>
-                <span class="admin-badge">{{ item.collectionName || "--" }}</span>
+                <span class="admin-badge is-outline">{{ item.collectionName || "--" }}</span>
               </td>
               <td>{{ item.documentCount ?? "--" }}</td>
               <td>{{ item.createdBy || "--" }}</td>
@@ -303,7 +287,7 @@ onMounted(() => {
               <td>{{ formatDateTime(item.updateTime) }}</td>
               <td>
                 <div class="admin-inline-actions">
-                  <button class="admin-button--ghost" type="button" @click="openRenameDialog(item)">编辑</button>
+                  <button class="admin-button--ghost" type="button" @click="openRenameDialog(item)">重命名</button>
                   <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
                 </div>
               </td>
@@ -312,7 +296,7 @@ onMounted(() => {
         </table>
       </div>
 
-      <div v-if="pageRecords(page).length > 0" class="admin-pagination">
+      <div v-if="records.length > 0" class="admin-pagination">
         <span>共 {{ pageTotal(page) }} 条</span>
         <div class="admin-pagination-controls">
           <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
@@ -320,13 +304,13 @@ onMounted(() => {
           <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">下一页</button>
         </div>
       </div>
-    </article>
+    </section>
 
     <div v-if="createDialogOpen" class="admin-dialog-overlay" @click.self="closeCreateDialog">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeCreateDialog">&times;</button>
         <h3>新建知识库</h3>
-        <p>填写知识库信息</p>
+        <p>填写知识库基础信息。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>名称</label>
@@ -354,11 +338,11 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeRenameDialog">&times;</button>
         <h3>重命名知识库</h3>
-        <p>修改知识库名称</p>
+        <p>修改知识库名称。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>名称</label>
-            <input v-model="renameValue" class="admin-input" placeholder="请输入知识库名称" />
+            <input v-model="renameValue" class="admin-input" placeholder="请输入新的名称" />
           </div>
         </div>
         <div class="admin-dialog-footer">
@@ -374,7 +358,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
-        <p class="admin-confirm-text">知识库删除后当前不提供恢复入口。确定要继续吗？</p>
+        <p class="admin-confirm-text">删除后该知识库不可恢复，是否继续？</p>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeDeleteDialog">取消</button>
           <button class="admin-button--danger" type="button" :disabled="deleteSubmitting" @click="handleDelete">

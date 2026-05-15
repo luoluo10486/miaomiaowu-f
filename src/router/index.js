@@ -56,6 +56,10 @@ const router = createRouter({
     },
     {
       path: "/rag",
+      redirect: "/chat"
+    },
+    {
+      path: "/chat",
       name: "rag-chat",
       component: RagChatView,
       meta: {
@@ -65,7 +69,7 @@ const router = createRouter({
       }
     },
     {
-      path: "/rag/:sessionId",
+      path: "/chat/:sessionId",
       name: "rag-chat-session",
       component: RagChatView,
       meta: {
@@ -73,6 +77,10 @@ const router = createRouter({
         title: "RAG Chat",
         description: "支持会话深链的 RAG 问答工作台。"
       }
+    },
+    {
+      path: "/rag/:sessionId",
+      redirect: (to) => `/chat/${to.params.sessionId || ""}`
     },
     {
       path: "/admin",
@@ -270,7 +278,7 @@ router.beforeEach((to) => {
   }
 
   if (requiresAdmin && !isAdminUser(user)) {
-    return "/rag";
+    return "/chat";
   }
 
   if (to.name === "login" && isAuthenticated) {
