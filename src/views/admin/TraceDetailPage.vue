@@ -77,19 +77,11 @@ const traceResponse = computed(() =>
 );
 
 const traceMetadata = computed(() =>
-  pickFirstDefined(
-    detail.value?.metadata,
-    detail.value?.requestMetadata,
-    run.value.metadata
-  )
+  pickFirstDefined(detail.value?.metadata, detail.value?.requestMetadata, run.value.metadata)
 );
 
 const traceError = computed(() =>
-  pickFirstDefined(
-    run.value.errorMessage,
-    detail.value?.errorMessage,
-    detail.value?.error
-  )
+  pickFirstDefined(run.value.errorMessage, detail.value?.errorMessage, detail.value?.error)
 );
 
 const overviewCards = computed(() => [
@@ -228,7 +220,7 @@ onMounted(() => {
     <PageHeader
       tag="Trace Detail"
       :title="traceId ? `Trace ${traceId}` : 'Trace 详情'"
-      description="查看链路运行摘要、请求响应、错误信息和节点时间线，帮助快速定位异常与耗时瓶颈。"
+      description="查看链路运行摘要、请求响应、错误信息和节点时间线，快速定位异常与耗时瓶颈。"
     >
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="router.push('/admin/traces')">
@@ -279,7 +271,7 @@ onMounted(() => {
             <span class="admin-info-item-value admin-code">{{ run.taskId || "--" }}</span>
           </div>
           <div class="admin-info-item">
-            <span class="admin-info-item-label">用户名</span>
+            <span class="admin-info-item-label">用户</span>
             <span class="admin-info-item-value">{{ run.userName || run.username || run.userId || "--" }}</span>
           </div>
           <div class="admin-info-item">
@@ -327,7 +319,7 @@ onMounted(() => {
 
     <section class="admin-detail-card">
       <h3>请求 / 响应 / 元数据</h3>
-      <p class="admin-detail-card-desc">如果后端返回了原始载荷，这里会同步展示出来，方便排查链路上下文。</p>
+      <p class="admin-detail-card-desc">如果后端返回了原始载荷，这里会同步展示出来，便于排查上下文。</p>
       <div class="admin-split">
         <div>
           <h4 class="trace-section-title">Request</h4>
@@ -359,7 +351,9 @@ onMounted(() => {
       <div class="admin-table-card__header">
         <div>
           <h2>节点执行时间线</h2>
-          <p>共 {{ nodeStats.total }} 个节点，成功 {{ nodeStats.success }}，失败 {{ nodeStats.failed }}，运行中 {{ nodeStats.running }}。</p>
+          <p>
+            共 {{ nodeStats.total }} 个节点，成功 {{ nodeStats.success }}，失败 {{ nodeStats.failed }}，运行中 {{ nodeStats.running }}。
+          </p>
         </div>
         <span class="admin-page-count">{{ formatDuration(timeline.totalWindowMs) }}</span>
       </div>
@@ -398,8 +392,7 @@ onMounted(() => {
                     <div
                       class="trace-timeline-bar"
                       :class="{
-                        'is-slowest':
-                          nodeStats.avgDuration > 0 && resolveNodeDuration(item) >= nodeStats.avgDuration * 1.2
+                        'is-slowest': nodeStats.avgDuration > 0 && resolveNodeDuration(item) >= nodeStats.avgDuration * 1.2
                       }"
                       :style="{
                         left: `${item.leftPercent}%`,
@@ -460,6 +453,11 @@ onMounted(() => {
 .trace-timeline-bar.is-slowest {
   background: linear-gradient(90deg, #f59e0b, #fb7185);
   box-shadow: 0 6px 14px rgba(245, 158, 11, 0.18);
+}
+
+.admin-pre.is-error {
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 @media (max-width: 960px) {

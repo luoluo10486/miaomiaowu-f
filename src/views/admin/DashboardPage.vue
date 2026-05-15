@@ -1,33 +1,24 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+
+import StatCard from "../../components/admin/StatCard.vue";
 import {
   getAdminDashboardOverview,
   getAdminDashboardPerformance,
   getAdminDashboardTrends
 } from "../../services/dashboardService";
-import { formatDateTime } from "./adminShared";
 
-const loading = ref(false);
-const errorText = ref("");
-const overview = ref(null);
-const performance = ref(null);
-
-const trendsSessions = ref(null);
-const trendsMessages = ref(null);
-const trendsActiveUsers = ref(null);
-const trendsLatency = ref(null);
-const trendsQuality = ref(null);
-
-const windowValue = ref("24h");
-const lastUpdated = ref(null);
-
-const windowOptions = [
+const WINDOW_OPTIONS = [
   { value: "24h", label: "24h" },
   { value: "7d", label: "7d" },
   { value: "30d", label: "30d" }
 ];
 
-const WINDOW_LABEL_MAP = { "24h": "滚动 24h", "7d": "近 7 天", "30d": "近 30 天" };
+const WINDOW_LABEL_MAP = {
+  "24h": "最近 24 小时",
+  "7d": "最近 7 天",
+  "30d": "最近 30 天"
+};
 
 const THRESHOLDS = {
   latency: { good: 10000, warning: 15000 },
@@ -36,562 +27,702 @@ const THRESHOLDS = {
   noDocRate: { good: 10, warning: 30 }
 };
 
+const windowValue = ref("24h");
+const loading = ref(false);
+const errorText = ref("");
+const overview = ref(null);
+const performance = ref(null);
+const trends = ref({
+  sessions: null,
+  messages: null,
+  activeUsers: null,
+  latency: null,
+  quality: null
+});
+const lastUpdated = ref(null);
+const requestId = ref(0);
+
 function formatNumber(value) {
   if (value === null || value === undefined) return "--";
   return Number(value).toLocaleString("zh-CN");
 }
 
 function formatPercent(value) {
-  if (value === null || value === undefined) return "--";
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
   return `${Number(value).toFixed(1)}%`;
 }
 
 function formatDuration(value) {
-  if (value === null || value === undefined) return "--";
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
   const num = Number(value);
   if (num < 1000) return `${Math.round(num)}ms`;
   return `${(num / 1000).toFixed(2)}s`;
 }
 
 function formatRatio(value) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "--";
-  return value.toFixed(2);
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "--";
+  return Number(value).toFixed(2);
 }
 
-function formatCompactNumber(value) {
-  if (value >= 10000) return `${(value / 1000).toFixed(0)}k`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return Math.round(value).toString();
-}
-
-function formatDelta(deltaPct) {
-  if (deltaPct === null || deltaPct === undefined) return null;
-  const num = Number(deltaPct);
-  if (num > 0) return { text: `+${num.toFixed(1)}%`, trend: "up", positive: true };
-  if (num < 0) return { text: `${num.toFixed(1)}%`, trend: "down", positive: false };
-  return { text: "0%", trend: "flat", positive: true };
-}
-
-function formatLastUpdated() {
-  if (!lastUpdated.value) return "--";
-  return new Date(lastUpdated.value).toLocaleString("zh-CN", {
-    month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+function formatLastUpdated(timestamp) {
+  if (!timestamp) return "--";
+  return new Date(timestamp).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
   });
 }
 
 function getMetricTone(metric, value) {
   if (value === null || value === undefined) return "warning";
+
   if (metric === "latency") {
     if (value < THRESHOLDS.latency.good) return "good";
     if (value < THRESHOLDS.latency.warning) return "warning";
     return "bad";
   }
+
   if (metric === "successRate") {
     if (value >= THRESHOLDS.successRate.good) return "good";
     if (value >= THRESHOLDS.successRate.warning) return "warning";
     return "bad";
   }
+
   if (metric === "errorRate") {
     if (value <= THRESHOLDS.errorRate.good) return "good";
     if (value <= THRESHOLDS.errorRate.warning) return "warning";
     return "bad";
   }
+
   if (value <= THRESHOLDS.noDocRate.good) return "good";
   if (value <= THRESHOLDS.noDocRate.warning) return "warning";
   return "bad";
 }
 
-const TONE_COLOR = { good: "#10B981", warning: "#F59E0B", bad: "#EF4444" };
-
-const healthStatus = computed(() => {
-  const perf = performance.value;
-  const windowMessages = overview.value?.kpis?.messages24h?.value;
+function getHealthStatus(perf, windowMessages) {
   if (!perf || !windowMessages) return "unknown";
   if ((perf.errorRate ?? 0) > THRESHOLDS.errorRate.warning) return "critical";
   if ((perf.successRate ?? 0) < THRESHOLDS.successRate.warning) return "critical";
   if ((perf.noDocRate ?? 0) > 20) return "attention";
   return "healthy";
+}
+
+function formatDelta(deltaPct) {
+  if (deltaPct === null || deltaPct === undefined) return "--";
+  const value = Number(deltaPct);
+  if (!Number.isFinite(value) || value === 0) return "--";
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
+}
+
+function buildTrendSeries(trend) {
+  const series = trend?.series?.[0]?.data || [];
+  if (series.length === 0) {
+    return { points: [], linePath: "", areaPath: "", maxValue: 0 };
+  }
+
+  const values = series.map((item) => Number(item.value) || 0);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const valueRange = Math.max(maxValue - minValue, 1);
+  const points = series.map((item, index) => {
+    const x = series.length === 1 ? 0 : index / (series.length - 1);
+    const normalized = (Number(item.value) - minValue) / valueRange;
+    const y = 1 - normalized;
+    return {
+      x,
+      y,
+      value: Number(item.value) || 0,
+      ts: item.ts
+    };
+  });
+
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const areaPath = `${linePath} L 1 1 L 0 1 Z`;
+
+  return {
+    points,
+    linePath,
+    areaPath,
+    maxValue
+  };
+}
+
+function createSparklineState(sourceGetter) {
+  const tooltip = ref({
+    visible: false,
+    x: 0,
+    y: 0,
+    label: "",
+    value: ""
+  });
+
+  const chartData = computed(() => buildTrendSeries(sourceGetter()));
+
+  function handleMove(event) {
+    const { points } = chartData.value;
+    if (points.length === 0) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
+    let closest = points[0];
+    let minDistance = Number.POSITIVE_INFINITY;
+
+    points.forEach((point) => {
+      const distance = Math.abs(point.x - ratio);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = point;
+      }
+    });
+
+    const date = new Date(closest.ts);
+    const isDaily = windowValue.value !== "24h";
+    const label = isDaily
+      ? `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`
+      : `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+    tooltip.value = {
+      visible: true,
+      x: closest.x,
+      y: closest.y,
+      label,
+      value: String(closest.value)
+    };
+  }
+
+  function handleLeave() {
+    tooltip.value.visible = false;
+  }
+
+  return {
+    chartData,
+    tooltip,
+    handleMove,
+    handleLeave
+  };
+}
+
+const sessionsChart = createSparklineState(() => trends.value.sessions);
+const messagesChart = createSparklineState(() => trends.value.messages);
+const activeUsersChart = createSparklineState(() => trends.value.activeUsers);
+const latencyChart = createSparklineState(() => trends.value.latency);
+const qualityChart = createSparklineState(() => trends.value.quality);
+
+const healthStatus = computed(() => {
+  const perf = performance.value;
+  const messages = overview.value?.kpis?.messages24h?.value;
+  return getHealthStatus(perf, messages);
 });
 
-const HEALTH_CONFIG = {
-  healthy: { bg: "is-success", label: "运行正常" },
-  attention: { bg: "is-warning", label: "需要关注" },
-  critical: { bg: "is-error", label: "风险偏高" },
-  unknown: { bg: "is-muted", label: "暂无数据" }
-};
+const healthMeta = computed(() => {
+  switch (healthStatus.value) {
+    case "healthy":
+      return { label: "运行正常", tone: "is-success", detail: "当前窗口内未发现明显异常。" };
+    case "attention":
+      return { label: "需要关注", tone: "is-warn", detail: "部分指标已经接近阈值。" };
+    case "critical":
+      return { label: "风险偏高", tone: "is-danger", detail: "请优先查看错误率和无知识命中率。" };
+    default:
+      return { label: "暂无数据", tone: "is-muted", detail: "选择时间窗口后会加载指标。" };
+  }
+});
 
 const kpiCards = computed(() => {
   const kpis = overview.value?.kpis || {};
-  const sessionDepth = (kpis.sessions24h?.value ?? 0) > 0
-    ? (kpis.messages24h?.value ?? 0) / (kpis.sessions24h?.value ?? 1)
-    : null;
+  const sessionDepth =
+    (kpis.sessions24h?.value ?? 0) > 0
+      ? (kpis.messages24h?.value ?? 0) / (kpis.sessions24h?.value ?? 1)
+      : null;
+
   return [
-    { label: "活跃用户", value: formatNumber(kpis.activeUsers?.value), delta: formatDelta(kpis.activeUsers?.deltaPct), color: "is-blue" },
-    { label: "会话数", value: formatNumber(kpis.sessions24h?.value), delta: formatDelta(kpis.sessions24h?.deltaPct), color: "is-indigo" },
-    { label: "消息数", value: formatNumber(kpis.messages24h?.value), delta: formatDelta(kpis.messages24h?.deltaPct), color: "is-amber" },
-    { label: "会话深度", value: sessionDepth === null ? "--" : formatRatio(sessionDepth), delta: null, color: "is-cyan", suffix: "条/会话" }
+    {
+      title: "活跃用户",
+      value: formatNumber(kpis.activeUsers?.value),
+      hint: `较上期 ${formatDelta(kpis.activeUsers?.deltaPct)}`,
+      tone: "indigo"
+    },
+    {
+      title: "会话数",
+      value: formatNumber(kpis.sessions24h?.value),
+      hint: `较上期 ${formatDelta(kpis.sessions24h?.deltaPct)}`,
+      tone: "blue"
+    },
+    {
+      title: "消息数",
+      value: formatNumber(kpis.messages24h?.value),
+      hint: `较上期 ${formatDelta(kpis.messages24h?.deltaPct)}`,
+      tone: "amber"
+    },
+    {
+      title: "会话深度",
+      value: sessionDepth === null ? "--" : formatRatio(sessionDepth),
+      hint: "条 / 会话",
+      tone: "cyan"
+    }
   ];
 });
 
-const successRate = computed(() => performance.value?.successRate ?? 0);
-const ringColor = computed(() => {
-  const v = successRate.value;
-  if (v >= 95) return "#10B981";
-  if (v >= 85) return "#F59E0B";
-  return "#EF4444";
-});
-const ringDasharray = computed(() => 2 * Math.PI * 50);
-const ringDashoffset = computed(() => {
-  const progress = (Math.min(successRate.value, 100) / 100) * ringDasharray.value;
-  return ringDasharray.value - progress;
-});
+const performanceRows = computed(() => [
+  {
+    label: "平均响应",
+    value: formatDuration(performance.value?.avgLatencyMs),
+    tone: getMetricTone("latency", performance.value?.avgLatencyMs)
+  },
+  {
+    label: "P95 响应",
+    value: formatDuration(performance.value?.p95LatencyMs),
+    tone: getMetricTone("latency", performance.value?.p95LatencyMs)
+  },
+  {
+    label: "成功率",
+    value: formatPercent(performance.value?.successRate),
+    tone: getMetricTone("successRate", performance.value?.successRate)
+  },
+  {
+    label: "错误率",
+    value: formatPercent(performance.value?.errorRate),
+    tone: getMetricTone("errorRate", performance.value?.errorRate)
+  },
+  {
+    label: "无知识命中率",
+    value: formatPercent(performance.value?.noDocRate),
+    tone: getMetricTone("noDocRate", performance.value?.noDocRate)
+  },
+  {
+    label: "慢响应率",
+    value: formatPercent(performance.value?.slowRate),
+    tone: getMetricTone("latency", performance.value?.slowRate)
+  }
+]);
 
-const metricRows = computed(() => {
-  const p = performance.value || {};
-  return [
-    { label: "平均响应", value: formatDuration(p.avgLatencyMs), tone: getMetricTone("latency", p.avgLatencyMs) },
-    { label: "P95 响应", value: formatDuration(p.p95LatencyMs), tone: getMetricTone("latency", p.p95LatencyMs) }
-  ];
-});
-
-const qualityItems = computed(() => {
-  const p = performance.value || {};
-  return [
-    { label: "错误率", value: p.errorRate, toneClass: "is-error-bar", valueClass: "is-error-text", target: "阈值 ≤5%" },
-    { label: "无知识率", value: p.noDocRate, toneClass: "is-warning-bar", valueClass: "is-warning-text", target: "阈值 ≤20%" },
-    { label: "慢响应率", value: p.slowRate, toneClass: "is-info-bar", valueClass: "is-info-text", target: "阈值 ≤20%" }
-  ];
-});
-
-function clampPercent(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return 0;
-  return Math.max(0, Math.min(100, value));
-}
-
-const efficiencyItems = computed(() => {
+const efficiencyRows = computed(() => {
   const kpis = overview.value?.kpis || {};
   const activeUsers = kpis.activeUsers?.value ?? 0;
   const sessions = kpis.sessions24h?.value ?? 0;
   const messages = kpis.messages24h?.value ?? 0;
+
   return [
-    { label: "人均会话", value: activeUsers > 0 ? formatRatio(sessions / activeUsers) + " 次/人" : "--" },
-    { label: "单会话消息", value: sessions > 0 ? formatRatio(messages / sessions) + " 条/会话" : "--" },
-    { label: "人均消息", value: activeUsers > 0 ? formatRatio(messages / activeUsers) + " 条/人" : "--" }
+    {
+      label: "人均会话",
+      value: activeUsers > 0 ? formatRatio(sessions / activeUsers) : "--"
+    },
+    {
+      label: "单会话消息",
+      value: sessions > 0 ? formatRatio(messages / sessions) : "--"
+    },
+    {
+      label: "人均消息",
+      value: activeUsers > 0 ? formatRatio(messages / activeUsers) : "--"
+    }
   ];
 });
 
 const insights = computed(() => {
   const perf = performance.value;
-  const windowMessages = overview.value?.kpis?.messages24h?.value;
-  const windowLabel = WINDOW_LABEL_MAP[windowValue.value] || windowValue.value;
-  if (!perf || !windowMessages) {
-    return [{ type: "trend", title: "暂无会话数据", metric: "Dashboard", change: windowLabel, context: "当前窗口内暂无消息记录，各项指标将在会话产生后自动更新" }];
+  const windowLabel = WINDOW_LABEL_MAP[windowValue.value];
+
+  if (!perf) {
+    return [
+      {
+        type: "trend",
+        title: "暂无窗口数据",
+        metric: "Dashboard",
+        change: windowLabel,
+        context: "当前窗口还没有足够的统计数据，等会话产生后会自动刷新。"
+      }
+    ];
   }
+
   const items = [];
-  if (perf.errorRate > 5 || perf.successRate < 95) {
+
+  if ((perf.errorRate ?? 0) > 5 || (perf.successRate ?? 0) < 95) {
     items.push({
-      type: "anomaly", title: "链路稳定性触发告警",
-      metric: "成功率/错误率", change: `${perf.successRate.toFixed(1)}% / ${perf.errorRate.toFixed(1)}%`,
-      context: "成功率低于 95% 或错误率高于 5%", action: "优先查看失败请求分布与超时节点"
-    });
-  } else if (perf.noDocRate > 20) {
-    items.push({
-      type: "recommendation", title: "召回质量需优化",
-      metric: "无知识率", change: `${perf.noDocRate.toFixed(1)}%`,
-      context: "无知识率超过 20%，用户命中体验存在风险", action: "优化索引覆盖率与检索重排策略"
+      type: "anomaly",
+      title: "稳定性需要关注",
+      metric: "成功率 / 错误率",
+      change: `${formatPercent(perf.successRate)} / ${formatPercent(perf.errorRate)}`,
+      context: "成功率偏低或错误率偏高，建议优先排查失败请求和超时路径。"
     });
   } else {
     items.push({
-      type: "trend", title: "系统可用性稳定",
-      metric: "成功率", change: `${perf.successRate.toFixed(1)}%`,
-      context: "当前窗口整体可用性处于健康区间"
+      type: "trend",
+      title: "系统状态平稳",
+      metric: "成功率",
+      change: formatPercent(perf.successRate),
+      context: "当前窗口内的服务质量整体处于健康区间。"
     });
   }
-  if (perf.noDocRate > 20 && items.length < 3) {
+
+  if ((perf.noDocRate ?? 0) > 20) {
     items.push({
-      type: "recommendation", title: "召回质量需优化",
-      metric: "无知识率", change: `${perf.noDocRate.toFixed(1)}%`,
-      context: "无知识率超过 20%", action: "优化索引覆盖率与检索重排策略"
+      type: "recommendation",
+      title: "知识召回有优化空间",
+      metric: "无知识命中率",
+      change: formatPercent(perf.noDocRate),
+      context: "召回覆盖不足会直接影响问答体验，建议检查知识库和检索配置。"
     });
   }
-  if (perf.avgLatencyMs > 15000 && items.length < 3) {
+
+  if ((perf.avgLatencyMs ?? 0) > 15000) {
     items.push({
-      type: "recommendation", title: "响应性能需要关注",
-      metric: "平均响应时间", change: `${(perf.avgLatencyMs / 1000).toFixed(2)}s`,
-      context: "平均延迟高于阈值", action: "排查慢节点与模型并发配置"
+      type: "recommendation",
+      title: "响应速度偏慢",
+      metric: "平均响应时间",
+      change: formatDuration(perf.avgLatencyMs),
+      context: "可以优先排查模型、网络和后端链路的慢点。"
     });
   }
-  if (items.length < 3) {
+
+  while (items.length < 3) {
     items.push({
-      type: "recommendation", title: "继续保持当前策略",
-      metric: "运营状态", change: windowLabel,
-      context: "当前窗口内未发现显著异常趋势"
+      type: "recommendation",
+      title: "继续保持当前策略",
+      metric: "运行状态",
+      change: windowLabel,
+      context: "暂未发现新的异常模式。"
     });
   }
+
   return items.slice(0, 3);
 });
 
-const INSIGHT_STYLE = {
-  anomaly: { cls: "is-anomaly", icon: "⚠" },
-  trend: { cls: "is-trend", icon: "ℹ" },
-  recommendation: { cls: "is-recommendation", icon: "💡" }
+const insightMeta = {
+  anomaly: { label: "异常", tone: "is-danger" },
+  trend: { label: "趋势", tone: "is-success" },
+  recommendation: { label: "建议", tone: "is-warn" }
 };
 
-const INSIGHT_TYPE_LABEL = { anomaly: "异常", trend: "趋势", recommendation: "建议" };
-
-function getSeriesData(trend) {
-  if (!trend?.series?.length) return [];
-  return trend.series[0]?.data || [];
-}
-
-function buildChartData(trend) {
-  const data = getSeriesData(trend);
-  if (data.length === 0) return { points: [], linePath: "", areaPath: "", yLabels: [], xLabels: [] };
-  const vals = data.map((d) => Number(d.value) || 0);
-  const maxVal = Math.max(1, ...vals);
-  const CHART_W = 600;
-  const CHART_H = 180;
-  const PAD = { top: 8, right: 8, bottom: 28, left: 40 };
-  const drawW = CHART_W - PAD.left - PAD.right;
-  const drawH = CHART_H - PAD.top - PAD.bottom;
-  const points = data.map((d, i) => {
-    const x = i / Math.max(data.length - 1, 1);
-    const y = 1 - (Number(d.value) / maxVal);
-    return { x, y, ts: d.ts, value: d.value };
-  });
-  let line = "";
-  if (points.length === 1) {
-    line = `M ${points[0].x} ${points[0].y}`;
-  } else {
-    line = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpx1 = prev.x + (curr.x - prev.x) * 0.4;
-      const cpx2 = prev.x + (curr.x - prev.x) * 0.6;
-      line += ` C ${cpx1} ${prev.y}, ${cpx2} ${curr.y}, ${curr.x} ${curr.y}`;
-    }
-  }
-  const areaPath = `${line} L ${points[points.length - 1].x} 1 L ${points[0].x} 1 Z`;
-
-  const yTickCount = 4;
-  const yStep = maxVal / (yTickCount - 1);
-  const yLabels = Array.from({ length: yTickCount }, (_, i) => ({
-    y: i / (yTickCount - 1),
-    label: formatCompactNumber(yStep * (yTickCount - 1 - i))
-  }));
-
-  const xCount = Math.min(5, data.length);
-  const xStep = Math.max(1, Math.floor((data.length - 1) / (xCount - 1)));
-  const xLabels = Array.from({ length: xCount }, (_, i) => {
-    const idx = Math.min(i * xStep, data.length - 1);
-    const pt = data[idx];
-    if (!pt) return null;
-    const date = new Date(pt.ts);
-    const label = windowValue.value === "24h"
-      ? `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
-      : `${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getDate().toString().padStart(2, "0")}`;
-    return { x: idx / Math.max(data.length - 1, 1), label };
-  }).filter(Boolean);
-
-  return { points, linePath: line, areaPath, yLabels, xLabels, CHART_W, CHART_H, PAD };
-}
-
-const trafficData = computed(() => buildChartData(trendsMessages.value));
-const sessionsData = computed(() => buildChartData(trendsSessions.value));
-const activeUsersData = computed(() => buildChartData(trendsActiveUsers.value));
-const latencyData = computed(() => buildChartData(trendsLatency.value));
-const qualityData = computed(() => buildChartData(trendsQuality.value));
-
-function makeChartTooltip(trendRef) {
-  const tooltip = ref({ visible: false, x: 0, y: 0, value: "", label: "" });
-  const data = computed(() => buildChartData(trendRef.value));
-  function handleMove(event) {
-    const pts = data.value.points;
-    if (pts.length === 0) return;
-    const svg = event.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const relativeX = (event.clientX - rect.left) / rect.width;
-    let closestIdx = 0;
-    let minDist = Infinity;
-    pts.forEach((pt, i) => {
-      const dist = Math.abs(pt.x - relativeX);
-      if (dist < minDist) { minDist = dist; closestIdx = i; }
-    });
-    const pt = pts[closestIdx];
-    const date = new Date(pt.ts);
-    const label = windowValue.value === "24h"
-      ? `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
-      : `${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getDate().toString().padStart(2, "0")}`;
-    tooltip.value = { visible: true, x: pt.x, y: pt.y, value: String(pt.value), label };
-  }
-  function handleLeave() { tooltip.value.visible = false; }
-  return { tooltip, data, handleMove, handleLeave };
-}
-
-const trafficChart = makeChartTooltip(trendsMessages);
-const sessionsChart = makeChartTooltip(trendsSessions);
-const activeUsersChart = makeChartTooltip(trendsActiveUsers);
-const latencyChart = makeChartTooltip(trendsLatency);
-const qualityChart = makeChartTooltip(trendsQuality);
-
-async function loadDashboard() {
+async function loadDashboard(nextWindow = windowValue.value) {
+  const currentRequestId = ++requestId.value;
   loading.value = true;
   errorText.value = "";
-  const granularity = windowValue.value === "24h" ? "hour" : "day";
+
+  const granularity = nextWindow === "24h" ? "hour" : "day";
+
   try {
     const [overviewData, performanceData] = await Promise.all([
-      getAdminDashboardOverview(windowValue.value),
-      getAdminDashboardPerformance(windowValue.value)
+      getAdminDashboardOverview(nextWindow),
+      getAdminDashboardPerformance(nextWindow)
     ]);
+
+    if (requestId.value !== currentRequestId) return;
+
     overview.value = overviewData;
     performance.value = performanceData;
     lastUpdated.value = Date.now();
+
     try {
-      const [s, m, au, l, q] = await Promise.all([
-        getAdminDashboardTrends("sessions", windowValue.value, granularity),
-        getAdminDashboardTrends("messages", windowValue.value, granularity),
-        getAdminDashboardTrends("activeUsers", windowValue.value, granularity),
-        getAdminDashboardTrends("avgLatency", windowValue.value, granularity),
-        getAdminDashboardTrends("quality", windowValue.value, granularity)
+      const [sessions, messages, activeUsers, latency, quality] = await Promise.all([
+        getAdminDashboardTrends("sessions", nextWindow, granularity),
+        getAdminDashboardTrends("messages", nextWindow, granularity),
+        getAdminDashboardTrends("activeUsers", nextWindow, granularity),
+        getAdminDashboardTrends("avgLatency", nextWindow, granularity),
+        getAdminDashboardTrends("quality", nextWindow, granularity)
       ]);
-      trendsSessions.value = s;
-      trendsMessages.value = m;
-      trendsActiveUsers.value = au;
-      trendsLatency.value = l;
-      trendsQuality.value = q;
-    } catch {
-      trendsSessions.value = null;
-      trendsMessages.value = null;
-      trendsActiveUsers.value = null;
-      trendsLatency.value = null;
-      trendsQuality.value = null;
+
+      if (requestId.value !== currentRequestId) return;
+
+      trends.value = { sessions, messages, activeUsers, latency, quality };
+    } catch (trendError) {
+      if (requestId.value !== currentRequestId) return;
+      console.error(trendError);
+      trends.value = {
+        sessions: null,
+        messages: null,
+        activeUsers: null,
+        latency: null,
+        quality: null
+      };
     }
   } catch (error) {
-    errorText.value = error?.message || "加载 dashboard 失败，请稍后重试。";
+    if (requestId.value !== currentRequestId) return;
+    console.error(error);
+    errorText.value = "Dashboard 数据加载失败，请稍后重试。";
   } finally {
-    loading.value = false;
+    if (requestId.value === currentRequestId) {
+      loading.value = false;
+    }
   }
 }
 
-function changeWindow(val) {
-  windowValue.value = val;
-  loadDashboard();
+function handleWindowChange(nextWindow) {
+  if (windowValue.value === nextWindow) return;
+  windowValue.value = nextWindow;
+  void loadDashboard(nextWindow);
 }
 
-onMounted(() => { void loadDashboard(); });
+onMounted(() => {
+  void loadDashboard();
+});
 </script>
 
 <template>
   <section class="admin-page admin-dashboard">
     <header class="admin-dashboard-header">
-      <h1 class="admin-page-title">Dashboard</h1>
+      <div>
+        <span class="admin-page-eyebrow">Dashboard</span>
+        <h1 class="admin-page-title">后台总览</h1>
+        <p class="admin-page-subtitle">聚焦会话、消息、性能和知识召回，快速判断当前服务状态。</p>
+      </div>
+
       <div class="admin-dashboard-header-right">
         <div class="admin-window-tabs">
           <button
-            v-for="opt in windowOptions"
-            :key="opt.value"
-            :class="['admin-window-tab', { 'is-active': windowValue === opt.value }]"
+            v-for="option in WINDOW_OPTIONS"
+            :key="option.value"
+            class="admin-window-tab"
+            :class="{ 'is-active': windowValue === option.value }"
             type="button"
             :disabled="loading"
-            @click="changeWindow(opt.value)"
-          >{{ opt.label }}</button>
+            @click="handleWindowChange(option.value)"
+          >
+            {{ option.label }}
+          </button>
         </div>
+
         <div class="admin-updated-stamp">
           <span class="admin-dot is-success" />
-          <span>{{ formatLastUpdated() }}</span>
+          <span>{{ formatLastUpdated(lastUpdated) }}</span>
         </div>
-        <button class="admin-button--icon" type="button" :disabled="loading" @click="loadDashboard">
-          <span :class="['admin-icon-refresh', { 'is-spinning': loading }]">⟳</span>
+
+        <button class="admin-button--icon" type="button" :disabled="loading" @click="loadDashboard()">
+          <span :class="{ 'admin-icon-spin': loading }">↻</span>
         </button>
       </div>
     </header>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <div class="admin-dashboard-grid">
+    <section class="admin-stat-grid">
+      <StatCard
+        v-for="card in kpiCards"
+        :key="card.title"
+        :title="card.title"
+        :value="card.value"
+        :hint="card.hint"
+        :tone="card.tone"
+      >
+        <template #icon>{{ card.title.slice(0, 1) }}</template>
+      </StatCard>
+    </section>
+
+    <section class="admin-dashboard-grid">
       <div class="admin-dashboard-main">
-        <article class="admin-dash-card">
-          <h3 class="admin-dash-card-title">核心指标</h3>
-          <div class="admin-kpi-grid">
-            <div v-for="card in kpiCards" :key="card.label" class="admin-kpi-item">
-              <div class="admin-kpi-top">
-                <div>
-                  <span class="admin-kpi-value">{{ card.value }}</span>
-                  <span class="admin-kpi-label">{{ card.label }}<template v-if="card.suffix">（{{ card.suffix }}）</template></span>
-                </div>
-                <div :class="['admin-kpi-icon', card.color]">{{ card.label.charAt(0) }}</div>
-              </div>
-              <div class="admin-kpi-delta">
-                <template v-if="card.delta && card.delta.trend !== 'flat'">
-                  <span :class="['admin-kpi-delta-icon', card.delta.positive ? 'is-up' : 'is-down']">
-                    {{ card.delta.trend === 'up' ? '↑' : '↓' }}
-                  </span>
-                  <span :class="['admin-kpi-delta-text', card.delta.positive ? 'is-up' : 'is-down']">{{ card.delta.text }}</span>
-                  <span class="admin-kpi-delta-hint">较上周期</span>
-                </template>
-                <span v-else class="admin-kpi-delta-hint">--</span>
+        <article class="admin-table-card">
+          <div class="admin-table-card__header">
+            <div>
+              <h2>消息趋势</h2>
+              <p>当前窗口内的消息量变化，用于判断交互热度和请求波峰。</p>
+            </div>
+            <span class="admin-page-count">{{ WINDOW_LABEL_MAP[windowValue] }}</span>
+          </div>
+
+          <div v-if="messagesChart.chartData.points.length === 0" class="admin-empty">暂无消息趋势数据</div>
+          <div v-else class="admin-chart">
+            <svg
+              class="admin-chart-full"
+              viewBox="0 0 1 1"
+              preserveAspectRatio="none"
+              @mousemove="messagesChart.handleMove"
+              @mouseleave="messagesChart.handleLeave"
+            >
+              <defs>
+                <linearGradient id="dashboardMessagesGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.28" />
+                  <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02" />
+                </linearGradient>
+              </defs>
+              <path :d="messagesChart.chartData.areaPath" fill="url(#dashboardMessagesGradient)" />
+              <path
+                :d="messagesChart.chartData.linePath"
+                fill="none"
+                stroke="#3b82f6"
+                stroke-width="0.02"
+                vector-effect="non-scaling-stroke"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle
+                v-if="messagesChart.tooltip.visible"
+                :cx="messagesChart.tooltip.x"
+                :cy="messagesChart.tooltip.y"
+                r="0.01"
+                fill="#3b82f6"
+                stroke="#ffffff"
+                stroke-width="0.008"
+              />
+            </svg>
+
+            <div
+              v-if="messagesChart.tooltip.visible"
+              class="admin-chart-tooltip"
+              :style="{ left: `${messagesChart.tooltip.x * 100}%`, top: `${messagesChart.tooltip.y * 72}%` }"
+            >
+              <div class="admin-chart-tooltip-label">{{ messagesChart.tooltip.label }}</div>
+              <div class="admin-chart-tooltip-value">
+                <span class="admin-chart-tooltip-dot" />
+                消息数：{{ messagesChart.tooltip.value }}
               </div>
             </div>
           </div>
         </article>
 
-        <article class="admin-dash-card admin-dash-card--tall">
-          <p class="admin-dash-card-title">流量概览</p>
-          <template v-if="loading">
-            <div class="admin-chart-placeholder" />
-          </template>
-          <div v-else-if="trafficData.points.length === 0" class="admin-empty-sm">暂无流量数据</div>
-          <svg
-            v-else
-            class="admin-chart-full"
-            :viewBox="`0 0 1 1`"
-            preserveAspectRatio="none"
-            @mousemove="trafficChart.handleMove"
-            @mouseleave="trafficChart.handleLeave"
-          >
-            <defs>
-              <linearGradient id="gradTraffic" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.25" />
-                <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.02" />
-              </linearGradient>
-            </defs>
-            <path :d="trafficData.areaPath" fill="url(#gradTraffic)" />
-            <path :d="trafficData.linePath" fill="none" stroke="#3B82F6" stroke-width="2" vector-effect="non-scaling-stroke" />
-            <template v-if="trafficChart.tooltip.value.visible">
-              <line :x1="trafficChart.tooltip.value.x" y1="0" :x2="trafficChart.tooltip.value.x" y2="1" stroke="#94A3B8" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0.4" />
-              <circle :cx="trafficChart.tooltip.value.x" :cy="trafficChart.tooltip.value.y" r="0.006" fill="#3B82F6" stroke="#fff" stroke-width="0.003" />
-            </template>
-          </svg>
-          <div v-if="trafficChart.tooltip.value.visible" class="admin-chart-tooltip" :style="{ left: (trafficChart.tooltip.value.x * 100) + '%', top: (trafficChart.tooltip.value.y * 70) + '%' }">
-            <div class="admin-chart-tooltip-label">{{ trafficChart.tooltip.value.label }}</div>
-            <div class="admin-chart-tooltip-value">
-              <span class="admin-chart-tooltip-dot" />消息数: {{ trafficChart.tooltip.value.value }}
+        <article class="admin-table-card">
+          <div class="admin-table-card__header">
+            <div>
+              <h2>趋势分布</h2>
+              <p>会话、活跃用户、响应时延和质量指标的横向对比。</p>
             </div>
           </div>
-        </article>
 
-        <article class="admin-dash-card">
-          <h3 class="admin-dash-card-title">趋势分析</h3>
           <div class="admin-trend-grid">
-            <div class="admin-trend-item">
-              <div class="admin-trend-title">会话趋势</div>
-              <div class="admin-trend-unit">单位：次</div>
-              <svg v-if="sessionsData.points.length > 0" class="admin-chart-sm" viewBox="0 0 1 1" preserveAspectRatio="none" @mousemove="sessionsChart.handleMove" @mouseleave="sessionsChart.handleLeave">
-                <defs><linearGradient id="gradSessions" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10B981" stop-opacity="0.2" /><stop offset="100%" stop-color="#10B981" stop-opacity="0.02" /></linearGradient></defs>
-                <path :d="sessionsData.areaPath" fill="url(#gradSessions)" />
-                <path :d="sessionsData.linePath" fill="none" stroke="#10B981" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+            <section
+              v-for="chart in [
+                { key: 'sessions', title: '会话趋势', unit: '次', state: sessionsChart, color: '#10b981' },
+                { key: 'activeUsers', title: '活跃用户', unit: '人', state: activeUsersChart, color: '#6366f1' },
+                { key: 'latency', title: '响应时延', unit: 'ms', state: latencyChart, color: '#f59e0b' },
+                { key: 'quality', title: '质量趋势', unit: '%', state: qualityChart, color: '#ef4444' }
+              ]"
+              :key="chart.key"
+              class="admin-trend-item"
+            >
+              <div class="admin-trend-title">{{ chart.title }}</div>
+              <div class="admin-trend-unit">单位：{{ chart.unit }}</div>
+              <div v-if="chart.state.chartData.points.length === 0" class="admin-empty-sm">暂无数据</div>
+              <svg
+                v-else
+                class="admin-chart-sm"
+                viewBox="0 0 1 1"
+                preserveAspectRatio="none"
+                @mousemove="chart.state.handleMove"
+                @mouseleave="chart.state.handleLeave"
+              >
+                <defs>
+                  <linearGradient :id="`dashboard-${chart.key}-gradient`" x1="0" y1="0" x2="0" y2="1">
+                    <stop :stop-color="chart.color" stop-opacity="0.22" />
+                    <stop offset="100%" :stop-color="chart.color" stop-opacity="0.03" />
+                  </linearGradient>
+                </defs>
+                <path :d="chart.state.chartData.areaPath" :fill="`url(#dashboard-${chart.key}-gradient)`" />
+                <path
+                  :d="chart.state.chartData.linePath"
+                  fill="none"
+                  :stroke="chart.color"
+                  stroke-width="0.018"
+                  vector-effect="non-scaling-stroke"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
-              <div v-else class="admin-empty-sm">暂无数据</div>
+            </section>
+          </div>
+        </article>
+
+        <article class="admin-table-card">
+          <div class="admin-table-card__header">
+            <div>
+              <h2>运行建议</h2>
+              <p>根据当前窗口内的指标自动生成的观察点。</p>
             </div>
-            <div class="admin-trend-item">
-              <div class="admin-trend-title">活跃用户趋势</div>
-              <div class="admin-trend-unit">单位：人</div>
-              <svg v-if="activeUsersData.points.length > 0" class="admin-chart-sm" viewBox="0 0 1 1" preserveAspectRatio="none" @mousemove="activeUsersChart.handleMove" @mouseleave="activeUsersChart.handleLeave">
-                <defs><linearGradient id="gradActive" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366F1" stop-opacity="0.2" /><stop offset="100%" stop-color="#6366F1" stop-opacity="0.02" /></linearGradient></defs>
-                <path :d="activeUsersData.areaPath" fill="url(#gradActive)" />
-                <path :d="activeUsersData.linePath" fill="none" stroke="#6366F1" stroke-width="1.5" vector-effect="non-scaling-stroke" />
-              </svg>
-              <div v-else class="admin-empty-sm">暂无数据</div>
-            </div>
-            <div class="admin-trend-item">
-              <div class="admin-trend-title">响应时间趋势</div>
-              <div class="admin-trend-unit">单位：毫秒</div>
-              <svg v-if="latencyData.points.length > 0" class="admin-chart-sm" viewBox="0 0 1 1" preserveAspectRatio="none" @mousemove="latencyChart.handleMove" @mouseleave="latencyChart.handleLeave">
-                <defs><linearGradient id="gradLatency" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F59E0B" stop-opacity="0.2" /><stop offset="100%" stop-color="#F59E0B" stop-opacity="0.02" /></linearGradient></defs>
-                <path :d="latencyData.areaPath" fill="url(#gradLatency)" />
-                <path :d="latencyData.linePath" fill="none" stroke="#F59E0B" stroke-width="1.5" vector-effect="non-scaling-stroke" />
-              </svg>
-              <div v-else class="admin-empty-sm">暂无数据</div>
-            </div>
-            <div class="admin-trend-item">
-              <div class="admin-trend-title">质量趋势</div>
-              <div class="admin-trend-unit">单位：%</div>
-              <svg v-if="qualityData.points.length > 0" class="admin-chart-sm" viewBox="0 0 1 1" preserveAspectRatio="none" @mousemove="qualityChart.handleMove" @mouseleave="qualityChart.handleLeave">
-                <defs><linearGradient id="gradQuality" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#EF4444" stop-opacity="0.2" /><stop offset="100%" stop-color="#EF4444" stop-opacity="0.02" /></linearGradient></defs>
-                <path :d="qualityData.areaPath" fill="url(#gradQuality)" />
-                <path :d="qualityData.linePath" fill="none" stroke="#EF4444" stroke-width="1.5" vector-effect="non-scaling-stroke" />
-              </svg>
-              <div v-else class="admin-empty-sm">暂无数据</div>
+          </div>
+
+          <div class="admin-card-list">
+            <div v-for="item in insights" :key="`${item.title}-${item.change}`" class="admin-card-item">
+              <div class="admin-insight-header">
+                <span :class="['admin-badge', insightMeta[item.type].tone]">{{ insightMeta[item.type].label }}</span>
+                <span class="admin-page-count">{{ item.metric }}</span>
+              </div>
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.context }}</p>
+              <p class="admin-insight-change">{{ item.change }}</p>
             </div>
           </div>
         </article>
       </div>
 
       <aside class="admin-dashboard-aside">
-        <article class="admin-dash-card">
-          <div class="admin-perf-header">
-            <h3 class="admin-dash-card-title">AI 性能</h3>
-            <span :class="['admin-badge', HEALTH_CONFIG[healthStatus].bg]">{{ HEALTH_CONFIG[healthStatus].label }}</span>
+        <article class="admin-detail-card">
+          <h3>健康概览</h3>
+          <p class="admin-detail-card-desc">用一个颜色快速判断当前后端状态。</p>
+          <div class="admin-health-box">
+            <span :class="['admin-badge', healthMeta.tone]">{{ healthMeta.label }}</span>
+            <p>{{ healthMeta.detail }}</p>
           </div>
-          <div class="admin-perf-ring-wrap">
-            <svg class="admin-perf-ring" viewBox="0 0 120 120" width="120" height="120">
-              <circle cx="60" cy="60" r="50" fill="none" stroke="#F1F5F9" stroke-width="8" />
-              <circle
-                cx="60" cy="60" r="50" fill="none"
-                :stroke="ringColor" stroke-width="8" stroke-linecap="round"
-                :stroke-dasharray="ringDasharray" :stroke-dashoffset="ringDashoffset"
-                class="admin-perf-ring-progress"
-              />
-            </svg>
-            <div class="admin-perf-ring-label">
-              <span class="admin-perf-ring-value" :style="{ color: ringColor }">{{ formatPercent(successRate) }}</span>
-              <span class="admin-perf-ring-hint">成功率</span>
-            </div>
-          </div>
-          <div class="admin-metric-rows">
-            <div v-for="row in metricRows" :key="row.label" class="admin-metric-row">
-              <span class="admin-metric-row-label">{{ row.label }}</span>
-              <span class="admin-metric-row-value" :style="{ color: TONE_COLOR[row.tone] }">{{ row.value }}</span>
-            </div>
-          </div>
+        </article>
 
-          <div class="admin-quality-snapshot">
-            <div class="admin-quality-header">
-              <span class="admin-quality-title">质量快照（柱状）</span>
-              <span class="admin-quality-window">{{ WINDOW_LABEL_MAP[windowValue] || windowValue }}</span>
-            </div>
-            <div class="admin-quality-bars">
-              <div v-for="item in qualityItems" :key="item.label" class="admin-quality-bar-item">
-                <div class="admin-quality-bar-track">
-                  <div :class="['admin-quality-bar-fill', item.toneClass]" :style="{ height: Math.max(clampPercent(item.value), item.value != null ? 4 : 0) + '%' }" />
-                </div>
-                <div :class="['admin-quality-bar-value', item.valueClass]">{{ formatPercent(item.value) }}</div>
-                <div class="admin-quality-bar-label">{{ item.label }}</div>
-                <div class="admin-quality-bar-target">{{ item.target }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="admin-efficiency-snapshot">
-            <div class="admin-efficiency-header">
-              <span class="admin-efficiency-title">运营效率</span>
-              <span class="admin-efficiency-window">{{ WINDOW_LABEL_MAP[windowValue] || windowValue }}</span>
-            </div>
-            <div v-for="item in efficiencyItems" :key="item.label" class="admin-efficiency-row">
-              <span class="admin-efficiency-label">{{ item.label }}</span>
-              <span class="admin-efficiency-value">{{ item.value }}</span>
+        <article class="admin-detail-card">
+          <h3>性能指标</h3>
+          <p class="admin-detail-card-desc">核心链路的响应和质量表现。</p>
+          <div class="admin-kv">
+            <div v-for="row in performanceRows" :key="row.label">
+              <dt>{{ row.label }}</dt>
+              <dd>
+                <span :class="['admin-badge', row.tone === 'good' ? 'is-success' : row.tone === 'warning' ? 'is-warn' : 'is-danger']">
+                  {{ row.value }}
+                </span>
+              </dd>
             </div>
           </div>
         </article>
 
-        <article class="admin-dash-card admin-insight-card">
-          <h3 class="admin-dash-card-title">运营洞察</h3>
-          <div class="admin-insight-list">
-            <div v-for="(item, i) in insights" :key="i" class="admin-insight-item">
-              <div class="admin-insight-header">
-                <span :class="['admin-insight-badge', INSIGHT_STYLE[item.type]?.cls || 'is-trend']">
-                  {{ INSIGHT_STYLE[item.type]?.icon || 'ℹ' }} {{ INSIGHT_TYPE_LABEL[item.type] || item.type }}
-                </span>
-              </div>
-              <p class="admin-insight-title">{{ item.title }}</p>
-              <p class="admin-insight-metric">{{ item.metric }}: {{ item.change }}</p>
-              <p class="admin-insight-context">归因：{{ item.context }}</p>
-              <p v-if="item.action" class="admin-insight-action">建议：{{ item.action }}</p>
+        <article class="admin-detail-card">
+          <h3>效率指标</h3>
+          <p class="admin-detail-card-desc">观察用户和消息之间的整体效率。</p>
+          <div class="admin-kv">
+            <div v-for="row in efficiencyRows" :key="row.label">
+              <dt>{{ row.label }}</dt>
+              <dd>{{ row.value }}</dd>
             </div>
           </div>
         </article>
       </aside>
-    </div>
+    </section>
   </section>
 </template>
+
+<style scoped>
+.admin-icon-spin {
+  display: inline-block;
+  animation: adminSpin 0.8s linear infinite;
+}
+
+.admin-health-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.admin-health-box p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.admin-insight-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.admin-insight-change {
+  margin-top: 10px;
+  color: var(--admin-accent);
+  font-weight: 600;
+}
+
+@keyframes adminSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>
