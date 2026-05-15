@@ -579,6 +579,18 @@ onMounted(() => {
       />
     </div>
 
+    <section class="admin-detail-card docs-hero">
+      <div class="docs-hero-copy">
+        <p class="trace-hero-tag">Document Flow</p>
+        <h2>文档管理与切片调度</h2>
+        <p>在一个页面里完成上传、详情编辑、切片触发和日志追踪。</p>
+      </div>
+      <div class="docs-hero-side">
+        <span class="admin-badge is-outline">{{ kb?.collectionName || "未设置 Collection" }}</span>
+        <p>支持 file / URL 上传、chunk / pipeline 两种处理模式，以及定时同步配置。</p>
+      </div>
+    </section>
+
     <section class="admin-split">
       <article class="admin-table-card">
         <div class="admin-table-card__header">
@@ -924,6 +936,45 @@ onMounted(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.docs-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.docs-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.docs-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.docs-hero-copy p,
+.docs-hero-side p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.docs-hero-side {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 280px;
+}
+
+@media (max-width: 960px) {
+  .docs-hero {
+    flex-direction: column;
+  }
+}
+</style>
 
 <style scoped>
 .dot {

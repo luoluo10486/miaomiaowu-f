@@ -394,6 +394,11 @@ async function handlePasswordSubmit() {
     <main class="admin-main">
       <header class="admin-topbar">
         <div class="admin-topbar-inner">
+          <div class="admin-topbar-copy">
+            <p class="admin-topbar-eyebrow">RAG Admin Console</p>
+            <h2>管理控制台</h2>
+            <p>统一查看知识库、摄取链路、意图、追踪和系统设置。</p>
+          </div>
           <div class="admin-topbar-search-wrap">
             <div class="admin-topbar-search">
               <input
@@ -483,7 +488,10 @@ async function handlePasswordSubmit() {
         <p v-if="noticeText" :class="['admin-notice', noticeTone === 'error' ? 'is-error' : noticeTone === 'success' ? 'is-success' : '']">
           {{ noticeText }}
         </p>
-        <RouterView />
+        <section class="admin-content-shell">
+          <div class="admin-content-shell__accent" />
+          <RouterView />
+        </section>
       </div>
     </main>
 
@@ -522,3 +530,81 @@ async function handlePasswordSubmit() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.admin-topbar {
+  padding: 16px 32px;
+}
+
+.admin-topbar-inner {
+  gap: 18px;
+}
+
+.admin-topbar-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-topbar-eyebrow {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.admin-topbar-copy h2 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.admin-topbar-copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-content {
+  padding-top: 12px;
+}
+
+.admin-content-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.88));
+  box-shadow: var(--admin-shadow-lg);
+}
+
+.admin-content-shell__accent {
+  height: 4px;
+  background: linear-gradient(90deg, var(--admin-accent), #22c55e, #0ea5e9);
+}
+
+.admin-content-shell :deep(.admin-page) {
+  padding: 24px;
+}
+
+@media (max-width: 960px) {
+  .admin-topbar {
+    padding: 16px;
+  }
+
+  .admin-topbar-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-content-shell :deep(.admin-page) {
+    padding: 18px;
+  }
+}
+</style>

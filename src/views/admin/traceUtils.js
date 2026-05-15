@@ -47,16 +47,26 @@ export function toTimestamp(value) {
 
 export function formatDateTime(value) {
   const timestamp = toTimestamp(value);
-  if (timestamp === null) return "-";
-  return new Date(timestamp).toLocaleString("zh-CN");
+  if (timestamp === null) return "--";
+  return new Date(timestamp).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
 }
 
 export function formatDuration(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  if (value < 1000) return `${Math.round(value)}ms`;
-  if (value < 60000) return `${(value / 1000).toFixed(2)}s`;
-  const minute = Math.floor(value / 60000);
-  const second = ((value % 60000) / 1000).toFixed(1);
+  if (value === null || value === undefined || Number.isNaN(value)) return "--";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "--";
+  if (num < 1000) return `${Math.round(num)}ms`;
+  if (num < 60000) return `${(num / 1000).toFixed(2)}s`;
+  const minute = Math.floor(num / 60000);
+  const second = ((num % 60000) / 1000).toFixed(1);
   return `${minute}m ${second}s`;
 }
 

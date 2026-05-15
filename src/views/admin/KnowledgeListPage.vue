@@ -281,6 +281,13 @@ onMounted(() => {
       title="知识库管理"
       description="管理知识库集合、embedding 模型和文档总量，支持搜索、新建、重命名和删除。"
     >
+      <template #meta>
+        <div class="admin-page-header-meta">
+          <span class="admin-badge is-outline">Total {{ formatStatValue(stats.totalCount) }}</span>
+          <span class="admin-badge is-outline">Docs {{ formatStatValue(stats.documentCount) }}</span>
+          <span class="admin-badge is-outline">Active {{ formatStatValue(stats.activeCount) }}</span>
+        </div>
+      </template>
       <template #actions>
         <input
           v-model="searchInput"
@@ -312,67 +319,112 @@ onMounted(() => {
       </StatCard>
     </div>
 
-    <section class="admin-table-card">
-      <div class="admin-table-card__header">
-        <div>
-          <h2>知识库列表</h2>
-          <p>查看知识库集合、embedding 模型和文档总量，点击名称进入文档管理。</p>
+    <section class="admin-split">
+      <article class="admin-table-card">
+        <div class="admin-table-card__header">
+          <div>
+            <h2>知识库列表</h2>
+            <p>查看知识库集合、embedding 模型和文档总量，点击名称进入文档管理。</p>
+          </div>
+          <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
         </div>
-        <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
-      </div>
 
-      <div v-if="loading && records.length === 0" class="admin-empty">加载中...</div>
-      <div v-else-if="records.length === 0" class="admin-empty">暂无知识库，点击右上角按钮创建。</div>
-      <div v-else class="admin-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>名称</th>
-              <th>Embedding 模型</th>
-              <th>Collection</th>
-              <th>文档数</th>
-              <th>创建者</th>
-              <th>创建时间</th>
-              <th>更新时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in records" :key="item.id">
-              <td>
-                <button class="admin-link" type="button" @click="goToDocuments(item)">
-                  {{ item.name || "--" }}
-                </button>
-              </td>
-              <td class="is-code">{{ item.embeddingModel || "--" }}</td>
-              <td>
-                <span class="admin-badge is-muted">{{ item.collectionName || "--" }}</span>
-              </td>
-              <td>{{ item.documentCount ?? "--" }}</td>
-              <td>{{ item.createdBy || "--" }}</td>
-              <td>{{ formatDateTime(item.createTime) }}</td>
-              <td>{{ formatDateTime(item.updateTime) }}</td>
-              <td>
-                <div class="admin-inline-actions">
-                  <button class="admin-button--ghost" type="button" @click="openRenameDialog(item)">重命名</button>
-                  <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="records.length > 0" class="admin-pagination">
-        <span>共 {{ pageTotal(page) }} 条</span>
-        <div class="admin-pagination-controls">
-          <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
-          <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
-          <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">
-            下一页
-          </button>
+        <div class="admin-toolbar">
+          <div class="admin-toolbar-left">
+            <input
+              v-model="searchInput"
+              class="admin-input"
+              type="search"
+              placeholder="搜索知识库名称"
+              @keydown.enter.prevent="handleSearch"
+            />
+            <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
+            <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
+          </div>
+          <div class="admin-toolbar-right">
+            <button class="admin-button" type="button" @click="openCreateDialog">新建知识库</button>
+          </div>
         </div>
-      </div>
+
+        <div v-if="loading && records.length === 0" class="admin-empty">加载中...</div>
+        <div v-else-if="records.length === 0" class="admin-empty">暂无知识库，点击右上角按钮创建。</div>
+        <div v-else class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>Embedding 模型</th>
+                <th>Collection</th>
+                <th>文档数</th>
+                <th>创建者</th>
+                <th>创建时间</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in records" :key="item.id">
+                <td>
+                  <button class="admin-link" type="button" @click="goToDocuments(item)">
+                    {{ item.name || "--" }}
+                  </button>
+                </td>
+                <td class="is-code">{{ item.embeddingModel || "--" }}</td>
+                <td>
+                  <span class="admin-badge is-muted">{{ item.collectionName || "--" }}</span>
+                </td>
+                <td>{{ item.documentCount ?? "--" }}</td>
+                <td>{{ item.createdBy || "--" }}</td>
+                <td>{{ formatDateTime(item.createTime) }}</td>
+                <td>{{ formatDateTime(item.updateTime) }}</td>
+                <td>
+                  <div class="admin-inline-actions">
+                    <button class="admin-button--ghost" type="button" @click="openRenameDialog(item)">重命名</button>
+                    <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="records.length > 0" class="admin-pagination">
+          <span>共 {{ pageTotal(page) }} 条</span>
+          <div class="admin-pagination-controls">
+            <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
+            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
+            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">
+              下一页
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="admin-detail-card knowledge-aside">
+        <h3>知识库概览</h3>
+        <p class="admin-detail-card-desc">对齐 frontend 的知识库管理视图，重点突出集合、文档和活跃状态。</p>
+        <div class="admin-kv">
+          <div><dt>总数</dt><dd>{{ formatStatValue(stats.totalCount) }}</dd></div>
+          <div><dt>文档总数</dt><dd>{{ formatStatValue(stats.documentCount) }}</dd></div>
+          <div><dt>活跃知识库</dt><dd>{{ formatStatValue(stats.activeCount) }}</dd></div>
+          <div><dt>创建者数</dt><dd>{{ formatStatValue(stats.creatorCount) }}</dd></div>
+        </div>
+
+        <div class="admin-card-list" style="margin-top: 16px;">
+          <div class="admin-card-item">
+            <h3>Collection</h3>
+            <p>支持自动生成，也可以手动指定规范名称。</p>
+          </div>
+          <div class="admin-card-item">
+            <h3>Embedding</h3>
+            <p>新建时可直接选择默认嵌入模型。</p>
+          </div>
+          <div class="admin-card-item">
+            <h3>Documents</h3>
+            <p>点击知识库名称进入文档和切片管理。</p>
+          </div>
+        </div>
+      </aside>
     </section>
 
     <div v-if="createDialogOpen" class="admin-dialog-overlay" @click.self="closeCreateDialog">
@@ -438,3 +490,25 @@ onMounted(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.admin-page-header-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.knowledge-aside {
+  display: grid;
+  gap: 12px;
+  align-self: start;
+  position: sticky;
+  top: 16px;
+}
+
+@media (max-width: 960px) {
+  .knowledge-aside {
+    position: static;
+  }
+}
+</style>

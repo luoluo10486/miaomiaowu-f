@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-
+import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
   getAdminDashboardOverview,
@@ -224,7 +224,7 @@ const healthMeta = computed(() => {
     case "attention":
       return { label: "需要关注", tone: "is-warn", detail: "部分指标已经接近阈值。" };
     case "critical":
-      return { label: "风险偏高", tone: "is-danger", detail: "请优先查看错误率和无知识命中率。" };
+      return { label: "风险偏高", tone: "is-danger", detail: "请优先检查错误率和无知识命中率。" };
     default:
       return { label: "暂无数据", tone: "is-muted", detail: "选择时间窗口后会加载指标。" };
   }
@@ -331,7 +331,7 @@ const insights = computed(() => {
         title: "暂无窗口数据",
         metric: "Dashboard",
         change: windowLabel,
-        context: "当前窗口还没有足够的统计数据，等会话产生后会自动刷新。"
+        context: "切换时间窗口后会重新加载指标。"
       }
     ];
   }
@@ -344,7 +344,7 @@ const insights = computed(() => {
       title: "稳定性需要关注",
       metric: "成功率 / 错误率",
       change: `${formatPercent(perf.successRate)} / ${formatPercent(perf.errorRate)}`,
-      context: "成功率偏低或错误率偏高，建议优先排查失败请求和超时路径。"
+      context: "成功率偏低或错误率偏高时，优先排查失败请求和超时链路。"
     });
   } else {
     items.push({
@@ -352,17 +352,17 @@ const insights = computed(() => {
       title: "系统状态平稳",
       metric: "成功率",
       change: formatPercent(perf.successRate),
-      context: "当前窗口内的服务质量整体处于健康区间。"
+      context: "当前窗口内的整体服务质量处于健康区间。"
     });
   }
 
   if ((perf.noDocRate ?? 0) > 20) {
     items.push({
       type: "recommendation",
-      title: "知识召回有优化空间",
+      title: "知识召回存在空洞",
       metric: "无知识命中率",
       change: formatPercent(perf.noDocRate),
-      context: "召回覆盖不足会直接影响问答体验，建议检查知识库和检索配置。"
+      context: "建议检查知识库覆盖和检索策略。"
     });
   }
 
@@ -372,7 +372,7 @@ const insights = computed(() => {
       title: "响应速度偏慢",
       metric: "平均响应时间",
       change: formatDuration(perf.avgLatencyMs),
-      context: "可以优先排查模型、网络和后端链路的慢点。"
+      context: "可以优先排查模型、网络和后端链路中的慢点。"
     });
   }
 
@@ -382,7 +382,7 @@ const insights = computed(() => {
       title: "继续保持当前策略",
       metric: "运行状态",
       change: windowLabel,
-      context: "暂未发现新的异常模式。"
+      context: "当前窗口内暂未发现新的异常模式。"
     });
   }
 
@@ -460,15 +460,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page admin-dashboard">
-    <header class="admin-dashboard-header">
-      <div>
-        <span class="admin-page-eyebrow">Dashboard</span>
-        <h1 class="admin-page-title">后台总览</h1>
-        <p class="admin-page-subtitle">聚焦会话、消息、性能和知识召回，快速判断当前服务状态。</p>
-      </div>
-
-      <div class="admin-dashboard-header-right">
+  <section class="admin-page">
+    <PageHeader
+      tag="Dashboard"
+      title="后台总览"
+      description="聚焦会话、消息、性能和知识召回，快速判断当前服务状态。"
+    >
+      <template #actions>
         <div class="admin-window-tabs">
           <button
             v-for="option in WINDOW_OPTIONS"
@@ -482,21 +480,27 @@ onMounted(() => {
             {{ option.label }}
           </button>
         </div>
-
-        <div class="admin-updated-stamp">
-          <span class="admin-dot is-success" />
-          <span>{{ formatLastUpdated(lastUpdated) }}</span>
-        </div>
-
-        <button class="admin-button--icon" type="button" :disabled="loading" @click="loadDashboard()">
-          <span :class="{ 'admin-icon-spin': loading }">↻</span>
+        <button class="admin-button--ghost" type="button" :disabled="loading" @click="loadDashboard()">
+          {{ loading ? "刷新中..." : "刷新" }}
         </button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <section class="admin-stat-grid">
+    <section class="admin-detail-card dashboard-hero">
+      <div class="dashboard-hero-copy">
+        <p class="trace-hero-tag">Overview</p>
+        <h2>{{ WINDOW_LABEL_MAP[windowValue] }}</h2>
+        <p>最后更新时间：{{ formatLastUpdated(lastUpdated) }}</p>
+      </div>
+      <div class="dashboard-hero-side">
+        <span :class="['admin-badge', healthMeta.tone]">{{ healthMeta.label }}</span>
+        <p>{{ healthMeta.detail }}</p>
+      </div>
+    </section>
+
+    <div class="admin-stat-grid">
       <StatCard
         v-for="card in kpiCards"
         :key="card.title"
@@ -507,21 +511,21 @@ onMounted(() => {
       >
         <template #icon>{{ card.title.slice(0, 1) }}</template>
       </StatCard>
-    </section>
+    </div>
 
-    <section class="admin-dashboard-grid">
+    <section class="admin-split">
       <div class="admin-dashboard-main">
         <article class="admin-table-card">
           <div class="admin-table-card__header">
             <div>
               <h2>消息趋势</h2>
-              <p>当前窗口内的消息量变化，用于判断交互热度和请求波峰。</p>
+              <p>当前窗口内消息数量变化。</p>
             </div>
             <span class="admin-page-count">{{ WINDOW_LABEL_MAP[windowValue] }}</span>
           </div>
 
           <div v-if="messagesChart.chartData.points.length === 0" class="admin-empty">暂无消息趋势数据</div>
-          <div v-else class="admin-chart">
+          <div v-else class="dashboard-chart-shell">
             <svg
               class="admin-chart-full"
               viewBox="0 0 1 1"
@@ -574,11 +578,11 @@ onMounted(() => {
           <div class="admin-table-card__header">
             <div>
               <h2>趋势分布</h2>
-              <p>会话、活跃用户、响应时延和质量指标的横向对比。</p>
+              <p>会话、活跃用户、响应和质量指标。</p>
             </div>
           </div>
 
-          <div class="admin-trend-grid">
+          <div class="dashboard-trend-grid">
             <section
               v-for="chart in [
                 { key: 'sessions', title: '会话趋势', unit: '次', state: sessionsChart, color: '#10b981' },
@@ -587,7 +591,7 @@ onMounted(() => {
                 { key: 'quality', title: '质量趋势', unit: '%', state: qualityChart, color: '#ef4444' }
               ]"
               :key="chart.key"
-              class="admin-trend-item"
+              class="dashboard-trend-item"
             >
               <div class="admin-trend-title">{{ chart.title }}</div>
               <div class="admin-trend-unit">单位：{{ chart.unit }}</div>
@@ -625,7 +629,7 @@ onMounted(() => {
           <div class="admin-table-card__header">
             <div>
               <h2>运行建议</h2>
-              <p>根据当前窗口内的指标自动生成的观察点。</p>
+              <p>根据当前窗口指标自动生成的观察点。</p>
             </div>
           </div>
 
@@ -646,7 +650,7 @@ onMounted(() => {
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
           <h3>健康概览</h3>
-          <p class="admin-detail-card-desc">用一个颜色快速判断当前后端状态。</p>
+          <p class="admin-detail-card-desc">快速判断当前后端状态。</p>
           <div class="admin-health-box">
             <span :class="['admin-badge', healthMeta.tone]">{{ healthMeta.label }}</span>
             <p>{{ healthMeta.detail }}</p>
@@ -655,7 +659,7 @@ onMounted(() => {
 
         <article class="admin-detail-card">
           <h3>性能指标</h3>
-          <p class="admin-detail-card-desc">核心链路的响应和质量表现。</p>
+          <p class="admin-detail-card-desc">平均响应、P95、成功率和错误率。</p>
           <div class="admin-kv">
             <div v-for="row in performanceRows" :key="row.label">
               <dt>{{ row.label }}</dt>
@@ -687,6 +691,64 @@ onMounted(() => {
 .admin-icon-spin {
   display: inline-block;
   animation: adminSpin 0.8s linear infinite;
+}
+
+.dashboard-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.dashboard-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.dashboard-hero-copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+}
+
+.dashboard-hero-side {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 240px;
+}
+
+.dashboard-chart-shell {
+  position: relative;
+}
+
+.dashboard-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dashboard-trend-item {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--admin-line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.94));
+}
+
+.admin-trend-title {
+  font-weight: 700;
+  color: var(--admin-ink);
+}
+
+.admin-trend-unit {
+  color: var(--admin-muted);
+  font-size: 12px;
 }
 
 .admin-health-box {
@@ -723,6 +785,17 @@ onMounted(() => {
 
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+  .dashboard-hero,
+  .admin-split {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-trend-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import PageHeader from "../../components/admin/PageHeader.vue";
@@ -928,16 +928,18 @@ onMounted(() => {
       title="数据通道"
       description="对齐 frontend 的后台摄取管理结构，集中管理 pipeline、任务创建、文件上传和任务节点执行详情。"
     >
+      <template #meta>
+        <div class="admin-page-header-meta">
+          <span class="admin-badge is-outline">Pipelines {{ pageTotal(pipelines).toLocaleString("zh-CN") }}</span>
+          <span class="admin-badge is-outline">Tasks {{ pageTotal(tasks).toLocaleString("zh-CN") }}</span>
+          <span class="admin-badge is-outline">Running {{ activeTaskCount }}</span>
+          <span class="admin-badge is-outline">Failed {{ failedTaskCount }}</span>
+        </div>
+      </template>
       <template #actions>
-        <button class="admin-button--ghost" type="button" :disabled="loading" @click="loadIngestion">
-          刷新
-        </button>
-        <button class="admin-button--ghost" type="button" @click="openUploadDialog()">
-          上传文件
-        </button>
-        <button class="admin-button" type="button" @click="openPipelineDialog('create')">
-          新建 Pipeline
-        </button>
+        <button class="admin-button--ghost" type="button" :disabled="loading" @click="loadIngestion">刷新</button>
+        <button class="admin-button--ghost" type="button" @click="openUploadDialog()">上传文件</button>
+        <button class="admin-button" type="button" @click="openPipelineDialog('create')">新建 Pipeline</button>
         <input ref="uploadInputRef" class="admin-hidden-file" type="file" @change="handleUploadChange" />
       </template>
     </PageHeader>
@@ -956,188 +958,246 @@ onMounted(() => {
       />
     </section>
 
-    <div class="admin-window-tabs">
-      <button
-        :class="['admin-window-tab', { 'is-active': activeTab === 'pipelines' }]"
-        type="button"
-        @click="setTab('pipelines')"
-      >
-        Pipeline 管理
-      </button>
-      <button
-        :class="['admin-window-tab', { 'is-active': activeTab === 'tasks' }]"
-        type="button"
-        @click="setTab('tasks')"
-      >
-        Task 管理
-      </button>
-    </div>
+    <section class="admin-detail-card ingestion-hero">
+      <div class="ingestion-hero-copy">
+        <p class="trace-hero-tag">Data Flow</p>
+        <h2>Pipeline / Task / Upload 一体化管理</h2>
+        <p>围绕知识库摄取链路，统一查看流水线、任务、文件上传和节点执行详情。</p>
+      </div>
+      <div class="ingestion-hero-actions">
+        <button
+          class="ingestion-tab"
+          :class="{ 'is-active': activeTab === 'pipelines' }"
+          type="button"
+          @click="setTab('pipelines')"
+        >
+          Pipeline 管理
+        </button>
+        <button
+          class="ingestion-tab"
+          :class="{ 'is-active': activeTab === 'tasks' }"
+          type="button"
+          @click="setTab('tasks')"
+        >
+          Task 管理
+        </button>
+      </div>
+    </section>
 
-    <template v-if="activeTab === 'pipelines'">
-      <article class="admin-table-card">
-        <div class="admin-card-header">
-          <div>
-            <h3>Pipeline 列表</h3>
-            <p class="admin-detail-card-desc">支持搜索、编辑、节点预览、URL 任务创建、文件上传和删除。</p>
+    <section class="admin-split ingestion-layout">
+      <div class="ingestion-main">
+        <article v-if="activeTab === 'pipelines'" class="admin-table-card">
+          <div class="admin-table-card__header">
+            <div>
+              <h2>Pipeline 列表</h2>
+              <p>支持搜索、编辑、节点预览、任务创建、文件上传和删除。</p>
+            </div>
+            <span class="admin-page-count">共 {{ pageTotal(pipelines).toLocaleString("zh-CN") }} 条</span>
           </div>
-          <span class="admin-page-count">共 {{ pageTotal(pipelines).toLocaleString("zh-CN") }} 条</span>
-        </div>
 
-        <div class="admin-toolbar" style="margin-bottom: 16px;">
-          <div class="admin-toolbar-left">
-            <input
-              v-model="pipelineSearchInput"
-              class="admin-input"
-              type="search"
-              placeholder="搜索 pipeline 名称"
-              @keyup.enter="handlePipelineSearch"
-            />
-            <button class="admin-button--ghost" type="button" :disabled="loading" @click="handlePipelineSearch">
-              搜索
-            </button>
+          <div class="admin-toolbar">
+            <div class="admin-toolbar-left">
+              <input
+                v-model="pipelineSearchInput"
+                class="admin-input"
+                type="search"
+                placeholder="搜索 pipeline 名称"
+                @keyup.enter="handlePipelineSearch"
+              />
+              <button class="admin-button--ghost" type="button" :disabled="loading" @click="handlePipelineSearch">
+                搜索
+              </button>
+            </div>
+            <div class="admin-toolbar-right">
+              <button class="admin-button--ghost" type="button" :disabled="loading" @click="handlePipelineRefresh">
+                刷新
+              </button>
+              <button class="admin-button" type="button" @click="openPipelineDialog('create')">新建 Pipeline</button>
+            </div>
           </div>
-          <div class="admin-toolbar-right">
-            <button class="admin-button--ghost" type="button" :disabled="loading" @click="handlePipelineRefresh">
-              刷新
-            </button>
-            <button class="admin-button" type="button" @click="openPipelineDialog('create')">
-              新建 Pipeline
-            </button>
-          </div>
-        </div>
 
-        <div v-if="loading && pipelineRecords.length === 0" class="admin-empty">加载中...</div>
-        <div v-else-if="pipelineRecords.length === 0" class="admin-empty">暂无 pipeline</div>
-        <div v-else class="admin-table-wrap">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>描述</th>
-                <th>节点数</th>
-                <th>更新时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in pipelineRecords" :key="item.id">
-                <td>
-                  <div class="admin-cell-title">{{ item.name || item.id }}</div>
-                  <div class="admin-list-meta">{{ item.id }}</div>
-                </td>
-                <td>{{ item.description || "-" }}</td>
-                <td>{{ item.nodes?.length ?? 0 }}</td>
-                <td>{{ formatDateTime(item.updateTime || item.createTime) }}</td>
-                <td>
-                  <div class="admin-inline-actions">
-                    <button class="admin-button--ghost" type="button" @click="openPipelineDetail(item)">查看节点</button>
-                    <button class="admin-button--ghost" type="button" @click="openPipelineDialog('edit', item)">编辑</button>
-                    <button class="admin-button--ghost" type="button" @click="openTaskDialog(item.id)">新建任务</button>
-                    <button class="admin-button--ghost" type="button" @click="openUploadDialog(item.id)">上传文件</button>
-                    <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="admin-pagination">
-          <span class="admin-page-count">第 {{ pipelines.current || pipelinePageNo }} / {{ pipelinePages }} 页</span>
-          <div class="admin-pagination-controls">
-            <button class="admin-button--ghost" type="button" :disabled="loading || (pipelines.current || pipelinePageNo) <= 1" @click="goPipelinePrev">
-              上一页
-            </button>
-            <button class="admin-button--ghost" type="button" :disabled="loading || (pipelines.current || pipelinePageNo) >= pipelinePages" @click="goPipelineNext">
-              下一页
-            </button>
+          <div v-if="loading && pipelineRecords.length === 0" class="admin-empty">加载中...</div>
+          <div v-else-if="pipelineRecords.length === 0" class="admin-empty">暂无 pipeline</div>
+          <div v-else class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>名称</th>
+                  <th>描述</th>
+                  <th>节点数</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in pipelineRecords" :key="item.id">
+                  <td>
+                    <div class="admin-cell-title">{{ item.name || item.id }}</div>
+                    <div class="admin-list-meta">{{ item.id }}</div>
+                  </td>
+                  <td>{{ item.description || "-" }}</td>
+                  <td>{{ item.nodes?.length ?? 0 }}</td>
+                  <td>{{ formatDateTime(item.updateTime || item.createTime) }}</td>
+                  <td>
+                    <div class="admin-inline-actions">
+                      <button class="admin-button--ghost" type="button" @click="openPipelineDetail(item)">查看节点</button>
+                      <button class="admin-button--ghost" type="button" @click="openPipelineDialog('edit', item)">编辑</button>
+                      <button class="admin-button--ghost" type="button" @click="openTaskDialog(item.id)">新建任务</button>
+                      <button class="admin-button--ghost" type="button" @click="openUploadDialog(item.id)">上传文件</button>
+                      <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        </div>
-      </article>
-    </template>
 
-    <template v-else>
-      <article class="admin-table-card">
-        <div class="admin-card-header">
-          <div>
-            <h3>Task 列表</h3>
-            <p class="admin-detail-card-desc">支持按状态过滤、创建 URL/文件任务，并查看任务节点执行详情。</p>
+          <div class="admin-pagination">
+            <span class="admin-page-count">第 {{ pipelines.current || pipelinePageNo }} / {{ pipelinePages }} 页</span>
+            <div class="admin-pagination-controls">
+              <button class="admin-button--ghost" type="button" :disabled="loading || (pipelines.current || pipelinePageNo) <= 1" @click="goPipelinePrev">
+                上一页
+              </button>
+              <button class="admin-button--ghost" type="button" :disabled="loading || (pipelines.current || pipelinePageNo) >= pipelinePages" @click="goPipelineNext">
+                下一页
+              </button>
+            </div>
           </div>
-          <span class="admin-page-count">共 {{ pageTotal(tasks).toLocaleString("zh-CN") }} 条</span>
-        </div>
+        </article>
 
-        <div class="admin-toolbar" style="margin-bottom: 16px;">
-          <div class="admin-toolbar-left">
-            <select v-model="taskStatus" class="admin-select" @change="handleTaskRefresh">
-              <option value="">全部状态</option>
-              <option value="PENDING">PENDING</option>
-              <option value="RUNNING">RUNNING</option>
-              <option value="SUCCESS">SUCCESS</option>
-              <option value="FAILED">FAILED</option>
-              <option value="COMPLETED">COMPLETED</option>
-            </select>
+        <article v-else class="admin-table-card">
+          <div class="admin-table-card__header">
+            <div>
+              <h2>Task 列表</h2>
+              <p>支持按状态过滤、创建 URL / 文件任务，并查看任务节点执行详情。</p>
+            </div>
+            <span class="admin-page-count">共 {{ pageTotal(tasks).toLocaleString("zh-CN") }} 条</span>
           </div>
-          <div class="admin-toolbar-right">
-            <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleTaskRefresh">
-              刷新
-            </button>
-            <button class="admin-button--ghost" type="button" @click="openUploadDialog()">
-              上传文件
-            </button>
-            <button class="admin-button" type="button" @click="openTaskDialog()">
-              新建任务
-            </button>
-          </div>
-        </div>
 
-        <div v-if="loading && taskRecords.length === 0" class="admin-empty">加载中...</div>
-        <div v-else-if="taskRecords.length === 0" class="admin-empty">暂无 ingestion task</div>
-        <div v-else class="admin-table-wrap">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Pipeline</th>
-                <th>状态</th>
-                <th>来源</th>
-                <th>分块数</th>
-                <th>开始时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in taskRecords" :key="item.id">
-                <td class="is-code">{{ item.id }}</td>
-                <td>{{ item.pipelineId || "--" }}</td>
-                <td>
-                  <span :class="['admin-badge', taskStatusBadgeClass(item.status)]">
-                    {{ normalizeTaskStatus(item.status) || "--" }}
-                  </span>
-                </td>
-                <td>{{ item.sourceLocation || item.sourceFileName || "--" }}</td>
-                <td>{{ item.chunkCount ?? "--" }}</td>
-                <td>{{ formatDateTime(item.startedAt || item.createTime) }}</td>
-                <td>
-                  <button class="admin-button--ghost" type="button" @click="openTaskDetail(item)">查看详情</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="admin-pagination">
-          <span class="admin-page-count">第 {{ tasks.current || taskPageNo }} / {{ taskPages }} 页</span>
-          <div class="admin-pagination-controls">
-            <button class="admin-button--ghost" type="button" :disabled="loading || (tasks.current || taskPageNo) <= 1" @click="goTaskPrev">
-              上一页
-            </button>
-            <button class="admin-button--ghost" type="button" :disabled="loading || (tasks.current || taskPageNo) >= taskPages" @click="goTaskNext">
-              下一页
-            </button>
+          <div class="admin-toolbar">
+            <div class="admin-toolbar-left">
+              <select v-model="taskStatus" class="admin-select" @change="handleTaskRefresh">
+                <option value="">全部状态</option>
+                <option value="PENDING">PENDING</option>
+                <option value="RUNNING">RUNNING</option>
+                <option value="SUCCESS">SUCCESS</option>
+                <option value="FAILED">FAILED</option>
+                <option value="COMPLETED">COMPLETED</option>
+              </select>
+            </div>
+            <div class="admin-toolbar-right">
+              <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleTaskRefresh">刷新</button>
+              <button class="admin-button--ghost" type="button" @click="openUploadDialog()">上传文件</button>
+              <button class="admin-button" type="button" @click="openTaskDialog()">新建任务</button>
+            </div>
           </div>
-        </div>
-      </article>
-    </template>
+
+          <div v-if="loading && taskRecords.length === 0" class="admin-empty">加载中...</div>
+          <div v-else-if="taskRecords.length === 0" class="admin-empty">暂无 ingestion task</div>
+          <div v-else class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Pipeline</th>
+                  <th>状态</th>
+                  <th>来源</th>
+                  <th>分块数</th>
+                  <th>开始时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in taskRecords" :key="item.id">
+                  <td class="is-code">{{ item.id }}</td>
+                  <td>{{ item.pipelineId || "--" }}</td>
+                  <td>
+                    <span :class="['admin-badge', taskStatusBadgeClass(item.status)]">
+                      {{ normalizeTaskStatus(item.status) || "--" }}
+                    </span>
+                  </td>
+                  <td>{{ item.sourceLocation || item.sourceFileName || "--" }}</td>
+                  <td>{{ item.chunkCount ?? "--" }}</td>
+                  <td>{{ formatDateTime(item.startedAt || item.createTime) }}</td>
+                  <td>
+                    <button class="admin-button--ghost" type="button" @click="openTaskDetail(item)">查看详情</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="admin-pagination">
+            <span class="admin-page-count">第 {{ tasks.current || taskPageNo }} / {{ taskPages }} 页</span>
+            <div class="admin-pagination-controls">
+              <button class="admin-button--ghost" type="button" :disabled="loading || (tasks.current || taskPageNo) <= 1" @click="goTaskPrev">
+                上一页
+              </button>
+              <button class="admin-button--ghost" type="button" :disabled="loading || (tasks.current || taskPageNo) >= taskPages" @click="goTaskNext">
+                下一页
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <aside class="ingestion-aside">
+        <article class="admin-detail-card">
+          <h3>运行概览</h3>
+          <p class="admin-detail-card-desc">关注流水线总量、任务状态和最近入口。</p>
+          <div class="admin-kv">
+            <div><dt>Pipeline 总数</dt><dd>{{ pageTotal(pipelines).toLocaleString("zh-CN") }}</dd></div>
+            <div><dt>Task 总数</dt><dd>{{ pageTotal(tasks).toLocaleString("zh-CN") }}</dd></div>
+            <div><dt>Running</dt><dd>{{ activeTaskCount }}</dd></div>
+            <div><dt>Failed</dt><dd>{{ failedTaskCount }}</dd></div>
+          </div>
+        </article>
+
+        <article class="admin-detail-card">
+          <h3>来源类型</h3>
+          <p class="admin-detail-card-desc">任务创建支持 file、url、feishu 与 s3。</p>
+          <div class="admin-card-list">
+            <div class="admin-card-item">
+              <h3>file</h3>
+              <p>本地文件直传，适合快速导入。</p>
+            </div>
+            <div class="admin-card-item">
+              <h3>url</h3>
+              <p>远程链接抓取，支持 http / https。</p>
+            </div>
+            <div class="admin-card-item">
+              <h3>feishu / s3</h3>
+              <p>适合文档平台和对象存储来源。</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="admin-detail-card">
+          <h3>节点类型</h3>
+          <p class="admin-detail-card-desc">Pipeline 编辑器覆盖常见摄取节点。</p>
+          <div class="admin-card-list">
+            <div v-for="option in NODE_TYPE_OPTIONS" :key="option.value" class="admin-card-item">
+              <h3>{{ option.label }}</h3>
+              <p>
+                {{
+                  option.value === "fetcher"
+                    ? "源数据抓取入口"
+                    : option.value === "parser"
+                      ? "内容解析与规则处理"
+                      : option.value === "chunker"
+                        ? "分块策略与窗口控制"
+                        : option.value === "enhancer"
+                          ? "内容增强与任务编排"
+                          : option.value === "enricher"
+                            ? "元数据补充与富集"
+                            : "向量索引前处理"
+                }}
+              </p>
+            </div>
+          </div>
+        </article>
+      </aside>
+    </section>
 
     <div v-if="pipelineDetailDialogOpen" class="admin-dialog-overlay" @click.self="closePipelineDetail">
       <div class="admin-dialog admin-dialog--wide">
@@ -1610,3 +1670,93 @@ onMounted(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.ingestion-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ingestion-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.ingestion-hero-copy h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.ingestion-hero-copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.ingestion-hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ingestion-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: var(--admin-bg-soft);
+  color: var(--admin-ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.ingestion-tab.is-active {
+  border-color: var(--admin-accent);
+  background: var(--admin-accent);
+  color: #fff;
+}
+
+.ingestion-layout {
+  align-items: start;
+}
+
+.ingestion-main {
+  display: grid;
+  gap: 16px;
+}
+
+.ingestion-aside {
+  display: grid;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}
+
+.admin-page-header-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .ingestion-hero {
+    flex-direction: column;
+  }
+
+  .ingestion-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ingestion-aside {
+    position: static;
+  }
+}
+</style>
