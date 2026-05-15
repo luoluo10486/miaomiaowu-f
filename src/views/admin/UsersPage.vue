@@ -1,22 +1,23 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import PageHeader from "../../components/admin/PageHeader.vue";
+import StatCard from "../../components/admin/StatCard.vue";
 import {
   createUser,
   deleteUser,
   getUsersPage,
   updateUser
 } from "../../services/userService";
-import PageHeader from "../../components/admin/PageHeader.vue";
-import StatCard from "../../components/admin/StatCard.vue";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const loading = ref(false);
 const errorText = ref("");
+const keywordInput = ref("");
 const keyword = ref("");
-const searchInput = ref("");
 const pageNo = ref(1);
 const pageSize = 10;
 const page = ref({ records: [], total: 0, size: pageSize });
+const selectedUserId = ref(null);
 
 const dialogOpen = ref(false);
 const dialogMode = ref("create");
@@ -30,16 +31,40 @@ const deleteSubmitting = ref(false);
 
 const pageUsers = computed(() => pageRecords(page.value));
 const totalUsers = computed(() => pageTotal(page.value));
-const adminCount = computed(
-  () => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length
-);
+const adminCount = computed(() => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length);
 const enabledCount = computed(() => pageUsers.value.filter((item) => item.enabled !== false).length);
+const selectedUser = computed(() => {
+  if (selectedUserId.value) {
+    return pageUsers.value.find((item) => item.id === selectedUserId.value) || pageUsers.value[0] || null;
+  }
+  return pageUsers.value[0] || null;
+});
 
-const statCards = computed(() => [
-  { title: "当前页用户", value: String(pageUsers.value.length), tone: "indigo", icon: "U" },
-  { title: "总用户数", value: String(totalUsers.value), tone: "cyan", icon: "T" },
-  { title: "管理员", value: String(adminCount.value), tone: "emerald", icon: "A" },
-  { title: "启用账号", value: String(enabledCount.value), tone: "amber", icon: "E" }
+const stats = computed(() => [
+  {
+    title: "Total",
+    value: String(totalUsers.value),
+    hint: "用户总数",
+    tone: "indigo"
+  },
+  {
+    title: "Page",
+    value: String(pageUsers.value.length),
+    hint: "当前页数量",
+    tone: "cyan"
+  },
+  {
+    title: "Admins",
+    value: String(adminCount.value),
+    hint: "当前页管理员",
+    tone: "emerald"
+  },
+  {
+    title: "Enabled",
+    value: String(enabledCount.value),
+    hint: "当前页启用账号",
+    tone: "amber"
+  }
 ]);
 
 function buildEmptyForm() {
@@ -74,24 +99,23 @@ function roleLabel(role) {
   return normalizeRole(role) === "ADMIN" ? "管理员" : "普通用户";
 }
 
-function resetForm() {
-  form.value = buildEmptyForm();
-}
-
 async function loadData(currentPage = pageNo.value, currentKeyword = keyword.value) {
   loading.value = true;
   errorText.value = "";
   try {
     page.value = await getUsersPage(currentPage, pageSize, currentKeyword);
+    if (!selectedUserId.value && pageUsers.value.length > 0) {
+      selectedUserId.value = pageUsers.value[0].id;
+    }
   } catch (error) {
-    errorText.value = error?.message || "加载用户列表失败，请稍后重试。";
+    errorText.value = error?.message || "加载用户列表失败。";
   } finally {
     loading.value = false;
   }
 }
 
 function handleSearch() {
-  const nextKeyword = searchInput.value.trim();
+  const nextKeyword = keywordInput.value.trim();
   keyword.value = nextKeyword;
   pageNo.value = 1;
   void loadData(1, nextKeyword);
@@ -101,6 +125,13 @@ function handleRefresh() {
   void loadData(pageNo.value, keyword.value);
 }
 
+function resetSearch() {
+  keywordInput.value = "";
+  keyword.value = "";
+  pageNo.value = 1;
+  void loadData(1, "");
+}
+
 function goPrev() {
   if (pageNo.value <= 1) return;
   pageNo.value -= 1;
@@ -108,16 +139,20 @@ function goPrev() {
 }
 
 function goNext() {
-  const nextPage = pageCount(page.value);
+  const nextPage = pageCount(page);
   if (pageNo.value >= nextPage) return;
   pageNo.value += 1;
   void loadData(pageNo.value, keyword.value);
 }
 
+function selectUser(item) {
+  selectedUserId.value = item.id;
+}
+
 function openCreateDialog() {
   dialogMode.value = "create";
   dialogTarget.value = null;
-  resetForm();
+  form.value = buildEmptyForm();
   dialogOpen.value = true;
 }
 
@@ -145,6 +180,7 @@ async function handleSubmit() {
   if (dialogMode.value === "create" && !form.value.password.trim()) return;
 
   submitting.value = true;
+  errorText.value = "";
   try {
     const payload = {
       username: form.value.username.trim(),
@@ -169,7 +205,7 @@ async function handleSubmit() {
 
     closeDialog();
   } catch (error) {
-    errorText.value = error?.message || "保存用户失败，请稍后重试。";
+    errorText.value = error?.message || "保存用户失败。";
   } finally {
     submitting.value = false;
   }
@@ -188,17 +224,23 @@ function closeDeleteDialog() {
 async function handleDelete() {
   if (!deleteTarget.value) return;
   deleteSubmitting.value = true;
+  errorText.value = "";
   try {
     await deleteUser(deleteTarget.value.id);
     closeDeleteDialog();
     pageNo.value = 1;
     await loadData(1, keyword.value);
   } catch (error) {
-    errorText.value = error?.message || "删除用户失败，请稍后重试。";
+    errorText.value = error?.message || "删除用户失败。";
   } finally {
     deleteSubmitting.value = false;
   }
 }
+
+watch(keyword, () => {
+  pageNo.value = 1;
+  void loadData();
+});
 
 onMounted(() => {
   void loadData();
@@ -213,119 +255,146 @@ onMounted(() => {
       description="管理后台账号、角色、启用状态和头像信息，支持新建、编辑、禁用与删除。"
     >
       <template #actions>
-        <input
-          v-model="searchInput"
-          class="admin-input admin-page-header-search"
-          type="search"
-          placeholder="搜索用户名或昵称"
-          @keydown.enter.prevent="handleSearch"
-        />
-        <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
-        <button class="admin-button--ghost" type="button" @click="handleRefresh">刷新</button>
+        <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新建用户</button>
       </template>
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <div class="admin-stat-grid">
-      <StatCard v-for="card in statCards" :key="card.title" :title="card.title" :value="card.value" :tone="card.tone">
-        <template #icon>{{ card.icon }}</template>
-      </StatCard>
-    </div>
+    <section class="admin-stat-grid">
+      <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
+    </section>
 
-    <section class="admin-table-card">
-      <div class="admin-table-card__header">
-        <div>
-          <h2>用户列表</h2>
-          <p>查看账号、昵称、角色与状态，支持快速编辑密码和头像。</p>
+    <section class="admin-split">
+      <article class="admin-table-card">
+        <div class="admin-table-card__header">
+          <div>
+            <h2>用户列表</h2>
+            <p>查看账号、昵称、角色和状态，支持快速编辑密码与头像。</p>
+          </div>
+          <span class="admin-page-count">共 {{ totalUsers }} 条</span>
         </div>
-        <span class="admin-page-count">{{ totalUsers }} 条</span>
-      </div>
 
-      <div v-if="loading && pageUsers.length === 0" class="admin-empty">加载中...</div>
-      <div v-else-if="pageUsers.length === 0" class="admin-empty">暂无用户</div>
-      <div v-else class="admin-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>用户</th>
-              <th>角色</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th>更新时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in pageUsers" :key="item.id">
-              <td>
-                <div class="flex items-center gap-3">
-                  <div class="admin-user-avatar">{{ userAvatarInitial(item) }}</div>
-                  <div>
-                    <p class="admin-cell-title">{{ userDisplayName(item) }}</p>
-                    <p class="admin-cell-subtitle is-secondary">{{ item.username || "--" }}</p>
+        <div class="admin-toolbar">
+          <div class="admin-toolbar-left">
+            <input
+              v-model="keywordInput"
+              class="admin-input admin-search-input"
+              type="search"
+              placeholder="搜索用户名或昵称..."
+              @keydown.enter.prevent="handleSearch"
+            />
+            <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
+            <button class="admin-button--ghost" type="button" @click="resetSearch">重置</button>
+          </div>
+          <div class="admin-toolbar-right">
+            <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
+            <button class="admin-button" type="button" @click="openCreateDialog">新建用户</button>
+          </div>
+        </div>
+
+        <div v-if="loading && pageUsers.length === 0" class="admin-empty">加载中...</div>
+        <div v-else-if="pageUsers.length === 0" class="admin-empty">暂无用户</div>
+        <div v-else class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="width:260px;">用户</th>
+                <th style="width:120px;">角色</th>
+                <th style="width:120px;">状态</th>
+                <th style="width:160px;">创建时间</th>
+                <th style="width:160px;">更新时间</th>
+                <th style="width:160px;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="item in pageUsers"
+                :key="item.id"
+                :class="selectedUser?.id === item.id ? 'is-active-row' : ''"
+                @click="selectUser(item)"
+              >
+                <td>
+                  <div class="admin-user-row">
+                    <div class="admin-user-avatar">{{ userAvatarInitial(item) }}</div>
+                    <div>
+                      <p class="admin-cell-title">{{ userDisplayName(item) }}</p>
+                      <p class="admin-cell-subtitle is-secondary">{{ item.username || "--" }}</p>
+                    </div>
                   </div>
-                </div>
-              </td>
-              <td>
-                <span :class="['admin-badge', normalizeRole(item.role) === 'ADMIN' ? 'is-outline' : 'is-success']">
-                  {{ roleLabel(item.role) }}
-                </span>
-              </td>
-              <td>
-                <span :class="['admin-badge', item.enabled === false ? 'is-outline' : 'is-success']">
-                  {{ item.enabled === false ? '禁用' : '启用' }}
-                </span>
-              </td>
-              <td>{{ formatDateTime(item.createTime) }}</td>
-              <td>{{ formatDateTime(item.updateTime) }}</td>
-              <td>
-                <div class="admin-inline-actions">
-                  <button
-                    class="admin-button--ghost"
-                    type="button"
-                    :disabled="isProtectedUser(item)"
-                    @click="openEditDialog(item)"
-                  >
-                    编辑
-                  </button>
-                  <button
-                    class="admin-button--danger"
-                    type="button"
-                    :disabled="isProtectedUser(item)"
-                    @click="openDeleteDialog(item)"
-                  >
-                    删除
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="pageUsers.length > 0" class="admin-pagination">
-        <span>共 {{ totalUsers }} 条</span>
-        <div class="admin-pagination-controls">
-          <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">
-            上一页
-          </button>
-          <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
-          <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">
-            下一页
-          </button>
+                </td>
+                <td>
+                  <span :class="['admin-badge', normalizeRole(item.role) === 'ADMIN' ? 'is-outline' : 'is-success']">
+                    {{ roleLabel(item.role) }}
+                  </span>
+                </td>
+                <td>
+                  <span :class="['admin-badge', item.enabled === false ? 'is-outline' : 'is-success']">
+                    {{ item.enabled === false ? "禁用" : "启用" }}
+                  </span>
+                </td>
+                <td>{{ formatDateTime(item.createTime) }}</td>
+                <td>{{ formatDateTime(item.updateTime) }}</td>
+                <td>
+                  <div class="admin-inline-actions">
+                    <button
+                      class="admin-button--ghost"
+                      type="button"
+                      :disabled="isProtectedUser(item)"
+                      @click.stop="openEditDialog(item)"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      class="admin-button--danger"
+                      type="button"
+                      :disabled="isProtectedUser(item)"
+                      @click.stop="openDeleteDialog(item)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
+
+        <div v-if="pageUsers.length > 0" class="admin-pagination">
+          <span>共 {{ totalUsers }} 条</span>
+          <div class="admin-pagination-right">
+            <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
+            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
+            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">下一页</button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="admin-dashboard-aside">
+        <article class="admin-detail-card">
+          <h3>用户预览</h3>
+          <p class="admin-detail-card-desc">点击一行查看完整资料和账号状态。</p>
+          <div v-if="selectedUser" class="admin-kv">
+            <div><dt>用户名</dt><dd>{{ selectedUser.username }}</dd></div>
+            <div><dt>昵称</dt><dd>{{ selectedUser.nickname || "--" }}</dd></div>
+            <div><dt>角色</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
+            <div><dt>状态</dt><dd>{{ selectedUser.enabled === false ? "禁用" : "启用" }}</dd></div>
+            <div><dt>创建时间</dt><dd>{{ formatDateTime(selectedUser.createTime) }}</dd></div>
+            <div><dt>更新时间</dt><dd>{{ formatDateTime(selectedUser.updateTime) }}</dd></div>
+            <div><dt>头像</dt><dd>{{ selectedUser.avatar || "--" }}</dd></div>
+            <div><dt>保护账号</dt><dd>{{ isProtectedUser(selectedUser) ? "是" : "否" }}</dd></div>
+          </div>
+          <div v-else class="admin-empty-sm">暂无选中用户</div>
+        </article>
+      </aside>
     </section>
 
     <div v-if="dialogOpen" class="admin-dialog-overlay" @click.self="closeDialog">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDialog">&times;</button>
         <h3>{{ dialogMode === "create" ? "新建用户" : "编辑用户" }}</h3>
-        <p>
-          {{ dialogMode === "create" ? "填写账号基础信息与初始密码" : "可更新昵称、头像、角色与密码，留空密码则不修改" }}
-        </p>
+        <p>{{ dialogMode === "create" ? "填写账号基础信息和初始密码。" : "可修改昵称、头像、角色和密码，留空密码则不改动。 " }}</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>用户名</label>
@@ -392,3 +461,15 @@ onMounted(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.is-active-row {
+  background: rgba(79, 70, 229, 0.05);
+}
+
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+</style>

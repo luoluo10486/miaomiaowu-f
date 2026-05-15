@@ -25,14 +25,13 @@ const docId = computed(() => String(route.params.docId || ""));
 
 const loading = ref(false);
 const errorText = ref("");
+const enabledFilter = ref("");
+const pageNo = ref(1);
 const doc = ref(null);
 const chunksPage = ref({ records: [], total: 0, pages: 1, current: 1, size: PAGE_SIZE });
 const logsPage = ref({ records: [], total: 0 });
-const enabledFilter = ref("");
 const selectedIds = ref(new Set());
 const previewTarget = ref(null);
-
-const pageNo = ref(1);
 
 const dialogOpen = ref(false);
 const dialogMode = ref("create");
@@ -62,17 +61,19 @@ function truncateContent(content, maxLen = 120) {
   return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text;
 }
 
-function formatDate(value) {
-  if (!value) return "--";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString("zh-CN");
+function statusDotClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "success") return "is-success";
+  if (normalized === "failed") return "is-danger";
+  if (normalized === "running") return "is-warn";
+  return "is-muted";
 }
 
 const chunks = computed(() => pageRecords(chunksPage.value));
 const selectedList = computed(() => Array.from(selectedIds.value));
+const recentLogs = computed(() => pageRecords(logsPage.value).slice(0, 3));
 
-const chunkStats = computed(() => {
+const stats = computed(() => {
   const records = chunks.value;
   const total = pageTotal(chunksPage.value);
   const enabledCount = records.filter((item) => isEnabled(item)).length;
@@ -81,13 +82,11 @@ const chunkStats = computed(() => {
 
   return [
     { title: "Chunks", value: total, hint: "当前文档切片总数", tone: "indigo" },
-    { title: "Enabled", value: enabledCount, hint: "当前页已启用切片数", tone: "emerald" },
-    { title: "Selected", value: selectedCount, hint: "当前已选择切片数", tone: "amber" },
+    { title: "Enabled", value: enabledCount, hint: "当前页已启用切片", tone: "emerald" },
+    { title: "Selected", value: selectedCount, hint: "当前已选切片数", tone: "amber" },
     { title: "Tokens", value: tokenCount, hint: "当前页 token 总量", tone: "blue" }
   ];
 });
-
-const recentLogs = computed(() => pageRecords(logsPage.value).slice(0, 5));
 
 async function loadDocument() {
   if (!docId.value) return;
@@ -110,8 +109,8 @@ async function loadChunks() {
       current: pageNo.value,
       size: PAGE_SIZE
     };
-    if (enabledFilter.value === "1") params.enabled = true;
-    if (enabledFilter.value === "0") params.enabled = false;
+    if (enabledFilter.value === "1") params.enabled = 1;
+    if (enabledFilter.value === "0") params.enabled = 0;
 
     const [chunkData, logData] = await Promise.all([
       getKnowledgeChunksPage(docId.value, params),
@@ -129,6 +128,18 @@ async function loadChunks() {
 
 function refreshAll() {
   pageNo.value = 1;
+  void loadChunks();
+}
+
+function goPrev() {
+  if (pageNo.value <= 1) return;
+  pageNo.value -= 1;
+  void loadChunks();
+}
+
+function goNext() {
+  if (pageNo.value >= pageCount(chunksPage.value)) return;
+  pageNo.value += 1;
   void loadChunks();
 }
 
@@ -160,6 +171,7 @@ function toggleSelectAll() {
 }
 
 async function handleBatchToggle(enable) {
+  if (!docId.value) return;
   if (selectedList.value.length === 0) {
     errorText.value = "请选择需要操作的切片。";
     return;
@@ -210,7 +222,11 @@ async function handleSubmit() {
 
   const indexRaw = String(form.value.index ?? "").trim();
   const indexValue = indexRaw === "" ? null : Number(indexRaw);
-  if (dialogMode.value === "create" && indexRaw !== "" && (!Number.isInteger(indexValue) || indexValue < 0)) {
+  if (
+    dialogMode.value === "create" &&
+    indexRaw !== "" &&
+    (!Number.isInteger(indexValue) || indexValue < 0)
+  ) {
     errorText.value = "序号必须是非负整数。";
     return;
   }
@@ -225,9 +241,7 @@ async function handleSubmit() {
         index: indexValue
       });
     } else if (dialogTarget.value) {
-      await updateKnowledgeChunk(docId.value, dialogTarget.value.id, {
-        content
-      });
+      await updateKnowledgeChunk(docId.value, dialogTarget.value.id, { content });
     }
     closeDialog();
     await loadChunks();
@@ -238,7 +252,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleToggle(item) {
+async function handleToggleEnabled(item) {
   try {
     await toggleKnowledgeChunk(docId.value, item.id, !isEnabled(item));
     await loadChunks();
@@ -274,18 +288,6 @@ async function handleDelete() {
   }
 }
 
-function goPrev() {
-  if (pageNo.value <= 1) return;
-  pageNo.value -= 1;
-  void loadChunks();
-}
-
-function goNext() {
-  if (pageNo.value >= pageCount(chunksPage.value)) return;
-  pageNo.value += 1;
-  void loadChunks();
-}
-
 watch([docId, enabledFilter], () => {
   pageNo.value = 1;
   void loadDocument();
@@ -303,10 +305,12 @@ onMounted(() => {
     <PageHeader
       tag="Knowledge Chunks"
       :title="doc?.docName || '切片管理'"
-      :description="`文档 ID: ${docId}${kbId ? ` · 知识库: ${kbId}` : ''}`"
+      :description="`文档 ID: ${docId}${kbId ? ` · 知识库 ${kbId}` : ''}`"
     >
       <template #actions>
-        <button class="admin-button--ghost" type="button" @click="router.push(`/admin/knowledge/${kbId}`)">返回文档</button>
+        <button class="admin-button--ghost" type="button" @click="router.push(`/admin/knowledge/${kbId}`)">
+          返回文档
+        </button>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="refreshAll">刷新</button>
         <button class="admin-button" type="button" @click="openCreateDialog">新建切片</button>
       </template>
@@ -314,20 +318,28 @@ onMounted(() => {
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <section class="admin-stat-grid">
+    <div class="admin-stat-grid">
       <StatCard
-        v-for="stat in chunkStats"
+        v-for="stat in stats"
         :key="stat.title"
         :title="stat.title"
         :value="stat.value"
         :hint="stat.hint"
         :tone="stat.tone"
       />
-    </section>
+    </div>
 
     <section class="admin-split">
       <article class="admin-table-card">
-        <div class="admin-toolbar" style="margin-bottom: 16px;">
+        <div class="admin-table-card__header">
+          <div>
+            <h2>Chunk 列表</h2>
+            <p>支持筛选、批量操作、启停、编辑和预览。</p>
+          </div>
+          <span class="admin-page-count">共 {{ pageTotal(chunksPage) }} 条</span>
+        </div>
+
+        <div class="admin-toolbar">
           <div class="admin-toolbar-left">
             <select v-model="enabledFilter" class="admin-select" @change="handleFilterChange">
               <option value="">全部状态</option>
@@ -337,7 +349,7 @@ onMounted(() => {
           </div>
           <div class="admin-toolbar-right">
             <template v-if="selectedIds.size > 0">
-              <span class="admin-page-count">{{ selectedIds.size }} 已选择</span>
+              <span class="admin-page-count">已选 {{ selectedIds.size }} 条</span>
               <button class="admin-button--ghost" type="button" @click="handleBatchToggle(true)">批量启用</button>
               <button class="admin-button--ghost" type="button" @click="handleBatchToggle(false)">批量禁用</button>
             </template>
@@ -390,7 +402,7 @@ onMounted(() => {
                 <td>
                   <div class="admin-inline-actions">
                     <button class="admin-button--ghost" type="button" @click="openEditDialog(item)">编辑</button>
-                    <button class="admin-button--ghost" type="button" @click="handleToggle(item)">
+                    <button class="admin-button--ghost" type="button" @click="handleToggleEnabled(item)">
                       {{ isEnabled(item) ? "禁用" : "启用" }}
                     </button>
                     <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
@@ -424,22 +436,10 @@ onMounted(() => {
           <h3>文档摘要</h3>
           <p class="admin-detail-card-desc">查看当前文档的基础信息和处理状态。</p>
           <div class="admin-kv">
-            <div>
-              <dt>名称</dt>
-              <dd>{{ doc?.docName || docId }}</dd>
-            </div>
-            <div>
-              <dt>切片数</dt>
-              <dd>{{ pageTotal(chunksPage) }}</dd>
-            </div>
-            <div>
-              <dt>已启用</dt>
-              <dd>{{ chunks.filter((item) => isEnabled(item)).length }}</dd>
-            </div>
-            <div>
-              <dt>已选择</dt>
-              <dd>{{ selectedIds.size }}</dd>
-            </div>
+            <div><dt>名称</dt><dd>{{ doc?.docName || docId }}</dd></div>
+            <div><dt>切片数</dt><dd>{{ pageTotal(chunksPage) }}</dd></div>
+            <div><dt>已启用</dt><dd>{{ chunks.filter((item) => isEnabled(item)).length }}</dd></div>
+            <div><dt>已选中</dt><dd>{{ selectedIds.size }}</dd></div>
           </div>
         </article>
 
@@ -468,21 +468,11 @@ onMounted(() => {
             <pre class="admin-chunk-preview">{{ previewTarget.content || "--" }}</pre>
           </div>
           <div class="admin-kv">
-            <div>
-              <dt>字符数</dt>
-              <dd>{{ previewTarget.charCount ?? "--" }}</dd>
-            </div>
-            <div>
-              <dt>Token</dt>
-              <dd>{{ previewTarget.tokenCount ?? "--" }}</dd>
-            </div>
+            <div><dt>字符数</dt><dd>{{ previewTarget.charCount ?? "--" }}</dd></div>
+            <div><dt>Token</dt><dd>{{ previewTarget.tokenCount ?? "--" }}</dd></div>
             <div>
               <dt>状态</dt>
-              <dd>
-                <span :class="['admin-badge', enabledBadgeClass(previewTarget)]">
-                  {{ isEnabled(previewTarget) ? "启用" : "禁用" }}
-                </span>
-              </dd>
+              <dd><span :class="['admin-badge', enabledBadgeClass(previewTarget)]">{{ isEnabled(previewTarget) ? "启用" : "禁用" }}</span></dd>
             </div>
           </div>
         </div>
@@ -498,13 +488,13 @@ onMounted(() => {
         <h3>{{ dialogMode === "create" ? "新建切片" : "编辑切片" }}</h3>
         <p>{{ dialogMode === "create" ? "手动维护切片内容" : "修改切片内容" }}</p>
         <div class="admin-dialog-body">
+          <div v-if="dialogMode === 'create'" class="admin-dialog-field">
+            <label>序号</label>
+            <input v-model="form.index" class="admin-input" type="number" min="0" placeholder="可选" />
+          </div>
           <div class="admin-dialog-field">
             <label>内容</label>
             <textarea v-model="form.content" class="admin-textarea" rows="10" placeholder="请输入切片内容" />
-          </div>
-          <div class="admin-dialog-field" v-if="dialogMode === 'create'">
-            <label>序号</label>
-            <input v-model="form.index" class="admin-input" type="number" min="0" placeholder="可选" />
           </div>
         </div>
         <div class="admin-dialog-footer">
@@ -520,7 +510,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
-        <p class="admin-confirm-text">确认删除这个切片吗？该操作不可撤销。</p>
+        <p class="admin-confirm-text">确认删除这个切片吗？该操作不可恢复。</p>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeDeleteDialog">取消</button>
           <button class="admin-button--danger" type="button" :disabled="deleteSubmitting" @click="handleDelete">
