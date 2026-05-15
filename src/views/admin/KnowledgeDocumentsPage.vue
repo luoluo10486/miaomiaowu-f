@@ -1,68 +1,57 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
-  getKnowledgeBase,
-  getKnowledgeDocumentsPage,
-  getKnowledgeDocument,
-  updateKnowledgeDocument,
-  startKnowledgeDocumentChunk,
-  uploadKnowledgeDocument,
   deleteKnowledgeDocument,
-  setKnowledgeDocumentEnabled,
   getChunkStrategies,
-  getKnowledgeChunkLogsPage
+  getKnowledgeBase,
+  getKnowledgeChunkLogsPage,
+  getKnowledgeDocument,
+  getKnowledgeDocumentsPage,
+  setKnowledgeDocumentEnabled,
+  startKnowledgeDocumentChunk,
+  updateKnowledgeDocument,
+  uploadKnowledgeDocument
 } from "../../services/knowledgeService";
 import { getIngestionPipelines } from "../../services/ingestionService";
 import { formatDateTime, pageRecords, pageTotal } from "./adminShared";
 
+const PAGE_SIZE = 10;
+
 const route = useRoute();
 const router = useRouter();
-const kbId = computed(() => route.params.kbId);
+const kbId = computed(() => String(route.params.kbId || ""));
 
 const loading = ref(false);
 const errorText = ref("");
 const keyword = ref("");
 const searchInput = ref("");
 const statusFilter = ref("");
-const base = ref(null);
-const page = ref({ records: [], total: 0, pages: 1, current: 1, size: 10 });
 const pageNo = ref(1);
-const pageSize = 10;
+
+const kb = ref(null);
+const page = ref({ records: [], total: 0, pages: 1, current: 1, size: PAGE_SIZE });
 
 const strategies = ref([]);
 const pipelines = ref([]);
+const metaLoading = ref(false);
 
 const uploadDialogOpen = ref(false);
 const uploadSubmitting = ref(false);
 const uploadFileRef = ref(null);
-const uploadForm = ref({
-  sourceType: "file",
-  processMode: "chunk",
-  chunkStrategy: "structure_aware",
-  pipelineId: "",
-  url: ""
-});
 const uploadFile = ref(null);
+const uploadForm = ref(createEmptyUploadForm());
+const uploadChunkConfig = ref({});
 
 const detailDialogOpen = ref(false);
 const detailLoading = ref(false);
 const detailSaving = ref(false);
 const detailTarget = ref(null);
-const detailForm = ref({
-  docName: "",
-  processMode: "chunk",
-  chunkStrategy: "structure_aware",
-  pipelineId: "",
-  sourceLocation: "",
-  scheduleEnabled: false,
-  scheduleCron: ""
-});
+const detailForm = ref(createEmptyDetailForm());
 const detailChunkConfig = ref({});
-const detailStrategies = ref([]);
-const detailPipelines = ref([]);
 
 const chunkDialogOpen = ref(false);
 const chunkTarget = ref(null);
@@ -77,55 +66,59 @@ const logTarget = ref(null);
 const logPage = ref({ records: [], total: 0 });
 const logLoading = ref(false);
 
-const documents = computed(() => pageRecords(page.value));
+function getErrorMessage(error, fallback) {
+  return error?.message || fallback;
+}
 
-const documentStats = computed(() => [
-  {
-    title: "Documents",
-    value: pageTotal(page.value),
-    hint: "当前知识库下的文档总数",
-    tone: "indigo"
-  },
-  {
-    title: "Shown",
-    value: documents.value.filter((item) => Boolean(item.enabled)).length,
-    hint: "当前页启用中的文档数",
-    tone: "emerald"
-  },
-  {
-    title: "Chunks",
-    value: documents.value.reduce((sum, item) => sum + Number(item.chunkCount || 0), 0),
-    hint: "当前页切片总数汇总",
-    tone: "blue"
-  },
-  {
-    title: "Strategies",
-    value: strategies.value.length,
-    hint: "可用切片策略数量",
-    tone: "amber"
+function createEmptyUploadForm() {
+  return {
+    sourceType: "file",
+    sourceLocation: "",
+    processMode: "chunk",
+    chunkStrategy: "structure_aware",
+    pipelineId: "",
+    scheduleEnabled: false,
+    scheduleCron: ""
+  };
+}
+
+function createEmptyDetailForm() {
+  return {
+    docName: "",
+    processMode: "chunk",
+    chunkStrategy: "structure_aware",
+    pipelineId: "",
+    sourceLocation: "",
+    scheduleEnabled: false,
+    scheduleCron: ""
+  };
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function parseChunkConfig(raw) {
+  if (!raw) return {};
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
   }
-]);
+}
 
-const STATUS_OPTIONS = [
-  { value: "", label: "全部状态" },
-  { value: "pending", label: "pending" },
-  { value: "running", label: "running" },
-  { value: "failed", label: "failed" },
-  { value: "success", label: "success" }
-];
-
-const SOURCE_OPTIONS = [
-  { value: "file", label: "Local File" },
-  { value: "url", label: "Remote URL" }
-];
-
-const PROCESS_MODE_OPTIONS = [
-  { value: "chunk", label: "直接切片" },
-  { value: "pipeline", label: "数据通道" }
-];
+function statusDotClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "success") return "bg-emerald-500";
+  if (normalized === "failed") return "bg-red-500";
+  if (normalized === "running") return "bg-amber-500";
+  if (normalized === "pending") return "bg-slate-400";
+  return "bg-slate-300";
+}
 
 function formatSize(size) {
-  if (size == null) return "--";
+  if (size === null || size === undefined) return "--";
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
@@ -139,45 +132,105 @@ function formatSourceLabel(sourceType) {
   return sourceType || "--";
 }
 
-function statusBadgeClass(status, enabled) {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized === "success") return "is-success";
-  if (normalized === "failed") return "is-danger";
-  if (normalized === "running") return "is-warn";
-  if (enabled) return "is-success";
-  return "is-muted";
+function formatModeLabel(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  if (normalized === "pipeline") return "数据通道";
+  if (normalized === "chunk") return "直接切片";
+  return mode || "--";
 }
 
-function parseChunkConfig(raw) {
-  if (!raw) return {};
-  try {
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+function formatChunkStrategy(strategy) {
+  const normalized = String(strategy || "").toLowerCase();
+  if (normalized === "fixed_size") return "固定大小";
+  if (normalized === "structure_aware") return "结构感知";
+  return strategy || "--";
 }
 
-function stringifyJson(value) {
-  if (value == null) return "-";
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
+function getStrategyDefinition(value, list) {
+  const normalized = String(value || "").trim();
+  return safeArray(list).find((item) => String(item?.value || item).trim() === normalized) || null;
 }
+
+function normalizeConfigValue(raw, defaultValue) {
+  if (typeof defaultValue === "number") {
+    const num = Number(raw);
+    return Number.isFinite(num) ? num : defaultValue;
+  }
+  if (typeof defaultValue === "boolean") {
+    return raw === true || raw === "true" || raw === 1 || raw === "1";
+  }
+  return raw === null || raw === undefined ? defaultValue : String(raw);
+}
+
+function syncConfigDefaults(targetRef, strategyValue, list, preserveExisting = true) {
+  const strategy = getStrategyDefinition(strategyValue, list);
+  const defaults = strategy?.defaultConfig || {};
+  const existing = targetRef.value || {};
+  const next = {};
+
+  Object.entries(defaults).forEach(([key, value]) => {
+    const current = preserveExisting ? existing[key] : undefined;
+    next[key] = normalizeConfigValue(current ?? value, value);
+  });
+
+  targetRef.value = next;
+}
+
+function buildConfigPayload(config, strategyValue, list) {
+  const strategy = getStrategyDefinition(strategyValue, list);
+  const defaults = strategy?.defaultConfig || {};
+  const payload = {};
+
+  Object.entries(defaults).forEach(([key, value]) => {
+    payload[key] = normalizeConfigValue(config[key], value);
+  });
+
+  return payload;
+}
+
+const documents = computed(() => pageRecords(page.value));
+
+const documentStats = computed(() => {
+  const records = documents.value;
+  const enabledCount = records.filter((item) => Boolean(item.enabled)).length;
+  const chunkCount = records.reduce((sum, item) => sum + Number(item.chunkCount || 0), 0);
+  const fileCount = records.filter((item) => String(item.sourceType || "").toLowerCase() === "file").length;
+  const urlCount = records.filter((item) => String(item.sourceType || "").toLowerCase() === "url").length;
+
+  return [
+    { title: "Documents", value: pageTotal(page.value), hint: "当前知识库文档总数", tone: "indigo" },
+    { title: "Enabled", value: enabledCount, hint: "当前页已启用文档数", tone: "emerald" },
+    { title: "Chunks", value: chunkCount, hint: "当前页切片总数", tone: "blue" },
+    { title: "Sources", value: `${fileCount}/${urlCount}`, hint: "文件 / URL", tone: "amber" }
+  ];
+});
+
+const uploadStrategy = computed(() => getStrategyDefinition(uploadForm.value.chunkStrategy, strategies.value));
+const detailStrategy = computed(() => getStrategyDefinition(detailForm.value.chunkStrategy, strategies.value));
+const uploadConfigFields = computed(() => Object.entries(uploadStrategy.value?.defaultConfig || {}).map(([key, value]) => ({
+  key,
+  value
+})));
+const detailConfigFields = computed(() => Object.entries(detailStrategy.value?.defaultConfig || {}).map(([key, value]) => ({
+  key,
+  value
+})));
 
 async function loadMeta() {
+  metaLoading.value = true;
   try {
     const [strategyData, pipelineData] = await Promise.all([
       getChunkStrategies().catch(() => []),
       getIngestionPipelines(1, 200).catch(() => ({ records: [] }))
     ]);
-    strategies.value = Array.isArray(strategyData) ? strategyData : [];
-    pipelines.value = Array.isArray(pipelineData?.records) ? pipelineData.records : [];
-  } catch {
+    strategies.value = safeArray(strategyData);
+    pipelines.value = safeArray(pipelineData?.records);
+  } catch (error) {
+    console.error(error);
     strategies.value = [];
     pipelines.value = [];
+  } finally {
+    metaLoading.value = false;
   }
 }
 
@@ -185,20 +238,21 @@ async function loadDocuments() {
   if (!kbId.value) return;
   loading.value = true;
   errorText.value = "";
+
   try {
-    const [baseData, pageData] = await Promise.all([
+    const [kbData, pageData] = await Promise.all([
       getKnowledgeBase(kbId.value),
       getKnowledgeDocumentsPage(kbId.value, {
         current: pageNo.value,
-        size: pageSize,
+        size: PAGE_SIZE,
         keyword: keyword.value || undefined,
         status: statusFilter.value || undefined
       })
     ]);
-    base.value = baseData;
-    page.value = pageData || { records: [], total: 0, pages: 1, current: 1, size: pageSize };
+    kb.value = kbData;
+    page.value = pageData || { records: [], total: 0, pages: 1, current: 1, size: PAGE_SIZE };
   } catch (error) {
-    errorText.value = error?.message || "加载文档失败。";
+    errorText.value = getErrorMessage(error, "加载文档列表失败，请稍后重试。");
   } finally {
     loading.value = false;
   }
@@ -222,25 +276,9 @@ function goPrev() {
 }
 
 function goNext() {
-  if (pageNo.value >= page.value.pages) return;
+  if (pageNo.value >= (page.value.pages || 1)) return;
   pageNo.value += 1;
   void loadDocuments();
-}
-
-function openUploadDialog() {
-  uploadDialogOpen.value = true;
-  uploadForm.value = {
-    sourceType: "file",
-    processMode: "chunk",
-    chunkStrategy: "structure_aware",
-    pipelineId: pipelines.value[0]?.id || "",
-    url: ""
-  };
-  uploadFile.value = null;
-}
-
-function closeUploadDialog() {
-  uploadDialogOpen.value = false;
 }
 
 function openFilePicker() {
@@ -252,64 +290,45 @@ function handleFileChange(event) {
   uploadFile.value = event.target?.files?.[0] || null;
 }
 
-async function handleUploadSubmit() {
-  if (uploadForm.value.sourceType === "url" && !uploadForm.value.url.trim()) return;
-  if (uploadForm.value.sourceType === "file" && !uploadFile.value) return;
-
-  uploadSubmitting.value = true;
-  errorText.value = "";
-  try {
-    if (uploadForm.value.sourceType === "file") {
-      await uploadKnowledgeDocument(kbId.value, {
-        sourceType: "file",
-        file: uploadFile.value,
-        processMode: uploadForm.value.processMode || "chunk",
-        chunkStrategy: uploadForm.value.chunkStrategy || "structure_aware",
-        pipelineId: uploadForm.value.processMode === "pipeline" ? uploadForm.value.pipelineId || null : null
-      });
-    } else {
-      await uploadKnowledgeDocument(kbId.value, {
-        sourceType: "url",
-        sourceLocation: uploadForm.value.url.trim(),
-        processMode: uploadForm.value.processMode || "chunk",
-        chunkStrategy: uploadForm.value.chunkStrategy || "structure_aware",
-        pipelineId: uploadForm.value.processMode === "pipeline" ? uploadForm.value.pipelineId || null : null
-      });
-    }
-    closeUploadDialog();
-    await loadDocuments();
-  } catch (error) {
-    errorText.value = error?.message || "上传文档失败。";
-  } finally {
-    uploadSubmitting.value = false;
-  }
+function openUploadDialog() {
+  uploadDialogOpen.value = true;
+  uploadFile.value = null;
+  uploadForm.value = createEmptyUploadForm();
+  syncConfigDefaults(uploadChunkConfig, uploadForm.value.chunkStrategy, strategies.value, false);
 }
 
-async function openDetailDialog(item) {
+function closeUploadDialog() {
+  uploadDialogOpen.value = false;
+}
+
+function openDetailDialog(item) {
+  detailTarget.value = item;
   detailDialogOpen.value = true;
   detailLoading.value = true;
-  detailTarget.value = null;
   errorText.value = "";
-  try {
-    const detail = await getKnowledgeDocument(item.id);
-    detailTarget.value = detail;
-    detailForm.value = {
-      docName: detail.docName || "",
-      processMode: detail.processMode || "chunk",
-      chunkStrategy: detail.chunkStrategy || "structure_aware",
-      pipelineId: detail.pipelineId ? String(detail.pipelineId) : "",
-      sourceLocation: detail.sourceLocation || "",
-      scheduleEnabled: Boolean(detail.scheduleEnabled),
-      scheduleCron: detail.scheduleCron || ""
-    };
-    detailChunkConfig.value = parseChunkConfig(detail.chunkConfig);
-    detailStrategies.value = strategies.value;
-    detailPipelines.value = pipelines.value;
-  } catch (error) {
-    errorText.value = error?.message || "加载文档详情失败。";
-  } finally {
-    detailLoading.value = false;
-  }
+  getKnowledgeDocument(item.id)
+    .then((detail) => {
+      detailTarget.value = detail;
+      detailForm.value = {
+        docName: detail.docName || "",
+        processMode: detail.processMode || "chunk",
+        chunkStrategy: detail.chunkStrategy || "structure_aware",
+        pipelineId: detail.pipelineId ? String(detail.pipelineId) : "",
+        sourceLocation: detail.sourceLocation || "",
+        scheduleEnabled: Boolean(detail.scheduleEnabled),
+        scheduleCron: detail.scheduleCron || ""
+      };
+      detailChunkConfig.value = parseChunkConfig(detail.chunkConfig);
+      syncConfigDefaults(detailChunkConfig, detailForm.value.chunkStrategy, strategies.value, true);
+    })
+    .catch((error) => {
+      errorText.value = getErrorMessage(error, "加载文档详情失败，请稍后重试。");
+      detailDialogOpen.value = false;
+      detailTarget.value = null;
+    })
+    .finally(() => {
+      detailLoading.value = false;
+    });
 }
 
 function closeDetailDialog() {
@@ -317,46 +336,95 @@ function closeDetailDialog() {
   detailTarget.value = null;
 }
 
-async function handleDetailSave() {
-  if (!detailTarget.value || !detailForm.value.docName.trim()) return;
-  detailSaving.value = true;
+async function handleUploadSubmit() {
+  const sourceType = String(uploadForm.value.sourceType || "file").toLowerCase();
+  const processMode = String(uploadForm.value.processMode || "chunk").toLowerCase();
+  const chunkStrategyValue = processMode === "chunk" ? uploadForm.value.chunkStrategy : undefined;
+  const pipelineId = processMode === "pipeline" ? uploadForm.value.pipelineId || null : null;
+
+  if (sourceType === "file" && !uploadFile.value) {
+    errorText.value = "请选择要上传的文件。";
+    return;
+  }
+  if (sourceType === "url" && !uploadForm.value.sourceLocation.trim()) {
+    errorText.value = "请输入文档地址。";
+    return;
+  }
+
+  uploadSubmitting.value = true;
   errorText.value = "";
+
   try {
     const payload = {
-      docName: detailForm.value.docName.trim(),
-      processMode: detailForm.value.processMode || "chunk",
+      sourceType,
+      sourceLocation: uploadForm.value.sourceLocation.trim() || null,
+      processMode,
+      chunkStrategy: chunkStrategyValue,
+      pipelineId,
+      scheduleEnabled: uploadForm.value.scheduleEnabled,
+      scheduleCron: uploadForm.value.scheduleEnabled ? uploadForm.value.scheduleCron.trim() || null : null
+    };
+
+    if (sourceType === "file") {
+      payload.file = uploadFile.value;
+    }
+
+    if (processMode === "chunk") {
+      payload.chunkConfig = JSON.stringify(buildConfigPayload(uploadChunkConfig.value, uploadForm.value.chunkStrategy, strategies.value));
+    }
+
+    await uploadKnowledgeDocument(kbId.value, payload);
+    closeUploadDialog();
+    await loadDocuments();
+  } catch (error) {
+    errorText.value = getErrorMessage(error, "上传文档失败，请稍后重试。");
+  } finally {
+    uploadSubmitting.value = false;
+  }
+}
+
+async function handleDetailSave() {
+  if (!detailTarget.value) return;
+  const name = detailForm.value.docName.trim();
+  if (!name) {
+    errorText.value = "请输入文档名称。";
+    return;
+  }
+
+  detailSaving.value = true;
+  errorText.value = "";
+
+  try {
+    const payload = {
+      docName: name,
+      processMode: detailForm.value.processMode,
       chunkStrategy: detailForm.value.processMode === "chunk" ? detailForm.value.chunkStrategy : undefined,
       pipelineId: detailForm.value.processMode === "pipeline" ? detailForm.value.pipelineId || null : null,
       sourceLocation: detailForm.value.sourceLocation.trim() || null,
       scheduleEnabled: detailForm.value.scheduleEnabled,
       scheduleCron: detailForm.value.scheduleEnabled ? detailForm.value.scheduleCron.trim() || null : null
     };
+
     if (detailForm.value.processMode === "chunk") {
-      const strategy = detailStrategies.value.find((item) => item.value === detailForm.value.chunkStrategy);
-      if (strategy?.defaultConfig) {
-        const chunkConfig = {};
-        for (const [key, value] of Object.entries(strategy.defaultConfig)) {
-          chunkConfig[key] = Number(detailChunkConfig.value[key] ?? value);
-        }
-        payload.chunkConfig = JSON.stringify(chunkConfig);
-      }
+      payload.chunkConfig = JSON.stringify(buildConfigPayload(detailChunkConfig.value, detailForm.value.chunkStrategy, strategies.value));
     }
+
     await updateKnowledgeDocument(detailTarget.value.id, payload);
     closeDetailDialog();
     await loadDocuments();
   } catch (error) {
-    errorText.value = error?.message || "保存文档失败。";
+    errorText.value = getErrorMessage(error, "保存文档失败，请稍后重试。");
   } finally {
     detailSaving.value = false;
   }
 }
 
-async function handleToggleEnabled(item) {
+async function handleToggleEnabled(docItem) {
   try {
-    await setKnowledgeDocumentEnabled(item.id, !item.enabled);
+    await setKnowledgeDocumentEnabled(docItem.id, !Boolean(docItem.enabled));
     await loadDocuments();
   } catch (error) {
-    errorText.value = error?.message || "切换文档状态失败。";
+    errorText.value = getErrorMessage(error, "切换启用状态失败。");
   }
 }
 
@@ -372,14 +440,16 @@ function closeChunkDialog() {
 
 async function handleChunk() {
   if (!chunkTarget.value) return;
+
   chunkSubmitting.value = true;
   errorText.value = "";
+
   try {
     await startKnowledgeDocumentChunk(chunkTarget.value.id);
     closeChunkDialog();
     await loadDocuments();
   } catch (error) {
-    errorText.value = error?.message || "触发切片失败。";
+    errorText.value = getErrorMessage(error, "触发切片失败，请稍后重试。");
   } finally {
     chunkSubmitting.value = false;
   }
@@ -397,14 +467,16 @@ function closeDeleteDialog() {
 
 async function handleDelete() {
   if (!deleteTarget.value) return;
+
   deleteSubmitting.value = true;
   errorText.value = "";
+
   try {
     await deleteKnowledgeDocument(deleteTarget.value.id);
     closeDeleteDialog();
     await loadDocuments();
   } catch (error) {
-    errorText.value = error?.message || "删除文档失败。";
+    errorText.value = getErrorMessage(error, "删除文档失败，请稍后重试。");
   } finally {
     deleteSubmitting.value = false;
   }
@@ -415,12 +487,13 @@ function openLogDialog(item) {
   logDialogOpen.value = true;
   logLoading.value = true;
   errorText.value = "";
+
   getKnowledgeChunkLogsPage(item.id, 1, 20)
     .then((data) => {
       logPage.value = data || { records: [], total: 0 };
     })
     .catch((error) => {
-      errorText.value = error?.message || "加载日志失败。";
+      errorText.value = getErrorMessage(error, "加载切片日志失败。");
       logPage.value = { records: [], total: 0 };
     })
     .finally(() => {
@@ -434,9 +507,46 @@ function closeLogDialog() {
   logPage.value = { records: [], total: 0 };
 }
 
+function handleUploadStrategyChange(value) {
+  uploadForm.value.chunkStrategy = value;
+  syncConfigDefaults(uploadChunkConfig, value, strategies.value, true);
+}
+
+function handleDetailStrategyChange(value) {
+  detailForm.value.chunkStrategy = value;
+  syncConfigDefaults(detailChunkConfig, value, strategies.value, true);
+}
+
 watch([kbId, statusFilter], () => {
   pageNo.value = 1;
   void loadDocuments();
+});
+
+watch(
+  () => uploadForm.value.chunkStrategy,
+  (value) => {
+    if (uploadDialogOpen.value) {
+      syncConfigDefaults(uploadChunkConfig, value, strategies.value, true);
+    }
+  }
+);
+
+watch(
+  () => detailForm.value.chunkStrategy,
+  (value) => {
+    if (detailDialogOpen.value) {
+      syncConfigDefaults(detailChunkConfig, value, strategies.value, true);
+    }
+  }
+);
+
+watch(strategies, () => {
+  if (uploadDialogOpen.value) {
+    syncConfigDefaults(uploadChunkConfig, uploadForm.value.chunkStrategy, strategies.value, true);
+  }
+  if (detailDialogOpen.value) {
+    syncConfigDefaults(detailChunkConfig, detailForm.value.chunkStrategy, strategies.value, true);
+  }
 });
 
 onMounted(() => {
@@ -446,11 +556,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page admin-documents">
     <PageHeader
       tag="Knowledge Docs"
-      :title="base?.name || '知识库文档'"
-      :description="`知识库: ${kbId}${base?.collectionName ? ` · ${base.collectionName}` : ''}`"
+      :title="kb?.name || '文档管理'"
+      :description="`知识库: ${kbId}${kb?.collectionName ? ` · ${kb.collectionName}` : ''}`"
     >
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="router.push('/admin/knowledge')">返回知识库</button>
@@ -474,129 +584,188 @@ onMounted(() => {
       />
     </section>
 
-    <article class="admin-table-card">
-      <div class="admin-toolbar" style="margin-bottom: 16px;">
-        <div class="admin-toolbar-left">
-          <input
-            v-model="searchInput"
-            class="admin-input"
-            type="search"
-            placeholder="搜索文档名称"
-            @keydown.enter.prevent="handleSearch"
-          />
-          <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
-          <select v-model="statusFilter" class="admin-select" @change="handleRefresh">
-            <option v-for="opt in STATUS_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
+    <section class="admin-split">
+      <article class="admin-table-card">
+        <div class="admin-toolbar" style="margin-bottom: 16px;">
+          <div class="admin-toolbar-left">
+            <input
+              v-model="searchInput"
+              class="admin-input"
+              type="search"
+              placeholder="搜索文档名称"
+              @keydown.enter.prevent="handleSearch"
+            />
+            <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
+            <select v-model="statusFilter" class="admin-select" @change="handleRefresh">
+              <option value="">全部状态</option>
+              <option value="pending">pending</option>
+              <option value="running">running</option>
+              <option value="failed">failed</option>
+              <option value="success">success</option>
+            </select>
+          </div>
+          <div class="admin-toolbar-right">
+            <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
+            <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
+          </div>
         </div>
-        <div class="admin-toolbar-right">
-          <span class="admin-page-count">共 {{ pageTotal(page).toLocaleString("zh-CN") }} 条</span>
-          <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
-        </div>
-      </div>
 
-      <div v-if="loading && documents.length === 0" class="admin-empty">加载中...</div>
-      <div v-else-if="documents.length === 0" class="admin-empty">暂无文档</div>
-      <div v-else class="admin-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>文档</th>
-              <th>来源</th>
-              <th>处理模式</th>
-              <th>状态</th>
-              <th>启用</th>
-              <th>切片数</th>
-              <th>策略</th>
-              <th>大小</th>
-              <th>更新时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in documents" :key="item.id">
-              <td>
-                <button class="admin-link" type="button" @click="router.push(`/admin/knowledge/${kbId}/docs/${item.id}`)">
-                  {{ item.docName || item.id }}
-                </button>
-              </td>
-              <td>{{ formatSourceLabel(item.sourceType) }}</td>
-              <td>{{ item.processMode || "-" }}</td>
-              <td>
-                <span :class="['admin-badge', statusBadgeClass(item.status, item.enabled)]">
-                  {{ item.status || "-" }}
-                </span>
-              </td>
-              <td>
-                <span :class="['admin-badge', item.enabled ? 'is-success' : 'is-muted']">
-                  {{ item.enabled ? "启用" : "禁用" }}
-                </span>
-              </td>
-              <td>{{ item.chunkCount ?? 0 }}</td>
-              <td>{{ item.chunkStrategy || "-" }}</td>
-              <td>{{ formatSize(item.fileSize) }}</td>
-              <td>{{ formatDateTime(item.updateTime || item.createTime) }}</td>
-              <td>
-                <div class="admin-inline-actions">
-                  <button class="admin-button--ghost" type="button" @click="openDetailDialog(item)">详情</button>
-                  <button class="admin-button--ghost" type="button" @click="openChunkDialog(item)">切片</button>
-                  <button class="admin-button--ghost" type="button" @click="openLogDialog(item)">日志</button>
-                  <button class="admin-button--ghost" type="button" @click="handleToggleEnabled(item)">
-                    {{ item.enabled ? "禁用" : "启用" }}
+        <div v-if="loading && documents.length === 0" class="admin-empty">加载中...</div>
+        <div v-else-if="documents.length === 0" class="admin-empty">暂无文档</div>
+        <div v-else class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>文档</th>
+                <th>来源</th>
+                <th>处理模式</th>
+                <th>状态</th>
+                <th>启用</th>
+                <th>切片数</th>
+                <th>策略</th>
+                <th>大小</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in documents" :key="item.id">
+                <td>
+                  <button class="admin-link" type="button" @click="openDetailDialog(item)">
+                    {{ item.docName || item.id }}
                   </button>
-                  <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="documents.length > 0" class="admin-pagination">
-        <span class="admin-page-count">第 {{ page.current || pageNo }} / {{ page.pages || pageCount(page) }} 页</span>
-        <div class="admin-pagination-controls">
-          <button class="admin-button--ghost" type="button" :disabled="loading || (page.current || pageNo) <= 1" @click="goPrev">上一页</button>
-          <button class="admin-button--ghost" type="button" :disabled="loading || (page.current || pageNo) >= (page.pages || pageCount(page))" @click="goNext">下一页</button>
+                </td>
+                <td>{{ formatSourceLabel(item.sourceType) }}</td>
+                <td>{{ formatModeLabel(item.processMode) }}</td>
+                <td>
+                  <span class="inline-flex items-center gap-2">
+                    <span :class="['h-2 w-2 rounded-full', statusDotClass(item.status)]" />
+                    <span>{{ item.status || "--" }}</span>
+                  </span>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="admin-badge"
+                    :class="item.enabled ? 'is-success' : 'is-muted'"
+                    @click="handleToggleEnabled(item)"
+                  >
+                    {{ item.enabled ? "启用" : "禁用" }}
+                  </button>
+                </td>
+                <td>{{ item.chunkCount ?? "-" }}</td>
+                <td>{{ formatChunkStrategy(item.chunkStrategy) }}</td>
+                <td>{{ formatSize(item.fileSize) }}</td>
+                <td>{{ formatDateTime(item.updateTime || item.createTime) }}</td>
+                <td>
+                  <div class="admin-inline-actions">
+                    <button class="admin-button--ghost" type="button" @click="openDetailDialog(item)">详情</button>
+                    <button class="admin-button--ghost" type="button" @click="openChunkDialog(item)">切片</button>
+                    <button class="admin-button--ghost" type="button" @click="openLogDialog(item)">日志</button>
+                    <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-    </article>
+
+        <div v-if="documents.length > 0" class="admin-pagination">
+          <span class="admin-page-count">第 {{ page.current || pageNo }} / {{ page.pages || 1 }} 页</span>
+          <div class="admin-pagination-controls">
+            <button class="admin-button--ghost" type="button" :disabled="loading || (page.current || pageNo) <= 1" @click="goPrev">
+              上一页
+            </button>
+            <button
+              class="admin-button--ghost"
+              type="button"
+              :disabled="loading || (page.current || pageNo) >= (page.pages || 1)"
+              @click="goNext"
+            >
+              下一页
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="admin-dashboard-aside">
+        <article class="admin-detail-card">
+          <h3>知识库摘要</h3>
+          <p class="admin-detail-card-desc">当前知识库的基础信息和处理模式。</p>
+          <div class="admin-kv">
+            <div>
+              <dt>名称</dt>
+              <dd>{{ kb?.name || kbId }}</dd>
+            </div>
+            <div>
+              <dt>Collection</dt>
+              <dd>{{ kb?.collectionName || "--" }}</dd>
+            </div>
+            <div>
+              <dt>文档数</dt>
+              <dd>{{ pageTotal(page) }}</dd>
+            </div>
+            <div>
+              <dt>策略数</dt>
+              <dd>{{ metaLoading ? "--" : strategies.length }}</dd>
+            </div>
+          </div>
+        </article>
+
+        <article class="admin-detail-card">
+          <h3>最近日志</h3>
+          <p class="admin-detail-card-desc">打开日志弹窗查看完整切片记录。</p>
+          <p class="admin-page-count">从列表中点击“日志”查看完整记录。</p>
+          <div v-if="recentLogs.length === 0" class="admin-empty">暂无日志</div>
+          <div v-else class="admin-card-list">
+            <div class="admin-card-item" v-for="item in recentLogs" :key="item.id">
+              <h3>{{ item.status || "unknown" }}</h3>
+              <p>{{ item.chunkStrategy || item.processMode || "--" }}</p>
+              <p>{{ formatDateTime(item.createTime || item.startTime) }}</p>
+            </div>
+          </div>
+        </article>
+      </aside>
+    </section>
 
     <div v-if="uploadDialogOpen" class="admin-dialog-overlay" @click.self="closeUploadDialog">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeUploadDialog">&times;</button>
         <h3>上传文档</h3>
-        <p>支持本地文件或远程 URL，并可选择 chunk / pipeline 处理方式。</p>
+        <p>支持本地文件和 URL，两种来源都可以选择切片或数据通道处理方式。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>来源类型</label>
             <select v-model="uploadForm.sourceType" class="admin-select">
-              <option v-for="opt in SOURCE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              <option value="file">Local File</option>
+              <option value="url">Remote URL</option>
             </select>
           </div>
-          <div v-if="uploadForm.sourceType === 'url'" class="admin-dialog-field">
-            <label>文档 URL</label>
-            <input v-model="uploadForm.url" class="admin-input" placeholder="https://example.com/doc" />
+          <div class="admin-dialog-field" v-if="uploadForm.sourceType === 'url'">
+            <label>文档地址</label>
+            <input v-model="uploadForm.sourceLocation" class="admin-input" placeholder="https://example.com/doc" />
           </div>
-          <div v-if="uploadForm.sourceType === 'file'" class="admin-dialog-field">
+          <div class="admin-dialog-field" v-if="uploadForm.sourceType === 'file'">
             <label>本地文件</label>
             <input type="file" class="admin-input" @change="handleFileChange" />
           </div>
           <div class="admin-dialog-field">
             <label>处理模式</label>
             <select v-model="uploadForm.processMode" class="admin-select">
-              <option v-for="opt in PROCESS_MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              <option value="chunk">直接切片</option>
+              <option value="pipeline">数据通道</option>
             </select>
           </div>
-          <div v-if="uploadForm.processMode === 'chunk'" class="admin-dialog-field">
+          <div class="admin-dialog-field" v-if="uploadForm.processMode === 'chunk'">
             <label>切片策略</label>
-            <select v-model="uploadForm.chunkStrategy" class="admin-select">
+            <select v-model="uploadForm.chunkStrategy" class="admin-select" @change="handleUploadStrategyChange($event.target.value)">
               <option v-if="strategies.length === 0" value="structure_aware">structure_aware</option>
               <option v-for="item in strategies" :key="item.value || item" :value="item.value || item">
                 {{ item.label || item.value || item }}
               </option>
             </select>
           </div>
-          <div v-if="uploadForm.processMode === 'pipeline'" class="admin-dialog-field">
+          <div class="admin-dialog-field" v-if="uploadForm.processMode === 'pipeline'">
             <label>数据通道</label>
             <select v-model="uploadForm.pipelineId" class="admin-select">
               <option value="">请选择 pipeline</option>
@@ -604,6 +773,25 @@ onMounted(() => {
                 {{ pipeline.name || pipeline.id }}
               </option>
             </select>
+          </div>
+          <div class="admin-form-grid-2" v-if="uploadForm.processMode === 'chunk' && uploadConfigFields.length > 0">
+            <div v-for="field in uploadConfigFields" :key="field.key" class="admin-dialog-field">
+              <label>{{ field.key }}</label>
+              <input v-model="uploadChunkConfig[field.key]" class="admin-input" :placeholder="String(field.value)" />
+            </div>
+          </div>
+          <div class="admin-form-grid-2">
+            <div class="admin-dialog-field">
+              <label>定时同步</label>
+              <select v-model="uploadForm.scheduleEnabled" class="admin-select">
+                <option :value="true">启用</option>
+                <option :value="false">禁用</option>
+              </select>
+            </div>
+            <div class="admin-dialog-field" v-if="uploadForm.scheduleEnabled">
+              <label>Cron</label>
+              <input v-model="uploadForm.scheduleCron" class="admin-input" placeholder="0 0 * * ?" />
+            </div>
           </div>
         </div>
         <div class="admin-dialog-footer">
@@ -629,23 +817,24 @@ onMounted(() => {
           <div class="admin-dialog-field">
             <label>处理模式</label>
             <select v-model="detailForm.processMode" class="admin-select">
-              <option v-for="opt in PROCESS_MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              <option value="chunk">直接切片</option>
+              <option value="pipeline">数据通道</option>
             </select>
           </div>
-          <div v-if="detailForm.processMode === 'chunk'" class="admin-dialog-field">
+          <div class="admin-dialog-field" v-if="detailForm.processMode === 'chunk'">
             <label>切片策略</label>
-            <select v-model="detailForm.chunkStrategy" class="admin-select">
-              <option v-if="detailStrategies.length === 0" value="structure_aware">structure_aware</option>
-              <option v-for="item in detailStrategies" :key="item.value || item" :value="item.value || item">
+            <select v-model="detailForm.chunkStrategy" class="admin-select" @change="handleDetailStrategyChange($event.target.value)">
+              <option v-if="strategies.length === 0" value="structure_aware">structure_aware</option>
+              <option v-for="item in strategies" :key="item.value || item" :value="item.value || item">
                 {{ item.label || item.value || item }}
               </option>
             </select>
           </div>
-          <div v-if="detailForm.processMode === 'pipeline'" class="admin-dialog-field">
+          <div class="admin-dialog-field" v-if="detailForm.processMode === 'pipeline'">
             <label>数据通道</label>
             <select v-model="detailForm.pipelineId" class="admin-select">
               <option value="">请选择 pipeline</option>
-              <option v-for="pipeline in detailPipelines" :key="pipeline.id" :value="pipeline.id">
+              <option v-for="pipeline in pipelines" :key="pipeline.id" :value="pipeline.id">
                 {{ pipeline.name || pipeline.id }}
               </option>
             </select>
@@ -654,21 +843,24 @@ onMounted(() => {
             <label>源地址</label>
             <input v-model="detailForm.sourceLocation" class="admin-input" placeholder="可选" />
           </div>
-          <div class="admin-dialog-field">
-            <label>定时同步</label>
-            <select v-model="detailForm.scheduleEnabled" class="admin-select">
-              <option :value="true">启用</option>
-              <option :value="false">禁用</option>
-            </select>
+          <div class="admin-form-grid-2">
+            <div class="admin-dialog-field">
+              <label>定时同步</label>
+              <select v-model="detailForm.scheduleEnabled" class="admin-select">
+                <option :value="true">启用</option>
+                <option :value="false">禁用</option>
+              </select>
+            </div>
+            <div class="admin-dialog-field" v-if="detailForm.scheduleEnabled">
+              <label>Cron</label>
+              <input v-model="detailForm.scheduleCron" class="admin-input" placeholder="0 0 * * ?" />
+            </div>
           </div>
-          <div v-if="detailForm.scheduleEnabled" class="admin-dialog-field">
-            <label>Cron</label>
-            <input v-model="detailForm.scheduleCron" class="admin-input" placeholder="0 0 * * ?" />
-          </div>
-
-          <div v-if="detailForm.processMode === 'chunk' && detailStrategies.length > 0" class="admin-dialog-field">
-            <label>chunkConfig</label>
-            <pre class="admin-pre">{{ stringifyJson(detailChunkConfig) }}</pre>
+          <div class="admin-form-grid-2" v-if="detailForm.processMode === 'chunk' && detailConfigFields.length > 0">
+            <div v-for="field in detailConfigFields" :key="field.key" class="admin-dialog-field">
+              <label>{{ field.key }}</label>
+              <input v-model="detailChunkConfig[field.key]" class="admin-input" :placeholder="String(field.value)" />
+            </div>
           </div>
         </div>
         <div class="admin-dialog-footer">
@@ -684,7 +876,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeChunkDialog">&times;</button>
         <h3>确认切片</h3>
-        <p class="admin-confirm-text">确认对文档 "{{ chunkTarget?.docName || chunkTarget?.id }}" 执行切片？</p>
+        <p class="admin-confirm-text">确认对文档 “{{ chunkTarget?.docName || chunkTarget?.id }}” 触发切片任务？</p>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeChunkDialog">取消</button>
           <button class="admin-button" type="button" :disabled="chunkSubmitting" @click="handleChunk">
@@ -698,7 +890,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
-        <p class="admin-confirm-text">确认删除文档 "{{ deleteTarget?.docName || deleteTarget?.id }}" 吗？</p>
+        <p class="admin-confirm-text">确认删除文档 “{{ deleteTarget?.docName || deleteTarget?.id }}”？该操作无法撤销。</p>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeDeleteDialog">取消</button>
           <button class="admin-button--danger" type="button" :disabled="deleteSubmitting" @click="handleDelete">
@@ -721,7 +913,7 @@ onMounted(() => {
                 <tr>
                   <th>时间</th>
                   <th>状态</th>
-                  <th>分块数</th>
+                  <th>切片数</th>
                   <th>耗时</th>
                   <th>备注</th>
                 </tr>
@@ -729,9 +921,7 @@ onMounted(() => {
               <tbody>
                 <tr v-for="log in pageRecords(logPage)" :key="log.id">
                   <td>{{ formatDateTime(log.createTime || log.startTime) }}</td>
-                  <td>
-                    <span :class="['admin-badge', statusBadgeClass(log.status)]">{{ log.status || "--" }}</span>
-                  </td>
+                  <td>{{ log.status || "--" }}</td>
                   <td>{{ log.chunkCount ?? "--" }}</td>
                   <td>{{ log.durationMs != null ? `${log.durationMs}ms` : "--" }}</td>
                   <td>{{ log.remark || log.errorMessage || "--" }}</td>
