@@ -36,22 +36,6 @@ const showFeedback = computed(
     !String(props.message.id).startsWith("assistant-")
 );
 
-function formatTimestamp(value) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toLocaleTimeString("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
 function handleCopy(content) {
   emit("copy", content);
 }
@@ -64,7 +48,7 @@ function handleFeedback(value) {
 <template>
   <article :class="['message-item', { 'is-user': isUser, 'is-last': isLast }]">
     <div v-if="isUser" class="message-item__user">
-      <div class="message-item__bubble message-item__bubble--user">
+      <div class="user-message">
         <p>{{ message.content }}</p>
       </div>
     </div>
@@ -82,10 +66,10 @@ function handleFeedback(value) {
             @click="thinkingExpanded = !thinkingExpanded"
           >
             <div class="message-item__thinking-head">
-              <span class="message-item__thinking-icon">◌</span>
-              <span class="message-item__thinking-label">深度思考</span>
+              <span class="message-item__thinking-icon">鈼?</span>
+              <span class="message-item__thinking-label">娣卞害鎬濊€?</span>
               <span v-if="message.thinkingDuration" class="message-item__thinking-badge">
-                {{ message.thinkingDuration }}秒
+                {{ message.thinkingDuration }}绉?
               </span>
             </div>
             <svg
@@ -102,27 +86,28 @@ function handleFeedback(value) {
         </div>
 
         <div class="message-item__body">
-          <div v-if="isWaiting" class="message-item__waiting" aria-label="思考中">
-            <span></span>
-            <span></span>
-            <span></span>
+          <div v-if="isWaiting" class="ai-wait" aria-label="思考中">
+            <span class="ai-wait-dots" aria-hidden="true">
+              <span class="ai-wait-dot" />
+              <span class="ai-wait-dot" />
+              <span class="ai-wait-dot" />
+            </span>
           </div>
 
           <RagMarkdownRenderer v-if="hasContent" :content="message.content" />
 
           <p v-else-if="message.status === 'error'" class="message-item__status is-error">
-            生成失败，请稍后重试
+            鐢熸垚澶辫触锛岃绋嶅悗閲嶈瘯
           </p>
           <p v-else-if="message.status === 'cancelled'" class="message-item__status">
-            已停止生成
+            宸插仠姝㈢敓鎴?
           </p>
           <p v-else-if="message.status === 'streaming'" class="message-item__status">
-            等待回答...
+            绛夊緟鍥炵瓟...
           </p>
 
           <div v-if="showFeedback" class="message-item__actions">
             <RagFeedbackButtons
-              :message-id="message.id"
               :feedback="message.feedback || null"
               :content="message.content"
               :always-visible="Boolean(isLast)"
@@ -150,29 +135,6 @@ function handleFeedback(value) {
   width: 100%;
 }
 
-.message-item__bubble {
-  max-width: min(760px, 82%);
-  padding: 14px 16px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 18px;
-}
-
-.message-item__bubble--user {
-  margin-left: auto;
-  background: rgba(37, 99, 235, 0.08);
-  border-color: rgba(37, 99, 235, 0.16);
-  color: #0f172a;
-}
-
-.message-item__bubble p {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #0f172a;
-  font-size: 14px;
-  line-height: 1.75;
-}
-
 .message-item__assistant {
   display: flex;
 }
@@ -181,14 +143,14 @@ function handleFeedback(value) {
   min-width: 0;
   flex: 1;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .message-item__thinking-panel {
   overflow: hidden;
-  border: 1px solid rgba(37, 99, 235, 0.18);
-  border-radius: 18px;
-  background: rgba(219, 234, 254, 0.9);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #dbeafe;
 }
 
 .message-item__thinking-trigger {
@@ -197,7 +159,7 @@ function handleFeedback(value) {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  padding: 13px 16px;
+  padding: 12px 14px;
   border: 0;
   background: transparent;
   text-align: left;
@@ -218,7 +180,7 @@ function handleFeedback(value) {
   width: 28px;
   height: 28px;
   border-radius: 10px;
-  background: rgba(191, 219, 254, 0.95);
+  background: #bfdbfe;
   color: #2563eb;
   font-size: 18px;
 }
@@ -235,7 +197,7 @@ function handleFeedback(value) {
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(191, 219, 254, 0.95);
+  background: #bfdbfe;
   color: #2563eb;
   font-size: 12px;
   font-weight: 700;
@@ -257,45 +219,23 @@ function handleFeedback(value) {
 }
 
 .message-item__thinking-body {
-  border-top: 1px solid rgba(191, 219, 254, 0.9);
-  padding: 0 16px 14px;
+  border-top: 1px solid #bfdbfe;
+  padding: 12px 14px 14px;
   color: #1e40af;
-  font-size: 13px;
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.7;
   white-space: pre-wrap;
 }
 
 .message-item__body {
   display: grid;
-  gap: 10px;
-}
-
-.message-item__waiting {
-  display: flex;
-  gap: 5px;
-  padding: 4px 0 4px;
-}
-
-.message-item__waiting span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #2563eb;
-  animation: dotPulse 1s ease-in-out infinite;
-}
-
-.message-item__waiting span:nth-child(2) {
-  animation-delay: 0.12s;
-}
-
-.message-item__waiting span:nth-child(3) {
-  animation-delay: 0.24s;
+  gap: 8px;
 }
 
 .message-item__status {
   margin: 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .message-item__status.is-error {
@@ -305,18 +245,6 @@ function handleFeedback(value) {
 .message-item__actions {
   display: flex;
   justify-content: flex-end;
-}
-
-@keyframes dotPulse {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(0.9);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
+  padding-top: 2px;
 }
 </style>

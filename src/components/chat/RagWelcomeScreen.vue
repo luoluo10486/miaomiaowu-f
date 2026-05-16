@@ -39,6 +39,7 @@ const emit = defineEmits([
 const localTextareaRef = ref(null);
 const isFocused = ref(false);
 const isComposingRef = ref(false);
+const iconKinds = ["book", "check", "lightbulb"];
 
 function bindTextareaRef(el) {
   localTextareaRef.value = el;
@@ -94,6 +95,10 @@ function applySuggestion(question) {
   emit("suggestion", question);
 }
 
+function resolveIconKind(index) {
+  return iconKinds[index % iconKinds.length];
+}
+
 watch(
   () => props.draft,
   () => resizeTextarea()
@@ -112,10 +117,7 @@ onMounted(() => {
       <p>结构化提问、知识检索和深度思考放在同一个入口，尽量让每次对话都像一条清晰的工作流。</p>
     </div>
 
-    <div
-      class="welcome-screen__composer"
-      :class="{ 'is-focused': isFocused }"
-    >
+    <div class="welcome-screen__composer" :class="{ 'is-focused': isFocused }">
       <div class="welcome-screen__input-wrap">
         <textarea
           :ref="bindTextareaRef"
@@ -189,10 +191,33 @@ onMounted(() => {
           :disabled="isStreaming"
           @click="applySuggestion(item.question)"
         >
-          <span class="welcome-screen__index">{{ String(index + 1).padStart(2, '0') }}</span>
-          <strong>{{ item.title }}</strong>
-          <small>{{ item.description }}</small>
-          <span class="welcome-screen__arrow">↗</span>
+          <div class="welcome-screen__card-head">
+            <span class="welcome-screen__icon" :class="`is-${resolveIconKind(index)}`" aria-hidden="true">
+              <svg v-if="resolveIconKind(index) === 'book'" viewBox="0 0 24 24">
+                <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v14H6.5A2.5 2.5 0 0 0 4 20.5V6.5Z" />
+                <path d="M4 6.5V20.5" />
+              </svg>
+              <svg v-else-if="resolveIconKind(index) === 'check'" viewBox="0 0 24 24">
+                <path d="m20 6-11 11-5-5" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24">
+                <path d="M9 18h6" />
+                <path d="M10 22h4" />
+                <path d="M12 2a7 7 0 0 0-4 12v2h8v-2a7 7 0 0 0-4-12Z" />
+              </svg>
+            </span>
+            <div>
+              <strong>{{ item.title }}</strong>
+              <small>{{ item.description }}</small>
+            </div>
+          </div>
+          <div class="welcome-screen__prompt">
+            <span>推荐问法：{{ item.question }}</span>
+            <svg class="welcome-screen__arrow-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 17 17 7" />
+              <path d="M9 7h8v8" />
+            </svg>
+          </div>
         </button>
       </div>
     </div>
@@ -343,23 +368,23 @@ onMounted(() => {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: #111827;
+  background: #3b82f6;
   color: #fff;
   cursor: pointer;
   transition: all 0.22s ease;
 }
 
 .welcome-screen__send:hover:not(:disabled) {
-  transform: scale(1.04);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  background: #2563eb;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18);
 }
 
 .welcome-screen__send:disabled {
   cursor: not-allowed;
-  background: rgba(229, 231, 235, 0.96);
-  color: #cbd5e1;
+  background: #f5f5f5;
+  color: #cccccc;
 }
 
 .welcome-screen__send svg {
@@ -408,7 +433,7 @@ onMounted(() => {
 
 .welcome-screen__prompts {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .welcome-screen__prompts-head {
@@ -431,14 +456,14 @@ onMounted(() => {
 .welcome-screen__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .welcome-screen__card {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 20px 18px 28px;
+  padding: 18px 16px 22px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.72);
@@ -449,7 +474,7 @@ onMounted(() => {
 }
 
 .welcome-screen__card:hover:not(:disabled) {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   border-color: rgba(191, 219, 254, 0.9);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
@@ -460,42 +485,81 @@ onMounted(() => {
   opacity: 0.6;
 }
 
-.welcome-screen__index {
-  margin-bottom: 12px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.welcome-screen__card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.welcome-screen__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.welcome-screen__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .welcome-screen__card strong {
   display: block;
-  color: #0f172a;
-  font-size: 17px;
+  color: #1f2937;
+  font-size: 14px;
   line-height: 1.4;
   font-weight: 700;
 }
 
 .welcome-screen__card small {
   display: block;
-  margin-top: 8px;
-  color: #64748b;
+  margin-top: 6px;
+  color: #6b7280;
   font-size: 12px;
   line-height: 1.6;
 }
 
-.welcome-screen__arrow {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
+.welcome-screen__prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
   color: #94a3b8;
-  font-size: 16px;
-  transition: transform 0.2s ease;
+  font-size: 12px;
 }
 
-.welcome-screen__card:hover .welcome-screen__arrow {
-  transform: translate(3px, -3px);
-  color: #2563eb;
+.welcome-screen__prompt span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-screen__arrow-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #cbd5e1;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  transition: stroke 0.2s ease, transform 0.2s ease;
+}
+
+.welcome-screen__card:hover .welcome-screen__arrow-icon {
+  stroke: #3b82f6;
+  transform: translate(2px, -2px);
 }
 
 @media (max-width: 960px) {

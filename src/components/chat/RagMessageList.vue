@@ -129,8 +129,19 @@ const emit = defineEmits([
 
 .message-list__stack {
   display: grid;
-  gap: 18px;
-  padding: 8px 4px 0;
+  gap: 40px;
+  padding: 40px 24px 8px;
+}
+
+.message-list__item {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .message-list__stack {
+    gap: 32px;
+    padding: 32px 18px 8px;
+  }
 }
 
 @keyframes pulse {

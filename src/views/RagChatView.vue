@@ -223,8 +223,8 @@ onMounted(() => {
   --chat-text: #0f172a;
   --chat-text-soft: #334155;
   --chat-text-muted: #64748b;
-  --chat-bg: #f8fafc;
-  --chat-card: rgba(255, 255, 255, 0.82);
+  --chat-bg: #fafafa;
+  --chat-card: #ffffff;
   --chat-accent: #2563eb;
   --chat-border: rgba(148, 163, 184, 0.22);
   --chat-border-soft: rgba(148, 163, 184, 0.14);
@@ -244,10 +244,7 @@ onMounted(() => {
   padding: 18px;
   overflow: hidden;
   color: var(--chat-text);
-  background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.15), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(15, 23, 42, 0.08), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: var(--chat-bg);
   font-family: var(--chat-sans);
 }
 
@@ -256,12 +253,7 @@ onMounted(() => {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.38;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
-  background-size: 120px 120px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.15), transparent 60%);
+  opacity: 0;
 }
 
 .chat-topbar,
@@ -404,7 +396,7 @@ onMounted(() => {
 .chat-layout {
   display: grid;
   grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
-  gap: 16px;
+  gap: 0;
   min-height: calc(100vh - 96px);
 }
 
@@ -413,11 +405,12 @@ onMounted(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: 1px solid var(--chat-border);
-  border-radius: var(--chat-radius-lg);
+  border: 1px solid #f0f0f0;
+  border-left: 0;
+  border-radius: 0;
   background: var(--chat-card);
-  box-shadow: var(--chat-shadow);
-  backdrop-filter: blur(18px);
+  box-shadow: none;
+  backdrop-filter: none;
   overflow: hidden;
 }
 
@@ -426,8 +419,8 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 24px 24px 18px;
-  border-bottom: 1px solid var(--chat-border-soft);
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .chat-main__eyebrow {
@@ -499,7 +492,7 @@ onMounted(() => {
   height: 100%;
   min-height: 0;
   overflow-y: auto;
-  padding-top: 18px;
+  padding-top: 12px;
   scrollbar-width: thin;
   scrollbar-color: rgba(37, 99, 235, 0.22) transparent;
 }

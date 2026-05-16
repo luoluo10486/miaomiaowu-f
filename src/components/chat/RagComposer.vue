@@ -146,10 +146,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <p v-if="deepThinkingEnabled" class="composer__tip">
-      深度思考模式已开启，AI 会先进行更深入的分析再给出回答。
-    </p>
-
     <p class="composer__hint">
       <kbd>Enter</kbd> 发送
       <span>·</span>
@@ -166,16 +162,18 @@ onMounted(() => {
 }
 
 .composer__card {
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .composer__card.is-focused {
-  border-color: rgba(191, 219, 254, 0.9);
-  box-shadow: 0 20px 42px rgba(37, 99, 235, 0.12);
+  border-color: #d4d4d4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .composer__input-wrap {
@@ -185,20 +183,20 @@ onMounted(() => {
 .composer__input {
   display: block;
   width: 100%;
-  min-height: 52px;
+  min-height: 44px;
   max-height: 160px;
   resize: none;
   border: 0;
-  padding: 14px 16px 8px;
+  padding: 12px 16px 8px;
   background: transparent;
-  color: #1f2937;
-  font-size: 14px;
+  color: #333333;
+  font-size: 15px;
   line-height: 1.7;
   outline: none;
 }
 
 .composer__input::placeholder {
-  color: #9ca3af;
+  color: #999999;
 }
 
 .composer__fade {
@@ -206,16 +204,16 @@ onMounted(() => {
   position: absolute;
   inset: auto 0 0;
   height: 12px;
-  border-radius: 0 0 22px 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.94));
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.9));
 }
 
 .composer__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px 10px;
   gap: 12px;
+  padding: 4px 0 0;
+  min-height: 42px;
 }
 
 .composer__thinking {
@@ -225,8 +223,8 @@ onMounted(() => {
   height: 34px;
   padding: 0 14px;
   border: 1px solid transparent;
-  border-radius: 999px;
-  background: rgba(245, 245, 245, 0.96);
+  border-radius: 8px;
+  background: #f5f5f5;
   color: #6b7280;
   font-size: 12px;
   cursor: pointer;
@@ -234,18 +232,18 @@ onMounted(() => {
 }
 
 .composer__thinking:hover:not(:disabled) {
-  background: rgba(238, 242, 255, 0.9);
+  background: #eeeeee;
   color: #334155;
 }
 
 .composer__thinking.is-active {
-  border-color: rgba(191, 219, 254, 0.8);
-  background: rgba(219, 234, 254, 0.92);
+  border-color: #bfdbfe;
+  background: #dbeafe;
   color: #2563eb;
 }
 
 .composer__thinking:disabled {
-  opacity: 0.55;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -265,27 +263,34 @@ onMounted(() => {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  margin-left: auto;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: #111827;
+  background: #3b82f6;
   color: #fff;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .composer__send:hover:not(:disabled) {
-  transform: scale(1.04);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  background: #2563eb;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18);
 }
 
 .composer__send:disabled {
   cursor: not-allowed;
-  background: rgba(229, 231, 235, 0.96);
-  color: #cbd5e1;
+  background: #f5f5f5;
+  color: #cccccc;
 }
 
 .composer__send.is-stop {
   background: #ef4444;
+  color: #fff;
+}
+
+.composer__send.is-stop:hover:not(:disabled) {
+  background: #dc2626;
+  box-shadow: 0 12px 28px rgba(239, 68, 68, 0.18);
 }
 
 .composer__send svg {
@@ -298,16 +303,9 @@ onMounted(() => {
   stroke-linejoin: round;
 }
 
-.composer__tip {
-  margin: 10px 0 0;
-  color: #2563eb;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .composer__hint {
   margin: 10px 0 0;
-  color: #94a3b8;
+  color: #999999;
   font-size: 12px;
   text-align: center;
 }
@@ -316,10 +314,10 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   padding: 0 6px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #64748b;
+  background: #f5f5f5;
+  color: #666666;
   font-size: 11px;
 }
 

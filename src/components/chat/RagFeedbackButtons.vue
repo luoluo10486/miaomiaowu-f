@@ -2,10 +2,6 @@
 import { computed } from "vue";
 
 const props = defineProps({
-  messageId: {
-    type: String,
-    required: true
-  },
   feedback: {
     type: String,
     default: null
@@ -44,7 +40,7 @@ function handleFeedback(value) {
     <button
       type="button"
       class="feedback-buttons__btn"
-      :class="{ 'is-active': feedback === 'like' }"
+      :class="{ 'is-active is-like': feedback === 'like' }"
       aria-label="有帮助"
       @click="handleFeedback('like')"
     >
@@ -55,7 +51,7 @@ function handleFeedback(value) {
     <button
       type="button"
       class="feedback-buttons__btn"
-      :class="{ 'is-active': feedback === 'dislike' }"
+      :class="{ 'is-active is-dislike': feedback === 'dislike' }"
       aria-label="需改进"
       @click="handleFeedback('dislike')"
     >
@@ -83,26 +79,31 @@ function handleFeedback(value) {
 .feedback-buttons__btn {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
-  color: #64748b;
+  color: #999999;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .feedback-buttons__btn:hover {
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(37, 99, 235, 0.06);
-  color: #2563eb;
+  background: #f5f5f5;
+  color: #666666;
 }
 
 .feedback-buttons__btn.is-active {
-  border-color: rgba(37, 99, 235, 0.22);
-  background: rgba(37, 99, 235, 0.08);
-  color: #2563eb;
+  background: #f5f5f5;
+}
+
+.feedback-buttons__btn.is-like.is-active {
+  color: #10b981;
+}
+
+.feedback-buttons__btn.is-dislike.is-active {
+  color: #ef4444;
 }
 
 .feedback-buttons__btn svg {

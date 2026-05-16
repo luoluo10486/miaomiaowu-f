@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 const props = defineProps({
   groups: {
@@ -52,11 +52,31 @@ const emit = defineEmits([
 ]);
 
 const hasGroups = computed(() => Array.isArray(props.groups) && props.groups.length > 0);
+const activeMenuSessionId = ref("");
 
 function updateSearch(event) {
   emit("update:search", event.target.value);
 }
 
+function toggleMenu(sessionId) {
+  activeMenuSessionId.value = activeMenuSessionId.value === sessionId ? "" : sessionId;
+}
+
+function closeMenu() {
+  activeMenuSessionId.value = "";
+}
+
+function handleWindowClick() {
+  closeMenu();
+}
+
+onMounted(() => {
+  window.addEventListener("click", handleWindowClick);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("click", handleWindowClick);
+});
 </script>
 
 <template>
@@ -72,7 +92,9 @@ function updateSearch(event) {
       <div class="sidebar__brand">
         <div class="sidebar__brand-icon">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3c4.97 0 9 3.58 9 8 0 4.1-3.52 7.54-8 7.95L8 21v-2.76A8.69 8.69 0 0 1 3 11c0-4.42 4.03-8 9-8Z" />
+            <path
+              d="M12 3c4.97 0 9 3.58 9 8 0 4.1-3.52 7.54-8 7.95L8 21v-2.76A8.69 8.69 0 0 1 3 11c0-4.42 4.03-8 9-8Z"
+            />
           </svg>
         </div>
         <div class="sidebar__brand-copy">
@@ -154,36 +176,55 @@ function updateSearch(event) {
                   @click="
                     emit('select', session);
                     emit('close');
+                    closeMenu();
                   "
                 >
                   <span class="sidebar__item-title">{{ session.title }}</span>
                   <span class="sidebar__item-time">{{ formatTime(session.lastTime) }}</span>
                 </button>
 
-                <div class="sidebar__item-actions">
+                <div class="sidebar__item-menu">
                   <button
                     type="button"
                     class="sidebar__action"
-                    title="重命名"
-                    @click="emit('rename', session)"
+                    :class="{ 'is-open': activeMenuSessionId === session.id }"
+                    title="会话操作"
+                    aria-label="会话操作"
+                    @click.stop="toggleMenu(session.id)"
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 20h16" />
-                      <path d="M5 15.5 15.5 5a2.1 2.1 0 0 1 3 3L8 18.5 4 20z" />
+                      <path d="M12 5v.01M12 12v.01M12 19v.01" />
                     </svg>
                   </button>
-                  <button
-                    type="button"
-                    class="sidebar__action is-danger"
-                    title="删除"
-                    @click="emit('delete', session.id)"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
 
+                  <div
+                    v-if="activeMenuSessionId === session.id"
+                    class="sidebar__menu"
+                    @click.stop
+                  >
+                    <button
+                      type="button"
+                      class="sidebar__menu-item"
+                      @click="emit('rename', session); closeMenu();"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 20h16" />
+                        <path d="M5 15.5 15.5 5a2.1 2.1 0 0 1 3 3L8 18.5 4 20z" />
+                      </svg>
+                      <span>重命名</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="sidebar__menu-item is-danger"
+                      @click="emit('delete', session.id); closeMenu();"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                      <span>删除</span>
+                    </button>
+                  </div>
+                </div>
               </li>
             </ul>
           </section>
@@ -233,27 +274,26 @@ function updateSearch(event) {
   flex-direction: column;
   min-width: 0;
   min-height: calc(100vh - 36px);
-  padding: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 24px;
-  background: rgba(250, 250, 250, 0.95);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(18px);
+  padding: 14px 12px 12px;
+  background: #fafafa;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .sidebar__brand,
 .sidebar__quick,
 .sidebar__search,
 .sidebar__footer {
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.84);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .sidebar__brand {
   display: flex;
   gap: 12px;
-  padding: 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .sidebar__brand-icon {
@@ -289,7 +329,7 @@ function updateSearch(event) {
 
 .sidebar__quick {
   margin-top: 14px;
-  padding: 14px;
+  padding: 0;
 }
 
 .sidebar__quick-head,
@@ -320,18 +360,18 @@ function updateSearch(event) {
   width: 100%;
   margin-top: 12px;
   padding: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #eaeaea;
+  border-radius: 16px;
+  background: #ffffff;
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .sidebar__new:hover {
-  transform: translateY(-1px);
-  border-color: rgba(191, 219, 254, 0.9);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  border-color: #dbeafe;
+  background: #f8fbff;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
 }
 
 .sidebar__new-icon {
@@ -376,9 +416,9 @@ function updateSearch(event) {
   height: 30px;
   margin-top: 10px;
   padding: 0 12px;
-  border: 1px solid rgba(191, 219, 254, 0.8);
+  border: 1px solid #dbeafe;
   border-radius: 999px;
-  background: rgba(239, 246, 255, 0.86);
+  background: #eff6ff;
   color: #2563eb;
   font-size: 12px;
   font-weight: 600;
@@ -387,7 +427,7 @@ function updateSearch(event) {
 
 .sidebar__search {
   margin-top: 14px;
-  padding: 14px;
+  padding: 0;
 }
 
 .sidebar__search-hint {
@@ -420,7 +460,7 @@ function updateSearch(event) {
   width: 100%;
   height: 40px;
   padding: 0 12px 0 36px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid #e5e7eb;
   border-radius: 14px;
   background: #f8fafc;
   color: #1f2937;
@@ -430,7 +470,7 @@ function updateSearch(event) {
 }
 
 .sidebar__search-box input:focus {
-  border-color: rgba(147, 197, 253, 0.9);
+  border-color: #93c5fd;
   background: #fff;
 }
 
@@ -439,9 +479,7 @@ function updateSearch(event) {
   flex: 1;
   min-height: 0;
   margin-top: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.84);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -522,21 +560,20 @@ function updateSearch(event) {
 
 .sidebar__group li {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px;
+  display: flex;
   align-items: center;
+  gap: 6px;
 }
 
 .sidebar__item {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 100%;
+  flex: 1;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: 8px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -544,18 +581,16 @@ function updateSearch(event) {
 }
 
 .sidebar__item:hover {
-  border-color: rgba(191, 219, 254, 0.9);
-  background: rgba(37, 99, 235, 0.05);
+  background: #f5f5f5;
 }
 
 .sidebar__item.is-active {
-  border-color: rgba(191, 219, 254, 0.95);
-  background: rgba(219, 234, 254, 0.82);
+  background: #dbeafe;
 }
 
 .sidebar__item-title {
   overflow: hidden;
-  color: #1f2937;
+  color: #333333;
   font-size: 13px;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -563,13 +598,12 @@ function updateSearch(event) {
 }
 
 .sidebar__item-time {
-  color: #94a3b8;
+  color: #999999;
   font-size: 11px;
 }
 
-.sidebar__item-actions {
-  display: flex;
-  gap: 4px;
+.sidebar__item-menu {
+  position: relative;
 }
 
 .sidebar__action {
@@ -586,18 +620,62 @@ function updateSearch(event) {
 }
 
 .sidebar__action:hover {
-  border-color: rgba(191, 219, 254, 0.9);
+  border-color: #dbeafe;
   background: rgba(37, 99, 235, 0.06);
   color: #2563eb;
 }
 
-.sidebar__action.is-danger:hover {
-  border-color: rgba(254, 202, 202, 0.9);
-  background: rgba(254, 242, 242, 0.92);
-  color: #ef4444;
+.sidebar__action.is-open {
+  background: #f5f5f5;
+  color: #1f2937;
 }
 
 .sidebar__action svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 124px;
+  padding: 6px 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.sidebar__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: #333333;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar__menu-item:hover {
+  background: #f5f5f5;
+}
+
+.sidebar__menu-item.is-danger {
+  color: #ff4d4f;
+}
+
+.sidebar__menu-item svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -625,7 +703,8 @@ function updateSearch(event) {
 
 .sidebar__footer {
   margin-top: 14px;
-  padding: 14px;
+  padding: 14px 0 0;
+  border-top: 1px solid #f0f0f0;
 }
 
 .sidebar__user {
@@ -649,7 +728,7 @@ function updateSearch(event) {
 
 .sidebar__user-copy strong {
   display: block;
-  color: #111827;
+  color: #1a1a1a;
   font-size: 13px;
   font-weight: 700;
 }
@@ -657,7 +736,7 @@ function updateSearch(event) {
 .sidebar__user-copy small {
   display: block;
   margin-top: 3px;
-  color: #94a3b8;
+  color: #999999;
   font-size: 11px;
 }
 

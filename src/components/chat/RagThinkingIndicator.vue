@@ -21,7 +21,13 @@ defineProps({
       <span v-if="duration" class="thinking-indicator__badge">{{ duration }}秒</span>
     </div>
     <div class="thinking-indicator__body">
-      <span class="thinking-indicator__brain" aria-hidden="true">●</span>
+      <span class="thinking-indicator__brain" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M9 7a3 3 0 0 1 6 0v10a3 3 0 0 1-6 0V7Z" />
+          <path d="M9 11H7a2 2 0 0 0 0 4h2" />
+          <path d="M15 11h2a2 2 0 0 1 0 4h-2" />
+        </svg>
+      </span>
       <p>
         {{ content || "" }}
         <span class="thinking-indicator__pulse" aria-hidden="true" />
@@ -32,19 +38,19 @@ defineProps({
 
 <style scoped>
 .thinking-indicator {
-  padding: 16px;
-  border: 1px solid rgba(37, 99, 235, 0.18);
-  border-radius: 18px;
-  background: rgba(219, 234, 254, 0.92);
+  padding: 13px 15px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #dbeafe;
 }
 
 .thinking-indicator__header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: #2563eb;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .thinking-indicator__spinner {
@@ -68,28 +74,44 @@ defineProps({
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(191, 219, 254, 0.95);
-  font-size: 12px;
+  background: #bfdbfe;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .thinking-indicator__body {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 9px;
   color: #1e40af;
 }
 
 .thinking-indicator__brain {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
   margin-top: 2px;
   color: #2563eb;
-  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.thinking-indicator__brain svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .thinking-indicator__body p {
   margin: 0;
   white-space: pre-wrap;
-  line-height: 1.7;
+  line-height: 1.65;
   font-size: 13px;
 }
 
