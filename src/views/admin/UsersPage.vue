@@ -1,13 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
-import {
-  createUser,
-  deleteUser,
-  getUsersPage,
-  updateUser
-} from "../../services/userService";
+import { createUser, deleteUser, getUsersPage, updateUser } from "../../services/userService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const loading = ref(false);
@@ -28,51 +24,6 @@ const submitting = ref(false);
 const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
-
-const pageUsers = computed(() => pageRecords(page.value));
-const totalUsers = computed(() => pageTotal(page.value));
-const adminCount = computed(() => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length);
-const enabledCount = computed(() => pageUsers.value.filter((item) => item.enabled !== false).length);
-const protectedCount = computed(() => pageUsers.value.filter((item) => isProtectedUser(item)).length);
-const activeFilterLabel = computed(() => (keyword.value ? keyword.value : "全部用户"));
-const selectedUser = computed(() => {
-  if (selectedUserId.value) {
-    return pageUsers.value.find((item) => item.id === selectedUserId.value) || pageUsers.value[0] || null;
-  }
-  return pageUsers.value[0] || null;
-});
-const currentPageLabel = computed(() => `${pageNo.value} / ${pageCount(page)}`);
-const selectedUserLabel = computed(() => {
-  if (!selectedUser.value) return "--";
-  return `${userDisplayName(selectedUser.value)} · ${roleLabel(selectedUser.value.role)}`;
-});
-
-const stats = computed(() => [
-  {
-    title: "Total",
-    value: String(totalUsers.value),
-    hint: "用户总数",
-    tone: "indigo"
-  },
-  {
-    title: "Page",
-    value: String(pageUsers.value.length),
-    hint: "当前页数量",
-    tone: "cyan"
-  },
-  {
-    title: "Admins",
-    value: String(adminCount.value),
-    hint: "当前页管理员",
-    tone: "emerald"
-  },
-  {
-    title: "Enabled",
-    value: String(enabledCount.value),
-    hint: "当前页启用账号",
-    tone: "amber"
-  }
-]);
 
 function buildEmptyForm() {
   return {
@@ -105,6 +56,39 @@ function userAvatarInitial(item) {
 function roleLabel(role) {
   return normalizeRole(role) === "ADMIN" ? "管理员" : "普通用户";
 }
+
+const pageUsers = computed(() => pageRecords(page.value));
+const totalUsers = computed(() => pageTotal(page.value));
+const adminCount = computed(() => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length);
+const enabledCount = computed(() => pageUsers.value.filter((item) => item.enabled !== false).length);
+const protectedCount = computed(() => pageUsers.value.filter((item) => isProtectedUser(item)).length);
+const activeFilterLabel = computed(() => (keyword.value ? keyword.value : "全部用户"));
+const selectedUser = computed(() => {
+  if (selectedUserId.value) {
+    return pageUsers.value.find((item) => item.id === selectedUserId.value) || pageUsers.value[0] || null;
+  }
+  return pageUsers.value[0] || null;
+});
+const currentPageLabel = computed(() => `${pageNo.value} / ${pageCount(page.value)}`);
+const selectedUserLabel = computed(() => {
+  if (!selectedUser.value) return "--";
+  return `${userDisplayName(selectedUser.value)} · ${roleLabel(selectedUser.value.role)}`;
+});
+
+const stats = computed(() => [
+  { title: "Total", value: String(totalUsers.value), hint: "用户总数", tone: "indigo" },
+  { title: "Page", value: String(pageUsers.value.length), hint: "当前页数量", tone: "cyan" },
+  { title: "Admins", value: String(adminCount.value), hint: "当前页管理员", tone: "emerald" },
+  { title: "Enabled", value: String(enabledCount.value), hint: "当前页启用账户", tone: "amber" }
+]);
+
+const heroSummary = computed(() => [
+  { label: "当前筛选", value: activeFilterLabel.value },
+  { label: "当前页", value: currentPageLabel.value },
+  { label: "选中用户", value: selectedUserLabel.value },
+  { label: "管理员 / 启用", value: `${adminCount.value} / ${enabledCount.value}` },
+  { label: "保护账户", value: String(protectedCount.value) }
+]);
 
 async function loadData(currentPage = pageNo.value, currentKeyword = keyword.value) {
   loading.value = true;
@@ -146,7 +130,7 @@ function goPrev() {
 }
 
 function goNext() {
-  const nextPage = pageCount(page);
+  const nextPage = pageCount(page.value);
   if (pageNo.value >= nextPage) return;
   pageNo.value += 1;
   void loadData(pageNo.value, keyword.value);
@@ -183,8 +167,14 @@ function closeDialog() {
 }
 
 async function handleSubmit() {
-  if (!form.value.username.trim()) return;
-  if (dialogMode.value === "create" && !form.value.password.trim()) return;
+  if (!form.value.username.trim()) {
+    errorText.value = "请输入用户名。";
+    return;
+  }
+  if (dialogMode.value === "create" && !form.value.password.trim()) {
+    errorText.value = "请输入初始密码。";
+    return;
+  }
 
   submitting.value = true;
   errorText.value = "";
@@ -250,11 +240,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page users-page">
     <PageHeader
       tag="Users"
       title="用户管理"
-      description="管理后台账号、角色、启用状态和头像信息，支持新建、编辑、禁用与删除。"
+      description="管理后台账号、角色、启用状态和头像信息，支持新增、编辑、禁用与删除。"
     >
       <template #meta>
         <div class="admin-header-meta">
@@ -266,21 +256,21 @@ onMounted(() => {
       </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
-        <button class="admin-button" type="button" @click="openCreateDialog">新建用户</button>
+        <button class="admin-button" type="button" @click="openCreateDialog">新增用户</button>
       </template>
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <section class="admin-stat-grid">
+    <div class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
-    </section>
+    </div>
 
     <section class="admin-detail-card users-hero">
       <div class="users-hero-copy">
         <p class="trace-hero-tag">User Center</p>
-        <h2>账号与权限概览</h2>
-        <p>快速检索后台账号，查看角色、状态和头像，并在右侧锁定当前选中用户的完整资料。</p>
+        <h2>账户与权限概览</h2>
+        <p>快速搜索后台账户，查看角色、状态和头像，并在右侧锁定当前选中用户的完整资料。</p>
       </div>
       <div class="users-hero-side">
         <div class="users-hero-cardline">
@@ -300,7 +290,7 @@ onMounted(() => {
           <strong>{{ adminCount }} / {{ enabledCount }}</strong>
         </div>
         <div class="users-hero-cardline">
-          <span class="users-hero-cardlabel">保护账号</span>
+          <span class="users-hero-cardlabel">保护账户</span>
           <strong>{{ protectedCount }}</strong>
         </div>
       </div>
@@ -311,7 +301,7 @@ onMounted(() => {
         <div class="admin-table-card__header">
           <div>
             <h2>用户列表</h2>
-            <p>查看账号、昵称、角色和状态，支持快速编辑密码与头像。</p>
+            <p>查看账号、昵称、角色、状态和时间信息，支持编辑密码与头像。</p>
           </div>
           <span class="admin-page-count">共 {{ totalUsers }} 条</span>
         </div>
@@ -330,7 +320,7 @@ onMounted(() => {
           </div>
           <div class="admin-toolbar-right">
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
-            <button class="admin-button" type="button" @click="openCreateDialog">新建用户</button>
+            <button class="admin-button" type="button" @click="openCreateDialog">新增用户</button>
           </div>
         </div>
 
@@ -405,27 +395,27 @@ onMounted(() => {
           <span>共 {{ totalUsers }} 条</span>
           <div class="admin-pagination-right">
             <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
-            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
-            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">下一页</button>
+            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page.value) }}</span>
+            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page.value)" @click="goNext">下一页</button>
           </div>
         </div>
       </article>
 
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
-          <h3>账号结构</h3>
-          <p class="admin-detail-card-desc">先看当前页里的角色、状态和保护账号分布，再进入单个用户详情。</p>
+          <h3>账户结构</h3>
+          <p class="admin-detail-card-desc">先看当前页的角色、状态和保护账户分布，再进入用户详情。</p>
           <div class="admin-kv">
             <div><dt>当前页</dt><dd>{{ pageUsers.length }}</dd></div>
             <div><dt>管理员</dt><dd>{{ adminCount }}</dd></div>
             <div><dt>启用</dt><dd>{{ enabledCount }}</dd></div>
-            <div><dt>保护账号</dt><dd>{{ protectedCount }}</dd></div>
+            <div><dt>保护账户</dt><dd>{{ protectedCount }}</dd></div>
           </div>
         </article>
 
         <article class="admin-detail-card">
           <h3>用户预览</h3>
-          <p class="admin-detail-card-desc">点击一行查看完整资料和账号状态。</p>
+          <p class="admin-detail-card-desc">点击任意行查看完整资料和账户状态。</p>
           <div v-if="selectedUser" class="admin-kv">
             <div class="admin-user-preview">
               <div class="admin-user-avatar">{{ userAvatarInitial(selectedUser) }}</div>
@@ -443,7 +433,7 @@ onMounted(() => {
             <div><dt>创建时间</dt><dd>{{ formatDateTime(selectedUser.createTime) }}</dd></div>
             <div><dt>更新时间</dt><dd>{{ formatDateTime(selectedUser.updateTime) }}</dd></div>
             <div><dt>头像</dt><dd>{{ selectedUser.avatar || "--" }}</dd></div>
-            <div><dt>保护账号</dt><dd>{{ isProtectedUser(selectedUser) ? "是" : "否" }}</dd></div>
+            <div><dt>保护账户</dt><dd>{{ isProtectedUser(selectedUser) ? "是" : "否" }}</dd></div>
           </div>
           <div v-else class="admin-empty-sm">暂无选中用户</div>
         </article>
@@ -453,8 +443,8 @@ onMounted(() => {
     <div v-if="dialogOpen" class="admin-dialog-overlay" @click.self="closeDialog">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDialog">&times;</button>
-        <h3>{{ dialogMode === "create" ? "新建用户" : "编辑用户" }}</h3>
-        <p>{{ dialogMode === "create" ? "填写账号基础信息和初始密码。" : "可修改昵称、头像、角色和密码，留空密码则不改动。 " }}</p>
+        <h3>{{ dialogMode === "create" ? "新增用户" : "编辑用户" }}</h3>
+        <p>{{ dialogMode === "create" ? "填写账号基础信息和初始密码。" : "可修改昵称、头像、角色和密码，留空密码则不更新。" }}</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>用户名</label>
@@ -510,7 +500,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
-        <p class="admin-confirm-text">删除后该账号将无法登录，是否继续？</p>
+        <p class="admin-confirm-text">删除后该账户将无法登录，是否继续？</p>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeDeleteDialog">取消</button>
           <button class="admin-button--danger" type="button" :disabled="deleteSubmitting" @click="handleDelete">
@@ -540,6 +530,17 @@ onMounted(() => {
   gap: 12px;
 }
 
+.admin-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--admin-accent);
+  font-weight: 700;
+}
+
 .admin-user-preview {
   grid-column: 1 / -1;
   display: flex;
@@ -550,6 +551,11 @@ onMounted(() => {
   border: 1px solid var(--admin-line);
   border-radius: 14px;
   background: var(--admin-bg-soft);
+}
+
+.users-page {
+  display: grid;
+  gap: 18px;
 }
 
 .users-hero {
@@ -567,6 +573,7 @@ onMounted(() => {
 .users-hero-copy h2 {
   margin: 0;
   font-size: 24px;
+  line-height: 1.2;
 }
 
 .users-hero-copy p,
@@ -574,6 +581,15 @@ onMounted(() => {
   margin: 0;
   color: var(--admin-ink-soft);
   line-height: 1.7;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .users-hero-side {

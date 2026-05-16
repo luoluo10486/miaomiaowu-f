@@ -66,9 +66,9 @@ const latestMappingLabel = computed(() => {
 const currentFilterLabel = computed(() => (keyword.value ? keyword.value : "全部词条"));
 
 const stats = computed(() => [
-  { title: "Total", value: pageTotal(page.value), hint: "关键词映射总数", tone: "indigo" },
+  { title: "Total", value: pageTotal(page.value), hint: "映射规则总数", tone: "indigo" },
   { title: "Enabled", value: enabledCount.value, hint: "当前页启用数量", tone: "emerald" },
-  { title: "Disabled", value: disabledCount.value, hint: "当前页禁用数量", tone: "amber" },
+  { title: "Disabled", value: disabledCount.value, hint: "当前页停用数量", tone: "amber" },
   { title: "Visible", value: mappings.value.length, hint: "当前页显示数量", tone: "cyan" }
 ]);
 
@@ -77,7 +77,7 @@ const heroSummary = computed(() => [
   { label: "当前页", value: currentPageLabel.value },
   { label: "已选中", value: selectedMappingLabel.value },
   { label: "最新规则", value: latestMappingLabel.value },
-  { label: "启用 / 禁用", value: `${enabledCount.value} / ${disabledCount.value}` }
+  { label: "启用 / 停用", value: `${enabledCount.value} / ${disabledCount.value}` }
 ]);
 
 async function loadData() {
@@ -98,6 +98,7 @@ async function loadData() {
 function handleSearch() {
   pageNo.value = 1;
   keyword.value = keywordInput.value.trim();
+  void loadData();
 }
 
 function handleRefresh() {
@@ -108,7 +109,8 @@ function handleRefresh() {
 function resetSearch() {
   keywordInput.value = "";
   keyword.value = "";
-  handleRefresh();
+  pageNo.value = 1;
+  void loadData();
 }
 
 function goPrev() {
@@ -241,42 +243,33 @@ onMounted(() => {
       </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
-        <button class="admin-button" type="button" @click="openCreateDialog">新增映射</button>
+        <button class="admin-button" type="button" @click="openCreateDialog">新建映射</button>
       </template>
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
     <div class="admin-stat-grid">
-      <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
+      <StatCard
+        v-for="stat in stats"
+        :key="stat.title"
+        :title="stat.title"
+        :value="stat.value"
+        :hint="stat.hint"
+        :tone="stat.tone"
+      />
     </div>
 
     <section class="admin-detail-card mappings-hero">
       <div class="mappings-hero-copy">
         <p class="trace-hero-tag">Query Normalization</p>
-        <h2>关键词映射总览</h2>
-        <p>维护原始词到目标词的映射规则，方便快速定位当前筛选、选中规则和最新规则。</p>
+        <h2>映射规则总览</h2>
+        <p>先看当前筛选、命中规则和最新规则，再进入具体编辑或删除操作。</p>
       </div>
       <div class="mappings-hero-side">
-        <div class="mappings-hero-cardline">
-          <span class="mappings-hero-cardlabel">当前筛选</span>
-          <strong>{{ currentFilterLabel }}</strong>
-        </div>
-        <div class="mappings-hero-cardline">
-          <span class="mappings-hero-cardlabel">当前页</span>
-          <strong>{{ currentPageLabel }}</strong>
-        </div>
-        <div class="mappings-hero-cardline">
-          <span class="mappings-hero-cardlabel">选中规则</span>
-          <strong>{{ selectedMappingLabel }}</strong>
-        </div>
-        <div class="mappings-hero-cardline">
-          <span class="mappings-hero-cardlabel">最新规则</span>
-          <strong>{{ latestMappingLabel }}</strong>
-        </div>
-        <div class="mappings-hero-cardline">
-          <span class="mappings-hero-cardlabel">启用 / 禁用</span>
-          <strong>{{ enabledCount }} / {{ disabledCount }}</strong>
+        <div v-for="item in heroSummary" :key="item.label" class="mappings-hero-cardline">
+          <span class="mappings-hero-cardlabel">{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </div>
       </div>
     </section>
@@ -285,10 +278,10 @@ onMounted(() => {
       <article class="admin-table-card">
         <div class="admin-table-card__header">
           <div>
-            <h2>映射列表</h2>
-            <p>一目查看原始词、目标词、匹配类型和启用状态。</p>
+            <h2>规则列表</h2>
+            <p>一眼查看原始词、目标词、匹配类型和启用状态。</p>
           </div>
-          <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
+          <span class="admin-page-count">共 {{ pageTotal(page.value) }} 条</span>
         </div>
 
         <div class="admin-toolbar">
@@ -297,7 +290,7 @@ onMounted(() => {
               v-model="keywordInput"
               class="admin-input admin-search-input"
               type="search"
-              placeholder="搜索原始词 / 目标词"
+              placeholder="搜索原始词 / 目标词..."
               @keydown.enter.prevent="handleSearch"
             />
             <button class="admin-button--ghost" type="button" @click="handleSearch">搜索</button>
@@ -305,7 +298,7 @@ onMounted(() => {
           </div>
           <div class="admin-toolbar-right">
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
-            <button class="admin-button" type="button" @click="openCreateDialog">新增映射</button>
+            <button class="admin-button" type="button" @click="openCreateDialog">新建映射</button>
           </div>
         </div>
 
@@ -315,14 +308,14 @@ onMounted(() => {
           <table class="admin-table">
             <thead>
               <tr>
-                <th style="width:220px;">原始词</th>
-                <th style="width:220px;">目标词</th>
-                <th style="width:120px;">匹配类型</th>
-                <th style="width:90px;">优先级</th>
-                <th style="width:90px;">状态</th>
+                <th style="width: 220px">原始词</th>
+                <th style="width: 220px">目标词</th>
+                <th style="width: 120px">匹配类型</th>
+                <th style="width: 90px">优先级</th>
+                <th style="width: 90px">状态</th>
                 <th>备注</th>
-                <th style="width:160px;">更新时间</th>
-                <th style="width:160px;">操作</th>
+                <th style="width: 160px">更新时间</th>
+                <th style="width: 160px">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -338,7 +331,7 @@ onMounted(() => {
                 <td>{{ item.priority }}</td>
                 <td>
                   <span :class="['admin-badge', item.enabled ? 'is-success' : 'is-muted']">
-                    {{ item.enabled ? "启用" : "禁用" }}
+                    {{ item.enabled ? "启用" : "停用" }}
                   </span>
                 </td>
                 <td>{{ item.remark || "--" }}</td>
@@ -355,11 +348,13 @@ onMounted(() => {
         </div>
 
         <div v-if="mappings.length > 0" class="admin-pagination">
-          <span>共 {{ pageTotal(page) }} 条</span>
+          <span>共 {{ pageTotal(page.value) }} 条</span>
           <div class="admin-pagination-right">
             <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
-            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
-            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">下一页</button>
+            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page.value) }}</span>
+            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page.value)" @click="goNext">
+              下一页
+            </button>
           </div>
         </div>
       </article>
@@ -371,7 +366,7 @@ onMounted(() => {
           <div class="admin-kv">
             <div><dt>当前页</dt><dd>{{ mappings.length }}</dd></div>
             <div><dt>启用</dt><dd>{{ enabledCount }}</dd></div>
-            <div><dt>禁用</dt><dd>{{ disabledCount }}</dd></div>
+            <div><dt>停用</dt><dd>{{ disabledCount }}</dd></div>
             <div><dt>精确 / 正则</dt><dd>{{ exactCount }} / {{ regexCount }}</dd></div>
           </div>
         </article>
@@ -388,7 +383,7 @@ onMounted(() => {
             <div><dt>目标词</dt><dd>{{ selectedMapping.targetTerm }}</dd></div>
             <div><dt>匹配类型</dt><dd>{{ selectedMapping.matchType }}</dd></div>
             <div><dt>优先级</dt><dd>{{ selectedMapping.priority }}</dd></div>
-            <div><dt>状态</dt><dd>{{ selectedMapping.enabled ? "启用" : "禁用" }}</dd></div>
+            <div><dt>状态</dt><dd>{{ selectedMapping.enabled ? "启用" : "停用" }}</dd></div>
             <div><dt>更新时间</dt><dd>{{ formatDateTime(selectedMapping.updateTime || selectedMapping.createTime) }}</dd></div>
           </div>
           <div v-else class="admin-empty-sm">暂无选中规则</div>
@@ -399,7 +394,7 @@ onMounted(() => {
     <div v-if="dialogOpen" class="admin-dialog-overlay" @click.self="closeDialog">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDialog">&times;</button>
-        <h3>{{ dialogMode === "create" ? "新增映射规则" : "编辑映射规则" }}</h3>
+        <h3>{{ dialogMode === "create" ? "新建映射规则" : "编辑映射规则" }}</h3>
         <p>{{ dialogMode === "create" ? "配置查询归一化的关键词映射规则。" : "修改映射规则内容。" }}</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
@@ -427,12 +422,12 @@ onMounted(() => {
             <label>状态</label>
             <select v-model="form.enabled" class="admin-select">
               <option :value="true">启用</option>
-              <option :value="false">禁用</option>
+              <option :value="false">停用</option>
             </select>
           </div>
           <div class="admin-dialog-field">
             <label>备注</label>
-            <input v-model="form.remark" class="admin-input" placeholder="可选" />
+            <input v-model="form.remark" class="admin-input" placeholder="可选备注" />
           </div>
         </div>
         <div class="admin-dialog-footer">

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import { getSystemSettings } from "../../services/settingsService";
@@ -16,6 +17,7 @@ const memory = computed(() => settings.value?.rag?.memory || {});
 const selection = computed(() => settings.value?.ai?.selection || {});
 const stream = computed(() => settings.value?.ai?.stream || {});
 const providerEntries = computed(() => Object.entries(settings.value?.ai?.providers || {}));
+
 const providerCount = computed(() => providerEntries.value.length);
 const modelCountLabel = computed(() => {
   const chat = settings.value?.ai?.chat?.defaultModel || "--";
@@ -25,28 +27,26 @@ const modelCountLabel = computed(() => {
 });
 const modelCoverageLabel = computed(() => {
   const chat = Array.isArray(settings.value?.ai?.chat?.candidates) ? settings.value.ai.chat.candidates.length : 0;
-  const embedding = Array.isArray(settings.value?.ai?.embedding?.candidates) ? settings.value.ai.embedding.candidates.length : 0;
+  const embedding = Array.isArray(settings.value?.ai?.embedding?.candidates)
+    ? settings.value.ai.embedding.candidates.length
+    : 0;
   const rerank = Array.isArray(settings.value?.ai?.rerank?.candidates) ? settings.value.ai.rerank.candidates.length : 0;
   return `${chat} / ${embedding} / ${rerank}`;
 });
-const modelGroups = computed(() => [
-  { label: "Chat", data: settings.value?.ai?.chat || {}, tone: "indigo" },
-  { label: "Embedding", data: settings.value?.ai?.embedding || {}, tone: "cyan" },
-  { label: "Rerank", data: settings.value?.ai?.rerank || {}, tone: "emerald" }
-]);
+
 const strategyOverview = computed(() => [
   {
-    label: "Failure Threshold",
+    label: "失败阈值",
     value: selection.value.failureThreshold ?? "--",
     hint: "模型切换触发阈值"
   },
   {
-    label: "Open Duration",
+    label: "打开时长",
     value: selection.value.openDurationMs ?? "--",
     hint: "熔断窗口毫秒数"
   },
   {
-    label: "Stream Chunk",
+    label: "流式分片",
     value: stream.value.messageChunkSize ?? "--",
     hint: "流式输出分片大小"
   }
@@ -79,6 +79,12 @@ const stats = computed(() => [
   }
 ]);
 
+const modelGroups = computed(() => [
+  { label: "Chat", data: settings.value?.ai?.chat || {}, tone: "indigo" },
+  { label: "Embedding", data: settings.value?.ai?.embedding || {}, tone: "cyan" },
+  { label: "Rerank", data: settings.value?.ai?.rerank || {}, tone: "emerald" }
+]);
+
 async function loadSettings() {
   loading.value = true;
   errorText.value = "";
@@ -97,11 +103,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page settings-page">
     <PageHeader
       tag="Settings"
       title="系统设置"
-      description="只读查看当前应用配置，便于排查模型、限流和记忆策略的运行状态。"
+      description="只读查看当前应用的 RAG 默认参数、查询改写、限流、记忆策略以及模型路由信息。"
     >
       <template #meta>
         <div class="admin-header-meta">
@@ -134,8 +140,11 @@ onMounted(() => {
       <div class="settings-hero-copy">
         <p class="trace-hero-tag">System Control</p>
         <h2>配置总览与模型基线</h2>
-        <p>集中查看 RAG 默认值、查询改写、限流、记忆策略和模型提供方信息。</p>
+        <p>
+          这里集中展示系统运行时的关键配置，便于快速确认集合名、查询改写、限流、记忆摘要和模型选择策略是否符合预期。
+        </p>
       </div>
+
       <div class="settings-hero-side">
         <div class="settings-hero-cardline">
           <span class="settings-hero-cardlabel">Collection</span>
@@ -156,12 +165,12 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="admin-split">
+    <section class="admin-split settings-layout">
       <article class="admin-table-card">
         <div class="admin-table-card__header">
           <div>
             <h2>核心配置</h2>
-            <p>RAG 默认参数、查询改写、限流和记忆策略。</p>
+            <p>RAG 默认参数、查询改写、全局限流和记忆策略。</p>
           </div>
           <span class="admin-page-count">{{ loading ? "加载中" : "已加载" }}</span>
         </div>
@@ -170,41 +179,92 @@ onMounted(() => {
           <div class="admin-card-item">
             <h3>RAG 默认配置</h3>
             <div class="admin-kv">
-              <div><dt>Collection</dt><dd>{{ ragDefaults.collectionName || "--" }}</dd></div>
-              <div><dt>Dimension</dt><dd>{{ ragDefaults.dimension ?? "--" }}</dd></div>
-              <div><dt>Metric</dt><dd>{{ ragDefaults.metricType || "--" }}</dd></div>
+              <div>
+                <dt>Collection</dt>
+                <dd>{{ ragDefaults.collectionName || "--" }}</dd>
+              </div>
+              <div>
+                <dt>Dimension</dt>
+                <dd>{{ ragDefaults.dimension ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Metric</dt>
+                <dd>{{ ragDefaults.metricType || "--" }}</dd>
+              </div>
             </div>
           </div>
 
           <div class="admin-card-item">
             <h3>查询改写</h3>
             <div class="admin-kv">
-              <div><dt>Enabled</dt><dd>{{ normalizeBooleanLabel(queryRewrite.enabled) }}</dd></div>
-              <div><dt>Max History Messages</dt><dd>{{ queryRewrite.maxHistoryMessages ?? "--" }}</dd></div>
-              <div><dt>Max History Chars</dt><dd>{{ queryRewrite.maxHistoryChars ?? "--" }}</dd></div>
+              <div>
+                <dt>Enabled</dt>
+                <dd>{{ normalizeBooleanLabel(queryRewrite.enabled) }}</dd>
+              </div>
+              <div>
+                <dt>Max History Messages</dt>
+                <dd>{{ queryRewrite.maxHistoryMessages ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Max History Chars</dt>
+                <dd>{{ queryRewrite.maxHistoryChars ?? "--" }}</dd>
+              </div>
             </div>
           </div>
 
           <div class="admin-card-item">
             <h3>全局限流</h3>
             <div class="admin-kv">
-              <div><dt>Enabled</dt><dd>{{ normalizeBooleanLabel(rateLimit.enabled) }}</dd></div>
-              <div><dt>Max Concurrent</dt><dd>{{ rateLimit.maxConcurrent ?? "--" }}</dd></div>
-              <div><dt>Max Wait Seconds</dt><dd>{{ rateLimit.maxWaitSeconds ?? "--" }}</dd></div>
-              <div><dt>Lease Seconds</dt><dd>{{ rateLimit.leaseSeconds ?? "--" }}</dd></div>
-              <div><dt>Poll Interval (ms)</dt><dd>{{ rateLimit.pollIntervalMs ?? "--" }}</dd></div>
+              <div>
+                <dt>Enabled</dt>
+                <dd>{{ normalizeBooleanLabel(rateLimit.enabled) }}</dd>
+              </div>
+              <div>
+                <dt>Max Concurrent</dt>
+                <dd>{{ rateLimit.maxConcurrent ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Max Wait Seconds</dt>
+                <dd>{{ rateLimit.maxWaitSeconds ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Lease Seconds</dt>
+                <dd>{{ rateLimit.leaseSeconds ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Poll Interval (ms)</dt>
+                <dd>{{ rateLimit.pollIntervalMs ?? "--" }}</dd>
+              </div>
             </div>
           </div>
 
           <div class="admin-card-item">
             <h3>记忆管理</h3>
             <div class="admin-kv">
-              <div><dt>History Keep Turns</dt><dd>{{ memory.historyKeepTurns ?? "--" }}</dd></div>
-              <div><dt>Summary Start Turns</dt><dd>{{ memory.summaryStartTurns ?? "--" }}</dd></div>
-              <div><dt>Summary Enabled</dt><dd>{{ normalizeBooleanLabel(memory.summaryEnabled) }}</dd></div>
-              <div><dt>TTL Minutes</dt><dd>{{ memory.ttlMinutes ?? "--" }}</dd></div>
-              <div><dt>Summary Max Chars</dt><dd>{{ memory.summaryMaxChars ?? "--" }}</dd></div>
-              <div><dt>Title Max Length</dt><dd>{{ memory.titleMaxLength ?? "--" }}</dd></div>
+              <div>
+                <dt>History Keep Turns</dt>
+                <dd>{{ memory.historyKeepTurns ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Summary Start Turns</dt>
+                <dd>{{ memory.summaryStartTurns ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Summary Enabled</dt>
+                <dd>{{ normalizeBooleanLabel(memory.summaryEnabled) }}</dd>
+              </div>
+              <div>
+                <dt>TTL Minutes</dt>
+                <dd>{{ memory.ttlMinutes ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Summary Max Chars</dt>
+                <dd>{{ memory.summaryMaxChars ?? "--" }}</dd>
+              </div>
+              <div>
+                <dt>Title Max Length</dt>
+                <dd>{{ memory.titleMaxLength ?? "--" }}</dd>
+              </div>
             </div>
           </div>
         </div>
@@ -213,7 +273,9 @@ onMounted(() => {
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
           <h3>模型策略</h3>
-          <p class="admin-detail-card-desc">对照前端参考页的“选择策略”和“流式响应”分区，便于快速排查模型路由。</p>
+          <p class="admin-detail-card-desc">
+            这一栏对应前端参考页里的策略区，用来快速核对模型切换阈值和流式输出参数。
+          </p>
           <div class="admin-card-list">
             <div v-for="item in strategyOverview" :key="item.label" class="admin-card-item">
               <h3>{{ item.label }}</h3>
@@ -225,23 +287,23 @@ onMounted(() => {
 
         <article class="admin-detail-card">
           <h3>AI Provider</h3>
-          <p class="admin-detail-card-desc">当前提供商和端点信息。</p>
+          <p class="admin-detail-card-desc">当前供应商与端点配置。</p>
           <div v-if="providerEntries.length === 0" class="admin-empty-sm">暂无 provider 配置</div>
           <div v-else class="admin-card-list">
             <div v-for="[name, provider] in providerEntries" :key="name" class="admin-card-item">
               <h3>{{ name }}</h3>
               <p class="is-code">{{ provider?.url || "--" }}</p>
-              <p v-if="provider?.endpoints && Object.keys(provider.endpoints).length > 0">
+              <p v-if="provider?.endpoints && Object.keys(provider.endpoints).length > 0" class="admin-list-meta">
                 {{ Object.entries(provider.endpoints).map(([key, val]) => `${key}: ${val}`).join(" | ") }}
               </p>
-              <p v-else>--</p>
+              <p v-else class="admin-list-meta">--</p>
             </div>
           </div>
         </article>
 
         <article class="admin-detail-card">
           <h3>模型分组</h3>
-          <p class="admin-detail-card-desc">Chat、Embedding 和 Rerank 的默认模型信息。</p>
+          <p class="admin-detail-card-desc">Chat、Embedding 和 Rerank 的默认模型与候选模型信息。</p>
           <div class="admin-card-list">
             <div v-for="group in modelGroups" :key="group.label" class="admin-card-item">
               <h3>{{ group.label }}</h3>
@@ -264,6 +326,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.settings-page {
+  display: grid;
+  gap: 18px;
+}
+
 .admin-header-meta {
   display: flex;
   align-items: center;
@@ -286,6 +353,7 @@ onMounted(() => {
 .settings-hero-copy h2 {
   margin: 0;
   font-size: 24px;
+  line-height: 1.2;
 }
 
 .settings-hero-copy p,
@@ -293,6 +361,15 @@ onMounted(() => {
   margin: 0;
   color: var(--admin-ink-soft);
   line-height: 1.7;
+}
+
+.trace-hero-tag {
+  margin: 0;
+  color: var(--admin-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .settings-hero-side {
@@ -321,6 +398,10 @@ onMounted(() => {
   color: var(--admin-ink);
   font-size: 14px;
   word-break: break-word;
+}
+
+.settings-layout {
+  align-items: start;
 }
 
 @media (max-width: 960px) {

@@ -124,8 +124,8 @@ const latestTaskLabel = computed(() => {
 
 const pipelinePages = computed(() => Number(pipelines.value?.pages || 1));
 const taskPages = computed(() => Number(tasks.value?.pages || 1));
-const currentTabLabel = computed(() => (activeTab.value === "pipelines" ? "Pipeline 管理" : "Task 管理"));
-const viewSummaryLabel = computed(() => `当前视图：${currentTabLabel.value} · Running ${activeTaskCount.value} · Failed ${failedTaskCount.value}`);
+const currentTabLabel = computed(() => (activeTab.value === "pipelines" ? "流水线管理" : "任务管理"));
+const viewSummaryLabel = computed(() => `视图：${currentTabLabel.value} · 运行中 ${activeTaskCount.value} · 失败 ${failedTaskCount.value}`);
 const pipelineModeLabel = computed(() => (pipelineNodeMode.value === "json" ? "JSON 视图" : "表单视图"));
 const taskSourceTypeLabel = computed(() => String(taskForm.value.sourceType || "file").toUpperCase());
 const taskDialogSourceHint = computed(() => {
@@ -182,7 +182,7 @@ const pipelineStats = computed(() => [
   {
     title: "Pipelines",
     value: pageTotal(pipelines.value),
-    hint: "当前页和搜索结果对应的流水线总数",
+    hint: "当前页与筛选结果对应的流水线总数",
     tone: "indigo"
   },
   {
@@ -206,10 +206,10 @@ const pipelineStats = computed(() => [
 ]);
 const ingestionHeroSummary = computed(() => [
   { label: "当前视图", value: currentTabLabel.value },
-  { label: "流水线总数", value: String(pageTotal(pipelines.value)) },
-  { label: "任务总数", value: String(pageTotal(tasks.value)) },
-  { label: "Running", value: String(activeTaskCount.value) },
-  { label: "Failed", value: String(failedTaskCount.value) }
+  { label: "流水线", value: String(pageTotal(pipelines.value)) },
+  { label: "任务", value: String(pageTotal(tasks.value)) },
+  { label: "运行中", value: String(activeTaskCount.value) },
+  { label: "失败", value: String(failedTaskCount.value) }
 ]);
 
 watch(activeTab, (val) => {
@@ -927,17 +927,17 @@ onMounted(() => {
       <template #meta>
         <div class="admin-page-header-meta">
           <span class="admin-badge is-muted">视图：{{ currentTabLabel }}</span>
-          <span class="admin-badge is-muted">Pipelines：{{ pageTotal(pipelines).toLocaleString("zh-CN") }}</span>
-          <span class="admin-badge is-muted">Tasks：{{ pageTotal(tasks).toLocaleString("zh-CN") }}</span>
-          <span class="admin-badge is-muted">Running：{{ activeTaskCount }}</span>
-          <span class="admin-badge is-muted">Failed：{{ failedTaskCount }}</span>
+          <span class="admin-badge is-muted">流水线：{{ pageTotal(pipelines).toLocaleString("zh-CN") }}</span>
+          <span class="admin-badge is-muted">任务：{{ pageTotal(tasks).toLocaleString("zh-CN") }}</span>
+          <span class="admin-badge is-muted">运行中：{{ activeTaskCount }}</span>
+          <span class="admin-badge is-muted">失败：{{ failedTaskCount }}</span>
           <span class="admin-badge is-muted">{{ viewSummaryLabel }}</span>
         </div>
       </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="loadIngestion">刷新</button>
         <button class="admin-button--ghost" type="button" @click="openUploadDialog()">上传文件</button>
-        <button class="admin-button" type="button" @click="openPipelineDialog('create')">新建 Pipeline</button>
+        <button class="admin-button" type="button" @click="openPipelineDialog('create')">新建流水线</button>
       </template>
     </PageHeader>
 
@@ -968,7 +968,7 @@ onMounted(() => {
           type="button"
           @click="setTab('pipelines')"
         >
-          Pipeline 管理
+          流水线管理
         </button>
         <button
           class="ingestion-tab"
@@ -976,7 +976,7 @@ onMounted(() => {
           type="button"
           @click="setTab('tasks')"
         >
-          Task 管理
+          任务管理
         </button>
       </div>
       <div class="ingestion-hero-side">
@@ -985,11 +985,11 @@ onMounted(() => {
           <strong>{{ currentTabLabel }}</strong>
         </div>
         <div class="ingestion-hero-cardline">
-          <span class="ingestion-hero-cardlabel">最新 Pipeline</span>
+          <span class="ingestion-hero-cardlabel">最新流水线</span>
           <strong>{{ latestPipelineLabel }}</strong>
         </div>
         <div class="ingestion-hero-cardline">
-          <span class="ingestion-hero-cardlabel">最新 Task</span>
+          <span class="ingestion-hero-cardlabel">最新任务</span>
           <strong>{{ latestTaskLabel }}</strong>
         </div>
         <div class="ingestion-hero-cardline">

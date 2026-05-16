@@ -781,7 +781,7 @@ onMounted(() => {
             </div>
             <div>
               <dt>文档数</dt>
-              <dd>{{ pageTotal(page) }}</dd>
+              <dd>{{ pageTotal(page.value) }}</dd>
             </div>
             <div>
               <dt>策略数</dt>

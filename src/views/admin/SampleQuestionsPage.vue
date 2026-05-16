@@ -271,7 +271,7 @@ onMounted(() => {
             <h2>样例问题列表</h2>
             <p>搜索、分页、编辑和删除都在同一张表中完成。</p>
           </div>
-          <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
+          <span class="admin-page-count">共 {{ pageTotal(page.value) }} 条</span>
         </div>
 
         <div class="admin-toolbar">
@@ -330,11 +330,11 @@ onMounted(() => {
         </div>
 
         <div v-if="questions.length > 0" class="admin-pagination">
-          <span>共 {{ pageTotal(page) }} 条</span>
+          <span>共 {{ pageTotal(page.value) }} 条</span>
           <div class="admin-pagination-right">
             <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
-            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
-            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">下一页</button>
+            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page.value) }}</span>
+            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page.value)" @click="goNext">下一页</button>
           </div>
         </div>
       </article>

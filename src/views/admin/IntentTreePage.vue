@@ -101,7 +101,10 @@ const filteredRows = computed(() => {
 
 const selectedNode = computed(() => {
   if (selectedIntentCode.value) {
-    return rows.value.find((row) => row.intentCode === selectedIntentCode.value) || null;
+    const found = rows.value.find((row) => row.intentCode === selectedIntentCode.value) || null;
+    if (found && (!keyword.value || filteredRows.value.some((row) => row.id === found.id))) {
+      return found;
+    }
   }
   return filteredRows.value[0] || rows.value[0] || null;
 });
@@ -545,7 +548,7 @@ onMounted(() => {
                 {{ kindLabel(item.kind) }}
               </span>
               <span class="admin-badge is-muted">TopK {{ item.topK ?? "--" }}</span>
-              <span v-if="item.hasChildren" class="admin-badge is-muted">{{ item.childCount }} children</span>
+              <span v-if="item.hasChildren" class="admin-badge is-muted">{{ item.childCount }} 子节点</span>
               <span v-if="item.kind === 0 && item.collectionName" class="admin-badge is-success">
                 Collection: {{ item.collectionName }}
               </span>
@@ -594,7 +597,7 @@ onMounted(() => {
             </div>
             <div class="admin-card-item">
               <h3>描述</h3>
-              <p>{{ selectedNode.description || "No description" }}</p>
+              <p>{{ selectedNode.description || "暂无描述" }}</p>
             </div>
             <div class="admin-card-item">
               <h3>Prompt</h3>

@@ -375,7 +375,7 @@ onMounted(() => {
             <h2>知识库列表</h2>
             <p>查看知识库集合、embedding 模型和文档总量，点击名称进入文档管理。</p>
           </div>
-          <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
+          <span class="admin-page-count">共 {{ pageTotal(page.value) }} 条</span>
         </div>
 
         <div class="admin-toolbar">
@@ -438,11 +438,11 @@ onMounted(() => {
         </div>
 
         <div v-if="records.length > 0" class="admin-pagination">
-          <span>共 {{ pageTotal(page) }} 条</span>
+          <span>共 {{ pageTotal(page.value) }} 条</span>
           <div class="admin-pagination-controls">
             <button class="admin-button--ghost" type="button" :disabled="pageNo <= 1" @click="goPrev">上一页</button>
-            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page) }}</span>
-            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page)" @click="goNext">
+            <span class="admin-page-count">{{ pageNo }} / {{ pageCount(page.value) }}</span>
+            <button class="admin-button--ghost" type="button" :disabled="pageNo >= pageCount(page.value)" @click="goNext">
               下一页
             </button>
           </div>
