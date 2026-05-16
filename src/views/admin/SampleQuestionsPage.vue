@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
@@ -29,6 +30,14 @@ const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
 
+function buildEmptyForm() {
+  return {
+    title: "",
+    description: "",
+    question: ""
+  };
+}
+
 const questions = computed(() => pageRecords(page.value));
 const selectedQuestion = computed(() => {
   if (selectedQuestionId.value) {
@@ -50,7 +59,6 @@ const selectedQuestionLabel = computed(() => {
   if (!selectedQuestion.value) return "--";
   return `${selectedQuestion.value.title || "--"} · ${selectedQuestion.value.question?.length || 0} 字`;
 });
-const questionSummaryLabel = computed(() => `筛选: ${activeFilterLabel.value} · 当前页: ${visibleQuestionCount.value}`);
 const averageQuestionLength = computed(() => {
   if (questions.value.length === 0) return 0;
   const totalLength = questions.value.reduce((sum, item) => sum + (item.question?.length || 0), 0);
@@ -60,60 +68,42 @@ const titledCount = computed(() => questions.value.filter((item) => Boolean(item
 const describedCount = computed(() => questions.value.filter((item) => Boolean(item.description?.trim())).length);
 
 const stats = computed(() => [
-  {
-    title: "Total",
-    value: pageTotal(page.value),
-    hint: "样例问题总数",
-    tone: "indigo"
-  },
-  {
-    title: "Titled",
-    value: questions.value.filter((item) => Boolean(item.title)).length,
-    hint: "带标题的样例问题",
-    tone: "emerald"
-  },
-  {
-    title: "No Desc",
-    value: questions.value.filter((item) => !item.description).length,
-    hint: "缺少描述的记录",
-    tone: "amber"
-  },
-  {
-    title: "Visible",
-    value: questions.value.length,
-    hint: "当前页展示数量",
-    tone: "cyan"
-  }
+  { title: "Total", value: pageTotal(page.value), hint: "样例问题总数", tone: "indigo" },
+  { title: "Titled", value: titledCount.value, hint: "带标题的样例问题", tone: "emerald" },
+  { title: "No Desc", value: questions.value.filter((item) => !item.description).length, hint: "缺少描述的记录", tone: "amber" },
+  { title: "Visible", value: questions.value.length, hint: "当前页显示数量", tone: "cyan" }
 ]);
 
-function buildEmptyForm() {
-  return {
-    title: "",
-    description: "",
-    question: ""
-  };
-}
+const heroSummary = computed(() => [
+  { label: "当前选中", value: selectedQuestionLabel.value },
+  { label: "当前页", value: currentPageLabel.value },
+  { label: "当前筛选", value: activeFilterLabel.value },
+  { label: "平均长度", value: String(averageQuestionLength.value) },
+  { label: "有标题 / 有描述", value: `${titledCount.value} / ${describedCount.value}` }
+]);
 
-async function loadData() {
+function loadData() {
   loading.value = true;
   errorText.value = "";
-  try {
-    page.value = await getSampleQuestionsPage(pageNo.value, pageSize, keyword.value);
-    const nextSelected = questions.value.find((item) => item.id === selectedQuestionId.value);
-    if (!nextSelected && questions.value.length > 0) {
-      selectedQuestionId.value = questions.value[0].id;
-    }
-  } catch (error) {
-    errorText.value = error?.message || "加载样例问题失败。";
-  } finally {
-    loading.value = false;
-  }
+  getSampleQuestionsPage(pageNo.value, pageSize, keyword.value)
+    .then((data) => {
+      page.value = data;
+      const nextSelected = questions.value.find((item) => item.id === selectedQuestionId.value);
+      if (!nextSelected && questions.value.length > 0) {
+        selectedQuestionId.value = questions.value[0].id;
+      }
+    })
+    .catch((error) => {
+      errorText.value = error?.message || "加载样例问题失败。";
+    })
+    .finally(() => {
+      loading.value = false;
+    });
 }
 
 function handleSearch() {
   pageNo.value = 1;
   keyword.value = keywordInput.value.trim();
-  void loadData();
 }
 
 function handleRefresh() {
@@ -169,7 +159,11 @@ function closeDialog() {
 }
 
 async function handleSubmit() {
-  if (!form.value.question.trim()) return;
+  if (!form.value.question.trim()) {
+    errorText.value = "请输入样例问题内容。";
+    return;
+  }
+
   submitting.value = true;
   errorText.value = "";
   try {
@@ -221,12 +215,12 @@ async function handleDelete() {
 }
 
 onMounted(() => {
-  void loadData();
+  loadData();
 });
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page sample-questions-page">
     <PageHeader
       tag="Sample Questions"
       title="样例问题管理"
@@ -238,7 +232,6 @@ onMounted(() => {
           <span class="admin-badge is-muted">当前页：{{ questions.length }}</span>
           <span class="admin-badge is-muted">选中：{{ selectedQuestionLabel }}</span>
           <span class="admin-badge is-muted">最新：{{ latestQuestionLabel }}</span>
-          <span class="admin-badge is-muted">{{ questionSummaryLabel }}</span>
         </div>
       </template>
       <template #actions>
@@ -254,7 +247,7 @@ onMounted(() => {
         <p class="trace-hero-tag">Sample Question Overview</p>
         <h2>{{ selectedQuestion?.title || "样例问题总览" }}</h2>
         <p>
-          {{ selectedQuestion?.description || "在同一页面维护欢迎页和推荐位使用的示例问题内容，搜索、编辑和删除都保持在清晰的管理流程里。" }}
+          {{ selectedQuestion?.description || "在同一页面维护样例问题内容，搜索、编辑和删除保持在清晰的管理流程里。" }}
         </p>
       </div>
       <div class="sample-questions-hero__grid">
@@ -267,16 +260,16 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="admin-stat-grid">
+    <div class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
-    </section>
+    </div>
 
     <section class="admin-split">
       <article class="admin-table-card">
         <div class="admin-table-card__header">
           <div>
             <h2>样例问题列表</h2>
-            <p>搜索、分页、编辑和删除都在同一张表里完成。</p>
+            <p>搜索、分页、编辑和删除都在同一张表中完成。</p>
           </div>
           <span class="admin-page-count">共 {{ pageTotal(page) }} 条</span>
         </div>
@@ -308,7 +301,7 @@ onMounted(() => {
                 <th style="width:220px;">标题</th>
                 <th>描述</th>
                 <th>问题</th>
-                <th style="width:160px;">更新时间</th>
+                <th style="width:170px;">更新时间</th>
                 <th style="width:160px;">操作</th>
               </tr>
             </thead>
@@ -349,7 +342,7 @@ onMounted(() => {
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
           <h3>页面摘要</h3>
-          <p class="admin-detail-card-desc">这页更适合先看总览，再进入列表编辑。标题、描述和问题长度都能在这里快速确认。</p>
+          <p class="admin-detail-card-desc">先看总览，再进入列表编辑。标题、描述和问题长度都能在这里快速确认。</p>
           <div class="admin-kv admin-kv--compact">
             <div><dt>当前筛选</dt><dd>{{ activeFilterLabel }}</dd></div>
             <div><dt>当前页</dt><dd>{{ visibleQuestionCount }}</dd></div>
@@ -393,7 +386,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDialog">&times;</button>
         <h3>{{ dialogMode === "create" ? "新增样例问题" : "编辑样例问题" }}</h3>
-        <p>{{ dialogMode === "create" ? "填写首页或推荐区域展示的样例问题。 " : "修改样例问题内容。" }}</p>
+        <p>{{ dialogMode === "create" ? "填写首页或推荐区域展示的样例问题。" : "修改样例问题内容。" }}</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>标题</label>
@@ -434,10 +427,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.sample-questions-hero {
+.sample-questions-page {
   display: grid;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 18px;
 }
 
 .sample-header-meta {
@@ -445,6 +437,12 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.sample-questions-hero {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .sample-questions-hero__copy {
