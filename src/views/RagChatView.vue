@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import RagComposer from "../components/chat/RagComposer.vue";
@@ -9,7 +9,6 @@ import { useRagChat } from "../composables/useRagChat";
 
 const router = useRouter();
 const sidebarOpen = ref(false);
-const starCount = ref(null);
 
 const {
   messages,
@@ -46,19 +45,6 @@ const {
 
 const isAdminUser = computed(() => currentUser.value?.role === "admin");
 
-const starLabel = computed(() => {
-  if (starCount.value === null) {
-    return "--";
-  }
-
-  if (starCount.value < 1000) {
-    return String(starCount.value);
-  }
-
-  const rounded = Math.round((starCount.value / 1000) * 10) / 10;
-  return `${String(rounded).replace(/\.0$/, "")}k`;
-});
-
 function handleCreateConversation() {
   createConversation();
   sidebarOpen.value = false;
@@ -73,17 +59,6 @@ function openAdminPanel() {
   router.push("/admin");
   sidebarOpen.value = false;
 }
-
-onMounted(() => {
-  fetch("https://api.github.com/repos/nageoffer/ragent")
-    .then((response) => (response.ok ? response.json() : null))
-    .then((data) => {
-      starCount.value = typeof data?.stargazers_count === "number" ? data.stargazers_count : null;
-    })
-    .catch(() => {
-      starCount.value = null;
-    });
-});
 </script>
 
 <template>
@@ -105,21 +80,6 @@ onMounted(() => {
         <strong>{{ currentSessionTitle }}</strong>
       </div>
 
-      <a
-        class="chat-topbar__github"
-        href="https://github.com/nageoffer/ragent"
-        target="_blank"
-        rel="noreferrer"
-        aria-label="打开 GitHub 仓库"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M12 2a10 10 0 0 0-3.16 19.48c.5.1.68-.22.68-.48v-1.66c-2.78.6-3.37-1.2-3.37-1.2-.45-1.14-1.1-1.44-1.1-1.44-.9-.62.07-.61.07-.61 1 .07 1.53 1.04 1.53 1.04.88 1.52 2.3 1.08 2.86.83.09-.64.35-1.08.64-1.33-2.22-.25-4.56-1.11-4.56-4.95 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.03a9.6 9.6 0 0 1 5 0c1.91-1.3 2.75-1.03 2.75-1.03.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.85-2.35 4.7-4.58 4.94.36.31.69.93.69 1.87v2.77c0 .26.18.59.69.49A10 10 0 0 0 12 2Z"
-          />
-        </svg>
-        <span class="chat-topbar__github-label">Star</span>
-        <span class="chat-topbar__github-count">{{ starLabel }}</span>
-      </a>
     </header>
 
     <div v-if="noticeText" :class="['chat-notice', `is-${noticeType}`]">
@@ -264,11 +224,13 @@ onMounted(() => {
 }
 
 .chat-topbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 12px;
 }
 
 .chat-topbar__menu {
@@ -302,11 +264,13 @@ onMounted(() => {
 }
 
 .chat-topbar__title {
-  flex: 1;
+  position: absolute;
+  left: 50%;
   display: grid;
   justify-items: center;
   gap: 2px;
   text-align: center;
+  transform: translateX(-50%);
 }
 
 .chat-topbar__eyebrow {
@@ -321,49 +285,6 @@ onMounted(() => {
   color: var(--chat-text);
   font-size: 15px;
   font-weight: 600;
-}
-
-.chat-topbar__github {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 42px;
-  padding: 0 14px;
-  border: 1px solid var(--chat-border);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--chat-text-soft);
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.chat-topbar__github:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.2);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-}
-
-.chat-topbar__github svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-}
-
-.chat-topbar__github-label {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.chat-topbar__github-count {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: var(--chat-radius-full);
-  background: rgba(37, 99, 235, 0.1);
-  color: var(--chat-accent);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .chat-notice {
@@ -562,6 +483,8 @@ onMounted(() => {
   }
 
   .chat-topbar__title {
+    position: static;
+    transform: none;
     justify-items: start;
     text-align: left;
   }
@@ -571,11 +494,6 @@ onMounted(() => {
   .chat-topbar {
     align-items: flex-start;
     flex-wrap: wrap;
-  }
-
-  .chat-topbar__github {
-    width: 100%;
-    justify-content: center;
   }
 
   .chat-main__header {

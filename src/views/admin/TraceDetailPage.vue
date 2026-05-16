@@ -119,25 +119,25 @@ const slowestNodeLabel = computed(() => {
 
 const overviewCards = computed(() => [
   {
-    title: "Status",
+    title: "状态",
     value: traceStatus.value,
     tone: statusTone(run.value.status),
     icon: "S"
   },
   {
-    title: "Duration",
+    title: "总耗时",
     value: formatDuration(run.value.durationMs ?? undefined),
     tone: "indigo",
     icon: "D"
   },
   {
-    title: "User",
+    title: "用户",
     value: run.value.userName || run.value.username || run.value.userId || "--",
     tone: "cyan",
     icon: "U"
   },
   {
-    title: "Start",
+    title: "开始时间",
     value: formatDateTime(run.value.startTime),
     tone: "amber",
     icon: "T"
@@ -273,7 +273,7 @@ onMounted(() => {
     <template v-else>
       <section class="admin-detail-card trace-hero-card">
         <div class="trace-hero-copy">
-          <p class="trace-hero-tag">Trace Overview</p>
+          <p class="trace-hero-tag">链路概览</p>
           <div class="trace-hero-title-row">
             <h2>{{ traceName }}</h2>
             <span :class="['admin-badge', statusBadgeClass(run.status)]">{{ traceStatus }}</span>
@@ -291,19 +291,19 @@ onMounted(() => {
         </div>
         <div class="trace-hero-side">
           <div class="trace-hero-cardline">
-            <span class="trace-hero-cardlabel">Conversation</span>
+            <span class="trace-hero-cardlabel">会话 ID</span>
             <strong>{{ run.conversationId || "--" }}</strong>
           </div>
           <div class="trace-hero-cardline">
-            <span class="trace-hero-cardlabel">Task</span>
+            <span class="trace-hero-cardlabel">任务 ID</span>
             <strong>{{ run.taskId || "--" }}</strong>
           </div>
           <div class="trace-hero-cardline">
-            <span class="trace-hero-cardlabel">Duration</span>
+            <span class="trace-hero-cardlabel">总耗时</span>
             <strong>{{ formatDuration(run.durationMs ?? undefined) }}</strong>
           </div>
           <div class="trace-hero-cardline">
-            <span class="trace-hero-cardlabel">Slowest</span>
+            <span class="trace-hero-cardlabel">最慢节点</span>
             <strong>{{ slowestNodeLabel }}</strong>
           </div>
         </div>
@@ -311,7 +311,7 @@ onMounted(() => {
 
       <section class="admin-detail-card trace-detail-summary">
         <div class="trace-detail-summary__copy">
-          <p class="trace-hero-tag">Trace Summary</p>
+          <p class="trace-hero-tag">链路摘要</p>
           <h2>运行摘要</h2>
           <p>先看链路主信息，再往下看请求、响应、错误与节点时间线，保持和 frontend 参考一致的阅读顺序。</p>
         </div>
@@ -335,13 +335,13 @@ onMounted(() => {
           <p class="admin-detail-card-desc">Trace 标识、会话、任务和状态概览。</p>
           <div class="admin-kv">
             <div><dt>Trace ID</dt><dd class="is-code">{{ traceId || "--" }}</dd></div>
-            <div><dt>Trace Name</dt><dd>{{ run.traceName || "--" }}</dd></div>
-            <div><dt>Conversation ID</dt><dd class="is-code">{{ run.conversationId || "--" }}</dd></div>
-            <div><dt>Task ID</dt><dd class="is-code">{{ run.taskId || "--" }}</dd></div>
-            <div><dt>User</dt><dd>{{ run.userName || run.username || run.userId || "--" }}</dd></div>
-            <div><dt>Status</dt><dd><span :class="['admin-badge', statusBadgeClass(run.status)]">{{ traceStatus }}</span></dd></div>
-            <div><dt>Start</dt><dd>{{ formatDateTime(run.startTime) }}</dd></div>
-            <div><dt>End</dt><dd>{{ formatDateTime(run.endTime) }}</dd></div>
+            <div><dt>链路名称</dt><dd>{{ run.traceName || "--" }}</dd></div>
+            <div><dt>会话 ID</dt><dd class="is-code">{{ run.conversationId || "--" }}</dd></div>
+            <div><dt>任务 ID</dt><dd class="is-code">{{ run.taskId || "--" }}</dd></div>
+            <div><dt>用户</dt><dd>{{ run.userName || run.username || run.userId || "--" }}</dd></div>
+            <div><dt>状态</dt><dd><span :class="['admin-badge', statusBadgeClass(run.status)]">{{ traceStatus }}</span></dd></div>
+            <div><dt>开始时间</dt><dd>{{ formatDateTime(run.startTime) }}</dd></div>
+            <div><dt>结束时间</dt><dd>{{ formatDateTime(run.endTime) }}</dd></div>
           </div>
         </article>
 
@@ -363,22 +363,22 @@ onMounted(() => {
         <p class="admin-detail-card-desc">展示原始输入输出，便于排查上下文和后端返回值。</p>
         <div class="trace-meta-grid">
           <div>
-            <h4 class="trace-section-title">Request</h4>
+            <h4 class="trace-section-title">请求</h4>
             <pre v-if="traceRequest" class="admin-pre">{{ stringifyJson(traceRequest) }}</pre>
             <div v-else class="admin-empty">暂无请求内容</div>
           </div>
           <div>
-            <h4 class="trace-section-title">Response</h4>
+            <h4 class="trace-section-title">响应</h4>
             <pre v-if="traceResponse" class="admin-pre">{{ stringifyJson(traceResponse) }}</pre>
             <div v-else class="admin-empty">暂无响应内容</div>
           </div>
           <div>
-            <h4 class="trace-section-title">Error</h4>
+            <h4 class="trace-section-title">错误</h4>
             <pre v-if="traceError" class="admin-pre is-error">{{ stringifyJson(traceError) }}</pre>
             <div v-else class="admin-empty">暂无错误信息</div>
           </div>
           <div>
-            <h4 class="trace-section-title">Metadata</h4>
+            <h4 class="trace-section-title">元数据</h4>
             <pre v-if="traceMetadata" class="admin-pre">{{ stringifyJson(traceMetadata) }}</pre>
             <div v-else class="admin-empty">暂无元数据</div>
           </div>

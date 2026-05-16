@@ -172,8 +172,8 @@ function formatSize(size) {
 
 function formatSourceLabel(sourceType) {
   const normalized = String(sourceType || "").toLowerCase();
-  if (normalized === "url") return "Remote URL";
-  if (normalized === "file") return "Local File";
+  if (normalized === "url") return "远程 URL";
+  if (normalized === "file") return "本地文件";
   if (normalized === "feishu") return "Feishu";
   if (normalized === "s3") return "S3";
   return sourceType || "--";
@@ -223,8 +223,8 @@ const recentLogs = computed(() => safeArray(logs.value).slice(0, 3));
 const currentStatusLabel = computed(() => STATUS_OPTIONS.find((item) => item.value === statusFilter.value)?.label || "全部状态");
 const currentFilterSummary = computed(() => {
   const parts = [];
-  if (statusFilter.value) parts.push(`状态 ${statusFilter.value}`);
-  if (keyword.value) parts.push(`关键字 ${keyword.value}`);
+  if (statusFilter.value) parts.push(`状态：${statusFilter.value}`);
+  if (keyword.value) parts.push(`关键词：${keyword.value}`);
   return parts.length > 0 ? parts.join(" · ") : "全部";
 });
 const latestDocumentLabel = computed(() => {
@@ -239,10 +239,10 @@ const detailSourceType = computed(() => String(detailTarget.value?.sourceType ||
 const detailIsUrlSource = computed(() => detailSourceType.value === "url");
 
 const stats = computed(() => [
-  { title: "Documents", value: visibleDocumentCount.value, hint: "当前知识库文档总数", tone: "indigo" },
-  { title: "Enabled", value: enabledCount.value, hint: "当前页已启用文档数量", tone: "emerald" },
-  { title: "Chunks", value: chunkCount.value, hint: "当前页切片总数", tone: "blue" },
-  { title: "Sources", value: `${fileCount.value}/${urlCount.value}`, hint: "本地文件 / URL", tone: "amber" }
+  { title: "文档数", value: visibleDocumentCount.value, hint: "当前知识库文档总数", tone: "indigo" },
+  { title: "已启用", value: enabledCount.value, hint: "当前页已启用文档数量", tone: "emerald" },
+  { title: "切片数", value: chunkCount.value, hint: "当前页切片总数", tone: "blue" },
+  { title: "来源数", value: `${fileCount.value}/${urlCount.value}`, hint: "本地文件 / URL", tone: "amber" }
 ]);
 
 async function loadMeta() {
@@ -636,7 +636,7 @@ onMounted(() => {
 
     <div class="documents-hero">
       <div class="documents-hero-copy">
-        <p class="trace-hero-tag">Knowledge Documents</p>
+        <p class="trace-hero-tag">文档管理</p>
         <h2>围绕文档详情、切片和日志展开管理</h2>
         <p>
           这一区域保留了和 frontend 一致的信息层级：先看知识库概览，再快速筛选文档，
@@ -842,8 +842,8 @@ onMounted(() => {
           <div class="admin-dialog-field">
             <label>来源类型</label>
             <select v-model="uploadForm.sourceType" class="admin-select">
-              <option value="file">Local File</option>
-              <option value="url">Remote URL</option>
+              <option value="file">本地文件</option>
+              <option value="url">远程 URL</option>
             </select>
           </div>
           <div v-if="uploadForm.sourceType === 'url'" class="admin-dialog-field">
