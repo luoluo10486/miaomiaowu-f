@@ -31,8 +31,8 @@ const doc = ref(null);
 const chunksPage = ref({ records: [], total: 0, pages: 1, current: 1, size: PAGE_SIZE });
 const logsPage = ref({ records: [], total: 0 });
 const selectedIds = ref(new Set());
-const previewTarget = ref(null);
 
+const previewTarget = ref(null);
 const dialogOpen = ref(false);
 const dialogMode = ref("create");
 const dialogTarget = ref(null);
@@ -79,54 +79,60 @@ function statusDotClass(status) {
 
 const chunks = computed(() => pageRecords(chunksPage.value));
 const selectedList = computed(() => Array.from(selectedIds.value));
-const recentLogs = computed(() => pageRecords(logsPage.value).slice(0, 3));
+const recentLogs = computed(() => pageRecords(logsPage.value).slice(0, 4));
 const allSelected = computed(() => chunks.value.length > 0 && chunks.value.every((item) => selectedIds.value.has(String(item.id))));
 const latestLog = computed(() => recentLogs.value[0] || null);
 const latestChunk = computed(() => chunks.value[0] || null);
+
 const currentFilterLabel = computed(() => {
   if (enabledFilter.value === "1") return "已启用";
   if (enabledFilter.value === "0") return "已禁用";
   return "全部";
 });
+
 const latestChunkLabel = computed(() => {
   if (!latestChunk.value) return "--";
   return latestChunk.value.chunkIndex ?? latestChunk.value.id ?? "--";
 });
+
 const latestChunkSummary = computed(() => {
   if (!latestChunk.value) return "--";
   return `${latestChunkLabel.value} · ${isEnabled(latestChunk.value) ? "启用" : "禁用"}`;
 });
+
 const latestLogSummary = computed(() => {
   if (!latestLog.value) return "--";
   return `${latestLog.value.status || "unknown"} · ${formatDuration(
     latestLog.value.totalDuration ?? latestLog.value.chunkDuration ?? latestLog.value.extractDuration
   )}`;
 });
+
 const averageChunkChars = computed(() => {
   if (chunks.value.length === 0) return 0;
   const total = chunks.value.reduce((sum, item) => sum + Number(item.charCount || 0), 0);
   return Math.round(total / chunks.value.length);
 });
+
+const enabledCount = computed(() => chunks.value.filter((item) => isEnabled(item)).length);
+
 const chunksHeroSummary = computed(() => [
   { label: "当前文档", value: doc.value?.docName || docId.value || "--" },
+  { label: "文档状态", value: doc.value?.status || "--" },
+  { label: "切片策略", value: doc.value?.chunkStrategy || "--" },
   { label: "切片总数", value: String(pageTotal(chunksPage.value)) },
   { label: "当前筛选", value: currentFilterLabel.value },
-  { label: "已选中", value: String(selectedIds.value.size) },
-  { label: "最新切片", value: latestChunkSummary.value },
-  { label: "最近日志", value: latestLogSummary.value }
+  { label: "已选中", value: String(selectedIds.value.size) }
 ]);
 
 const stats = computed(() => {
   const records = chunks.value;
   const total = pageTotal(chunksPage.value);
-  const enabledCount = records.filter((item) => isEnabled(item)).length;
-  const selectedCount = selectedIds.value.size;
   const tokenCount = records.reduce((sum, item) => sum + Number(item.tokenCount || 0), 0);
 
   return [
     { title: "Chunks", value: total, hint: "当前文档切片总数", tone: "indigo" },
-    { title: "Enabled", value: enabledCount, hint: "当前页已启用切片", tone: "emerald" },
-    { title: "Selected", value: selectedCount, hint: "当前已选切片数", tone: "amber" },
+    { title: "Enabled", value: enabledCount.value, hint: "当前页已启用切片", tone: "emerald" },
+    { title: "Selected", value: selectedIds.value.size, hint: "当前已选切片数", tone: "amber" },
     { title: "Tokens", value: tokenCount, hint: "当前页 token 总量", tone: "blue" }
   ];
 });
@@ -188,7 +194,6 @@ function goNext() {
 
 function handleFilterChange() {
   pageNo.value = 1;
-  void loadChunks();
 }
 
 function toggleSelect(id) {
@@ -384,12 +389,20 @@ onMounted(() => {
       <div class="chunks-hero-copy">
         <p class="trace-hero-tag">Chunk Flow</p>
         <h2>切片内容与批量状态管理</h2>
-        <p>围绕文档切片进行预览、编辑、启停和批量操作。</p>
+        <p>围绕当前文档的切片进行预览、编辑、启停和批量操作，保持和 frontend 参考一致的操作节奏。</p>
       </div>
       <div class="chunks-hero-side">
         <div class="chunks-hero-cardline">
           <span class="chunks-hero-cardlabel">当前文档</span>
           <strong>{{ doc?.docName || "当前文档" }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">文档状态</span>
+          <strong>{{ doc?.status || "--" }}</strong>
+        </div>
+        <div class="chunks-hero-cardline">
+          <span class="chunks-hero-cardlabel">切片策略</span>
+          <strong>{{ doc?.chunkStrategy || "--" }}</strong>
         </div>
         <div class="chunks-hero-cardline">
           <span class="chunks-hero-cardlabel">当前筛选</span>
@@ -403,14 +416,6 @@ onMounted(() => {
           <span class="chunks-hero-cardlabel">平均字符</span>
           <strong>{{ averageChunkChars || "--" }}</strong>
         </div>
-        <div class="chunks-hero-cardline">
-          <span class="chunks-hero-cardlabel">最新切片</span>
-          <strong>{{ latestChunkSummary }}</strong>
-        </div>
-        <div class="chunks-hero-cardline">
-          <span class="chunks-hero-cardlabel">最近日志</span>
-          <strong>{{ latestLogSummary }}</strong>
-        </div>
       </div>
     </section>
 
@@ -418,7 +423,7 @@ onMounted(() => {
       <div class="chunks-summary__copy">
         <p class="trace-hero-tag">Chunks Summary</p>
         <h2>切片状态概览</h2>
-        <p>对齐 frontend 的切片管理页，先确认文档、筛选和最近执行状态，再进入切片表格和预览弹窗。</p>
+        <p>先确认当前文档、筛选和最近执行状态，再进入切片表格和预览弹窗，结构上更贴近 frontend 的后台页面。</p>
       </div>
       <div class="chunks-summary__grid">
         <div v-for="item in chunksHeroSummary" :key="item.label" class="chunks-summary__item">
@@ -442,8 +447,8 @@ onMounted(() => {
           <div class="admin-toolbar-left">
             <select v-model="enabledFilter" class="admin-select" @change="handleFilterChange">
               <option value="">全部状态</option>
-              <option value="1">启用</option>
-              <option value="0">禁用</option>
+              <option value="1">已启用</option>
+              <option value="0">已禁用</option>
             </select>
           </div>
           <div class="admin-toolbar-right">
@@ -533,11 +538,13 @@ onMounted(() => {
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
           <h3>文档摘要</h3>
-          <p class="admin-detail-card-desc">查看当前文档的基础信息和处理状态。</p>
+          <p class="admin-detail-card-desc">查看当前文档的基础信息、状态和切片统计。</p>
           <div class="admin-kv">
             <div><dt>名称</dt><dd>{{ doc?.docName || docId }}</dd></div>
+            <div><dt>文档状态</dt><dd>{{ doc?.status || "--" }}</dd></div>
+            <div><dt>切片策略</dt><dd>{{ doc?.chunkStrategy || "--" }}</dd></div>
             <div><dt>切片数</dt><dd>{{ pageTotal(chunksPage) }}</dd></div>
-            <div><dt>已启用</dt><dd>{{ chunks.filter((item) => isEnabled(item)).length }}</dd></div>
+            <div><dt>已启用</dt><dd>{{ enabledCount }}</dd></div>
             <div><dt>已选中</dt><dd>{{ selectedIds.size }}</dd></div>
             <div><dt>平均字符</dt><dd>{{ averageChunkChars || "--" }}</dd></div>
             <div><dt>当前筛选</dt><dd>{{ currentFilterLabel }}</dd></div>
@@ -547,7 +554,7 @@ onMounted(() => {
 
         <article class="admin-detail-card">
           <h3>最近日志</h3>
-          <p class="admin-detail-card-desc">切片执行记录会显示在这里。</p>
+          <p class="admin-detail-card-desc">切片任务执行记录会显示在这里，方便排查失败原因。</p>
           <div v-if="latestLog" class="admin-kv admin-kv--compact">
             <div><dt>状态</dt><dd>{{ latestLog.status || "--" }}</dd></div>
             <div><dt>切片数</dt><dd>{{ latestLog.chunkCount ?? "--" }}</dd></div>
@@ -652,6 +659,7 @@ onMounted(() => {
 .chunks-hero-copy h2 {
   margin: 0;
   font-size: 24px;
+  line-height: 1.2;
 }
 
 .chunks-hero-copy p,

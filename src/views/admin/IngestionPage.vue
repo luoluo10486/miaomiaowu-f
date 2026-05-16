@@ -108,15 +108,14 @@ const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
 
-const uploadInputRef = ref(null);
-
 const pipelineRecords = computed(() => pageRecords(pipelines.value));
 const taskRecords = computed(() => pageRecords(tasks.value));
 const latestPipeline = computed(() => pipelineRecords.value[0] || null);
 const latestTask = computed(() => taskRecords.value[0] || null);
+const latestPipelineNodeCount = computed(() => Number(latestPipeline.value?.nodes?.length || 0));
 const latestPipelineLabel = computed(() => {
   if (!latestPipeline.value) return "--";
-  return `${latestPipeline.value.name || latestPipeline.value.id || "--"} · ${latestPipeline.value.nodeCount ?? 0} 节点`;
+  return `${latestPipeline.value.name || latestPipeline.value.id || "--"} · ${latestPipelineNodeCount.value} 节点`;
 });
 const latestTaskLabel = computed(() => {
   if (!latestTask.value) return "--";
@@ -127,6 +126,16 @@ const pipelinePages = computed(() => Number(pipelines.value?.pages || 1));
 const taskPages = computed(() => Number(tasks.value?.pages || 1));
 const currentTabLabel = computed(() => (activeTab.value === "pipelines" ? "Pipeline 管理" : "Task 管理"));
 const viewSummaryLabel = computed(() => `当前视图：${currentTabLabel.value} · Running ${activeTaskCount.value} · Failed ${failedTaskCount.value}`);
+const pipelineModeLabel = computed(() => (pipelineNodeMode.value === "json" ? "JSON 视图" : "表单视图"));
+const taskSourceTypeLabel = computed(() => String(taskForm.value.sourceType || "file").toUpperCase());
+const taskDialogSourceHint = computed(() => {
+  const sourceType = String(taskForm.value.sourceType || "").toLowerCase();
+  if (sourceType === "file") return "本地文件会直接上传并触发任务。";
+  if (sourceType === "url") return "URL 适合远程抓取和定时同步。";
+  if (sourceType === "feishu") return "Feishu 需要地址和凭证 JSON。";
+  if (sourceType === "s3") return "S3 适合对象存储来源。";
+  return "";
+});
 
 const activeTaskCount = computed(
   () => taskRecords.value.filter((item) => normalizeTaskStatus(item.status) === "RUNNING").length
@@ -799,38 +808,6 @@ function closeUploadDialog() {
   uploadFile.value = null;
 }
 
-function triggerUpload(pipelineId) {
-  uploadPipelineId.value = pipelineId;
-  uploadInputRef.value?.click();
-}
-
-async function handleUploadChange(event) {
-  const file = event.target?.files?.[0];
-  if (!file || !uploadPipelineId.value) {
-    event.target.value = "";
-    return;
-  }
-  if (Number(file.size || 0) > maxFileSize.value) {
-    errorText.value = `上传文件大小超过限制，最大允许 ${taskFileSizeLabel.value}。`;
-    event.target.value = "";
-    return;
-  }
-
-  uploadSubmitting.value = true;
-  errorText.value = "";
-  try {
-    await uploadIngestionTask(uploadPipelineId.value, file);
-    successText.value = "文件摄取任务已提交。";
-    await loadIngestion();
-  } catch (error) {
-    errorText.value = error?.message || "上传 ingestion 文件失败。";
-  } finally {
-    uploadSubmitting.value = false;
-    uploadPipelineId.value = "";
-    event.target.value = "";
-  }
-}
-
 async function handleUploadSubmit() {
   if (!uploadPipelineId.value) {
     errorText.value = "请选择流水线。";
@@ -941,7 +918,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page admin-ingestion">
     <PageHeader
       tag="Ingestion"
       title="数据通道"
@@ -949,19 +926,18 @@ onMounted(() => {
     >
       <template #meta>
         <div class="admin-page-header-meta">
-          <span class="admin-badge is-outline">视图 {{ currentTabLabel }}</span>
-          <span class="admin-badge is-outline">Pipelines {{ pageTotal(pipelines).toLocaleString("zh-CN") }}</span>
-          <span class="admin-badge is-outline">Tasks {{ pageTotal(tasks).toLocaleString("zh-CN") }}</span>
-          <span class="admin-badge is-outline">Running {{ activeTaskCount }}</span>
-          <span class="admin-badge is-outline">Failed {{ failedTaskCount }}</span>
-          <span class="admin-badge is-outline">{{ viewSummaryLabel }}</span>
+          <span class="admin-badge is-muted">视图：{{ currentTabLabel }}</span>
+          <span class="admin-badge is-muted">Pipelines：{{ pageTotal(pipelines).toLocaleString("zh-CN") }}</span>
+          <span class="admin-badge is-muted">Tasks：{{ pageTotal(tasks).toLocaleString("zh-CN") }}</span>
+          <span class="admin-badge is-muted">Running：{{ activeTaskCount }}</span>
+          <span class="admin-badge is-muted">Failed：{{ failedTaskCount }}</span>
+          <span class="admin-badge is-muted">{{ viewSummaryLabel }}</span>
         </div>
       </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" :disabled="loading" @click="loadIngestion">刷新</button>
         <button class="admin-button--ghost" type="button" @click="openUploadDialog()">上传文件</button>
         <button class="admin-button" type="button" @click="openPipelineDialog('create')">新建 Pipeline</button>
-        <input ref="uploadInputRef" class="admin-hidden-file" type="file" @change="handleUploadChange" />
       </template>
     </PageHeader>
 
@@ -985,7 +961,7 @@ onMounted(() => {
         <h2>Pipeline / Task / Upload 一体化管理</h2>
         <p>围绕知识库摄取链路，统一查看流水线、任务、文件上传和节点执行详情。</p>
       </div>
-      <div class="ingestion-hero-actions">
+      <div class="ingestion-hero-actions" role="tablist" aria-label="Ingestion views">
         <button
           class="ingestion-tab"
           :class="{ 'is-active': activeTab === 'pipelines' }"
@@ -1285,250 +1261,299 @@ onMounted(() => {
     </div>
 
     <div v-if="pipelineDialogOpen" class="admin-dialog-overlay" @click.self="closePipelineDialog">
-      <div class="admin-dialog admin-dialog--wide">
+      <div class="admin-dialog admin-dialog--wide ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closePipelineDialog">&times;</button>
-        <h3>{{ pipelineDialogMode === "edit" ? "编辑 Pipeline" : "新建 Pipeline" }}</h3>
-        <p>对齐 frontend 的双模式节点编辑器，可在表单视图和 JSON 视图之间切换。</p>
-        <div class="admin-dialog-body">
-          <div class="admin-dialog-field">
-            <label>名称</label>
-            <input v-model="pipelineForm.name" class="admin-input" placeholder="请输入 pipeline 名称" />
+        <div class="admin-dialog-header-stack">
+          <h3>{{ pipelineDialogMode === "edit" ? "编辑 Pipeline" : "新建 Pipeline" }}</h3>
+          <p>对齐 frontend 的双模式节点编辑器，可在表单视图和 JSON 视图之间切换。</p>
+          <div class="ingestion-dialog-chips">
+            <span class="admin-badge is-muted">模式：{{ pipelineModeLabel }}</span>
+            <span class="admin-badge is-muted">节点：{{ pipelineNodes.length }}</span>
+            <span class="admin-badge is-muted">JSON：{{ pipelineForm.nodesJson ? '已填写' : '空' }}</span>
           </div>
-          <div class="admin-dialog-field">
-            <label>描述</label>
-            <input v-model="pipelineForm.description" class="admin-input" placeholder="可选" />
-          </div>
+        </div>
 
-          <div class="admin-toolbar" style="margin: 4px 0 0;">
-            <div class="admin-toolbar-left">
-              <span class="admin-page-count">节点配置</span>
+        <div class="ingestion-dialog-layout">
+          <div class="admin-dialog-body ingestion-dialog-main">
+            <div class="admin-dialog-field">
+              <label>名称</label>
+              <input v-model="pipelineForm.name" class="admin-input" placeholder="请输入 pipeline 名称" />
             </div>
-            <div class="admin-toolbar-right">
-              <button class="admin-button--ghost" type="button" @click="syncPipelineMode('form')">表单配置</button>
-              <button class="admin-button--ghost" type="button" @click="syncPipelineMode('json')">JSON 配置</button>
+            <div class="admin-dialog-field">
+              <label>描述</label>
+              <input v-model="pipelineForm.description" class="admin-input" placeholder="可选" />
             </div>
-          </div>
 
-          <div v-if="pipelineNodeMode === 'json'" class="admin-dialog-field">
-            <label>Nodes JSON</label>
-            <textarea
-              v-model="pipelineForm.nodesJson"
-              class="admin-textarea"
-              rows="12"
-              placeholder='[{"nodeId":"fetch-1","nodeType":"fetcher","settings":{}}]'
-            />
-            <p class="admin-page-count">可以直接编辑 nodes JSON 数组，保存时会自动校验。</p>
-          </div>
-
-          <template v-else>
-            <div v-if="pipelineNodes.length === 0" class="admin-empty">暂无节点，请先添加节点配置</div>
-
-            <article v-for="(node, index) in pipelineNodes" :key="node.id" class="admin-detail-card" style="margin-bottom: 16px;">
-              <div class="admin-toolbar" style="margin-bottom: 12px;">
+            <div class="ingestion-dialog-section">
+              <div class="admin-toolbar">
                 <div class="admin-toolbar-left">
-                  <span class="admin-page-count">节点 {{ index + 1 }}</span>
-                  <span class="admin-badge is-muted">{{ node.nodeType }}</span>
+                  <span class="admin-page-count">节点配置</span>
                 </div>
                 <div class="admin-toolbar-right">
-                  <button class="admin-button--ghost" type="button" @click="removePipelineNode(node.id)">删除节点</button>
+                  <button class="admin-button--ghost" type="button" @click="syncPipelineMode('form')">表单配置</button>
+                  <button class="admin-button--ghost" type="button" @click="syncPipelineMode('json')">JSON 配置</button>
                 </div>
               </div>
 
-              <div class="admin-info-grid is-2">
-                <div class="admin-dialog-field">
-                  <label>节点 ID</label>
-                  <input v-model="node.nodeId" class="admin-input" placeholder="例如：fetch-1" />
-                </div>
-                <div class="admin-dialog-field">
-                  <label>节点类型</label>
-                  <select v-model="node.nodeType" class="admin-select">
-                    <option v-for="option in NODE_TYPE_OPTIONS" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="admin-dialog-field">
-                  <label>下一节点 ID</label>
-                  <input v-model="node.nextNodeId" class="admin-input" placeholder="例如：parse-1" />
-                </div>
-                <div class="admin-dialog-field">
-                  <label>条件（可选）</label>
-                  <textarea v-model="node.condition" class="admin-textarea" rows="3" placeholder='{"if":"..."}' />
-                </div>
+              <div v-if="pipelineNodeMode === 'json'" class="admin-dialog-field">
+                <label>Nodes JSON</label>
+                <textarea
+                  v-model="pipelineForm.nodesJson"
+                  class="admin-textarea"
+                  rows="12"
+                  placeholder='[{"nodeId":"fetch-1","nodeType":"fetcher","settings":{}}]'
+                />
+                <p class="admin-page-count">可以直接编辑 nodes JSON 数组，保存时会自动校验。</p>
               </div>
 
-              <div v-if="node.nodeType === 'parser'" class="admin-dialog-field" style="margin-top: 12px;">
-                <label>解析规则（JSON）</label>
-                <textarea v-model="node.parser.rulesJson" class="admin-textarea" rows="4" placeholder='[{"mimeType":"PDF","options":{}}]' />
-              </div>
+              <template v-else>
+                <div v-if="pipelineNodes.length === 0" class="admin-empty">暂无节点，请先添加节点配置</div>
 
-              <div v-if="node.nodeType === 'chunker'" class="admin-info-grid is-2" style="margin-top: 12px;">
-                <div class="admin-dialog-field">
-                  <label>分块策略</label>
-                  <select v-model="node.chunker.strategy" class="admin-select">
-                    <option v-for="option in CHUNK_STRATEGY_OPTIONS" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="admin-dialog-field">
-                  <label>Chunk Size</label>
-                  <input v-model="node.chunker.chunkSize" class="admin-input" type="number" placeholder="例如：512" />
-                </div>
-                <div class="admin-dialog-field">
-                  <label>Overlap Size</label>
-                  <input v-model="node.chunker.overlapSize" class="admin-input" type="number" placeholder="例如：128" />
-                </div>
-                <div class="admin-dialog-field">
-                  <label>自定义分隔符</label>
-                  <input v-model="node.chunker.separator" class="admin-input" placeholder="可选" />
-                </div>
-              </div>
-
-              <div v-if="node.nodeType === 'enhancer'" style="margin-top: 12px;">
-                <div class="admin-info-grid is-2">
-                  <div class="admin-dialog-field">
-                    <label>模型 ID</label>
-                    <input v-model="node.enhancer.modelId" class="admin-input" placeholder="可选" />
-                  </div>
-                </div>
-                <div class="admin-toolbar" style="margin: 12px 0;">
-                  <div class="admin-toolbar-left">
-                    <span class="admin-page-count">增强任务</span>
-                  </div>
-                  <div class="admin-toolbar-right">
-                    <button class="admin-button--ghost" type="button" @click="addPipelineTask(node, 'enhancer')">添加任务</button>
-                  </div>
-                </div>
-                <div v-if="node.enhancer.tasks.length === 0" class="admin-empty">暂无任务</div>
-                <template v-else>
-                  <div v-for="(nodeTask, taskIndex) in node.enhancer.tasks" :key="nodeTask.id" class="admin-detail-card" style="margin-bottom: 12px;">
-                    <div class="admin-toolbar" style="margin-bottom: 12px;">
-                      <div class="admin-toolbar-left">
-                        <span class="admin-page-count">任务 {{ taskIndex + 1 }}</span>
-                      </div>
-                      <div class="admin-toolbar-right">
-                        <button
-                          class="admin-button--ghost"
-                          type="button"
-                          @click="node.enhancer.tasks = node.enhancer.tasks.filter((item) => item.id !== nodeTask.id)"
-                        >
-                          删除
-                        </button>
-                      </div>
+                <article v-for="(node, index) in pipelineNodes" :key="node.id" class="admin-detail-card ingestion-node-card">
+                  <div class="admin-toolbar">
+                    <div class="admin-toolbar-left">
+                      <span class="admin-page-count">节点 {{ index + 1 }}</span>
+                      <span class="admin-badge is-muted">{{ node.nodeType }}</span>
                     </div>
+                    <div class="admin-toolbar-right">
+                      <button class="admin-button--ghost" type="button" @click="removePipelineNode(node.id)">删除节点</button>
+                    </div>
+                  </div>
+
+                  <div class="admin-info-grid is-2">
+                    <div class="admin-dialog-field">
+                      <label>节点 ID</label>
+                      <input v-model="node.nodeId" class="admin-input" placeholder="例如：fetch-1" />
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>节点类型</label>
+                      <select v-model="node.nodeType" class="admin-select">
+                        <option v-for="option in NODE_TYPE_OPTIONS" :key="option.value" :value="option.value">
+                          {{ option.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>下一节点 ID</label>
+                      <input v-model="node.nextNodeId" class="admin-input" placeholder="例如：parse-1" />
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>条件（可选）</label>
+                      <textarea v-model="node.condition" class="admin-textarea" rows="3" placeholder='{"if":"..."}' />
+                    </div>
+                  </div>
+
+                  <div v-if="node.nodeType === 'parser'" class="admin-dialog-field ingestion-subsection">
+                    <label>解析规则（JSON）</label>
+                    <textarea v-model="node.parser.rulesJson" class="admin-textarea" rows="4" placeholder='[{"mimeType":"PDF","options":{}}]' />
+                  </div>
+
+                  <div v-if="node.nodeType === 'chunker'" class="admin-info-grid is-2 ingestion-subsection">
+                    <div class="admin-dialog-field">
+                      <label>分块策略</label>
+                      <select v-model="node.chunker.strategy" class="admin-select">
+                        <option v-for="option in CHUNK_STRATEGY_OPTIONS" :key="option.value" :value="option.value">
+                          {{ option.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>Chunk Size</label>
+                      <input v-model="node.chunker.chunkSize" class="admin-input" type="number" placeholder="例如：512" />
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>Overlap Size</label>
+                      <input v-model="node.chunker.overlapSize" class="admin-input" type="number" placeholder="例如：128" />
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>自定义分隔符</label>
+                      <input v-model="node.chunker.separator" class="admin-input" placeholder="可选" />
+                    </div>
+                  </div>
+
+                  <div v-if="node.nodeType === 'enhancer'" class="ingestion-subsection">
                     <div class="admin-info-grid is-2">
                       <div class="admin-dialog-field">
-                        <label>任务类型</label>
-                        <select v-model="nodeTask.type" class="admin-select">
-                          <option v-for="option in ENHANCER_TASK_OPTIONS" :key="option.value" :value="option.value">
-                            {{ option.label }}
-                          </option>
-                        </select>
-                      </div>
-                      <div class="admin-dialog-field">
-                        <label>System Prompt</label>
-                        <textarea v-model="nodeTask.systemPrompt" class="admin-textarea" rows="3" placeholder="可选" />
-                      </div>
-                      <div class="admin-dialog-field" style="grid-column: 1 / -1;">
-                        <label>User Prompt 模板</label>
-                        <textarea v-model="nodeTask.userPromptTemplate" class="admin-textarea" rows="3" placeholder="可选" />
+                        <label>模型 ID</label>
+                        <input v-model="node.enhancer.modelId" class="admin-input" placeholder="可选" />
                       </div>
                     </div>
+                    <div class="admin-toolbar">
+                      <div class="admin-toolbar-left">
+                        <span class="admin-page-count">增强任务</span>
+                      </div>
+                      <div class="admin-toolbar-right">
+                        <button class="admin-button--ghost" type="button" @click="addPipelineTask(node, 'enhancer')">添加任务</button>
+                      </div>
+                    </div>
+                    <div v-if="node.enhancer.tasks.length === 0" class="admin-empty">暂无任务</div>
+                    <template v-else>
+                      <div v-for="(nodeTask, taskIndex) in node.enhancer.tasks" :key="nodeTask.id" class="admin-detail-card ingestion-task-card">
+                        <div class="admin-toolbar">
+                          <div class="admin-toolbar-left">
+                            <span class="admin-page-count">任务 {{ taskIndex + 1 }}</span>
+                          </div>
+                          <div class="admin-toolbar-right">
+                            <button
+                              class="admin-button--ghost"
+                              type="button"
+                              @click="node.enhancer.tasks = node.enhancer.tasks.filter((item) => item.id !== nodeTask.id)"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                        <div class="admin-info-grid is-2">
+                          <div class="admin-dialog-field">
+                            <label>任务类型</label>
+                            <select v-model="nodeTask.type" class="admin-select">
+                              <option v-for="option in ENHANCER_TASK_OPTIONS" :key="option.value" :value="option.value">
+                                {{ option.label }}
+                              </option>
+                            </select>
+                          </div>
+                          <div class="admin-dialog-field">
+                            <label>System Prompt</label>
+                            <textarea v-model="nodeTask.systemPrompt" class="admin-textarea" rows="3" placeholder="可选" />
+                          </div>
+                          <div class="admin-dialog-field" style="grid-column: 1 / -1;">
+                            <label>User Prompt 模板</label>
+                            <textarea v-model="nodeTask.userPromptTemplate" class="admin-textarea" rows="3" placeholder="可选" />
+                          </div>
+                        </div>
+                      </div>
+                    </template>
                   </div>
-                </template>
-              </div>
 
-              <div v-if="node.nodeType === 'enricher'" style="margin-top: 12px;">
-                <div class="admin-info-grid is-2">
-                  <div class="admin-dialog-field">
-                    <label>模型 ID</label>
-                    <input v-model="node.enricher.modelId" class="admin-input" placeholder="可选" />
+                  <div v-if="node.nodeType === 'enricher'" class="ingestion-subsection">
+                    <div class="admin-info-grid is-2">
+                      <div class="admin-dialog-field">
+                        <label>模型 ID</label>
+                        <input v-model="node.enricher.modelId" class="admin-input" placeholder="可选" />
+                      </div>
+                      <div class="admin-dialog-field">
+                        <label>附加文档元数据</label>
+                        <select
+                          class="admin-select"
+                          :value="node.enricher.attachDocumentMetadata ? 'true' : 'false'"
+                          @change="node.enricher.attachDocumentMetadata = $event.target.value === 'true'"
+                        >
+                          <option value="true">是</option>
+                          <option value="false">否</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="admin-toolbar">
+                      <div class="admin-toolbar-left">
+                        <span class="admin-page-count">富集任务</span>
+                      </div>
+                      <div class="admin-toolbar-right">
+                        <button class="admin-button--ghost" type="button" @click="addPipelineTask(node, 'enricher')">添加任务</button>
+                      </div>
+                    </div>
+                    <div v-if="node.enricher.tasks.length === 0" class="admin-empty">暂无任务</div>
+                    <template v-else>
+                      <div v-for="(nodeTask, taskIndex) in node.enricher.tasks" :key="nodeTask.id" class="admin-detail-card ingestion-task-card">
+                        <div class="admin-toolbar">
+                          <div class="admin-toolbar-left">
+                            <span class="admin-page-count">任务 {{ taskIndex + 1 }}</span>
+                          </div>
+                          <div class="admin-toolbar-right">
+                            <button
+                              class="admin-button--ghost"
+                              type="button"
+                              @click="node.enricher.tasks = node.enricher.tasks.filter((item) => item.id !== nodeTask.id)"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                        <div class="admin-info-grid is-2">
+                          <div class="admin-dialog-field">
+                            <label>任务类型</label>
+                            <select v-model="nodeTask.type" class="admin-select">
+                              <option v-for="option in ENRICHER_TASK_OPTIONS" :key="option.value" :value="option.value">
+                                {{ option.label }}
+                              </option>
+                            </select>
+                          </div>
+                          <div class="admin-dialog-field">
+                            <label>System Prompt</label>
+                            <textarea v-model="nodeTask.systemPrompt" class="admin-textarea" rows="3" placeholder="可选" />
+                          </div>
+                          <div class="admin-dialog-field" style="grid-column: 1 / -1;">
+                            <label>User Prompt 模板</label>
+                            <textarea v-model="nodeTask.userPromptTemplate" class="admin-textarea" rows="3" placeholder="可选" />
+                          </div>
+                        </div>
+                      </div>
+                    </template>
                   </div>
-                  <div class="admin-dialog-field">
-                    <label>附加文档元数据</label>
-                    <select
-                      class="admin-select"
-                      :value="node.enricher.attachDocumentMetadata ? 'true' : 'false'"
-                      @change="node.enricher.attachDocumentMetadata = $event.target.value === 'true'"
-                    >
-                      <option value="true">是</option>
-                      <option value="false">否</option>
+
+                  <div v-if="node.nodeType === 'indexer'" class="admin-info-grid is-2 ingestion-subsection">
+                    <div class="admin-dialog-field">
+                      <label>Embedding Model</label>
+                      <input v-model="node.indexer.embeddingModel" class="admin-input" placeholder="可选" />
+                    </div>
+                    <div class="admin-dialog-field">
+                      <label>Metadata Fields</label>
+                      <input v-model="node.indexer.metadataFields" class="admin-input" placeholder="逗号分隔，例如 title, author" />
+                    </div>
+                  </div>
+                </article>
+
+                <div class="admin-toolbar ingestion-node-footer">
+                  <div class="admin-toolbar-left">
+                    <select v-model="pipelineNodeTypeDraft" class="admin-select">
+                      <option v-for="option in NODE_TYPE_OPTIONS" :key="option.value" :value="option.value">
+                        {{ option.label }}
+                      </option>
                     </select>
                   </div>
-                </div>
-                <div class="admin-toolbar" style="margin: 12px 0;">
-                  <div class="admin-toolbar-left">
-                    <span class="admin-page-count">富集任务</span>
-                  </div>
                   <div class="admin-toolbar-right">
-                    <button class="admin-button--ghost" type="button" @click="addPipelineTask(node, 'enricher')">添加任务</button>
+                    <button class="admin-button--ghost" type="button" @click="addPipelineNode(pipelineNodeTypeDraft)">添加节点</button>
                   </div>
                 </div>
-                <div v-if="node.enricher.tasks.length === 0" class="admin-empty">暂无任务</div>
-                <template v-else>
-                  <div v-for="(nodeTask, taskIndex) in node.enricher.tasks" :key="nodeTask.id" class="admin-detail-card" style="margin-bottom: 12px;">
-                    <div class="admin-toolbar" style="margin-bottom: 12px;">
-                      <div class="admin-toolbar-left">
-                        <span class="admin-page-count">任务 {{ taskIndex + 1 }}</span>
-                      </div>
-                      <div class="admin-toolbar-right">
-                        <button
-                          class="admin-button--ghost"
-                          type="button"
-                          @click="node.enricher.tasks = node.enricher.tasks.filter((item) => item.id !== nodeTask.id)"
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </div>
-                    <div class="admin-info-grid is-2">
-                      <div class="admin-dialog-field">
-                        <label>任务类型</label>
-                        <select v-model="nodeTask.type" class="admin-select">
-                          <option v-for="option in ENRICHER_TASK_OPTIONS" :key="option.value" :value="option.value">
-                            {{ option.label }}
-                          </option>
-                        </select>
-                      </div>
-                      <div class="admin-dialog-field">
-                        <label>System Prompt</label>
-                        <textarea v-model="nodeTask.systemPrompt" class="admin-textarea" rows="3" placeholder="可选" />
-                      </div>
-                      <div class="admin-dialog-field" style="grid-column: 1 / -1;">
-                        <label>User Prompt 模板</label>
-                        <textarea v-model="nodeTask.userPromptTemplate" class="admin-textarea" rows="3" placeholder="可选" />
-                      </div>
-                    </div>
-                  </div>
-                </template>
-              </div>
+              </template>
+            </div>
+          </div>
 
-              <div v-if="node.nodeType === 'indexer'" class="admin-info-grid is-2" style="margin-top: 12px;">
-                <div class="admin-dialog-field">
-                  <label>Embedding Model</label>
-                  <input v-model="node.indexer.embeddingModel" class="admin-input" placeholder="可选" />
-                </div>
-                <div class="admin-dialog-field">
-                  <label>Metadata Fields</label>
-                  <input v-model="node.indexer.metadataFields" class="admin-input" placeholder="逗号分隔，例如 title, author" />
+          <aside class="ingestion-dialog-aside">
+            <article class="admin-detail-card">
+              <h3>编辑概览</h3>
+              <p class="admin-detail-card-desc">参考页会把当前对象信息放在右侧，方便在编辑时随时核对。</p>
+              <div class="admin-kv admin-kv--compact">
+                <div><dt>名称</dt><dd>{{ pipelineForm.name || "--" }}</dd></div>
+                <div><dt>节点数</dt><dd>{{ pipelineNodes.length }}</dd></div>
+                <div><dt>当前模式</dt><dd>{{ pipelineModeLabel }}</dd></div>
+                <div><dt>JSON 状态</dt><dd>{{ pipelineForm.nodesJson ? "已填写" : "未填写" }}</dd></div>
+              </div>
+            </article>
+            <article class="admin-detail-card">
+              <h3>节点提示</h3>
+              <p class="admin-detail-card-desc">节点类型切换后，面板会自动显示对应配置块。</p>
+              <div class="admin-card-list">
+                <div v-for="option in NODE_TYPE_OPTIONS" :key="option.value" class="admin-card-item">
+                  <h3>{{ option.label }}</h3>
+                  <p>
+                    {{
+                      option.value === "fetcher"
+                        ? "源数据抓取入口"
+                        : option.value === "parser"
+                          ? "内容解析与规则处理"
+                          : option.value === "chunker"
+                            ? "分块策略与窗口控制"
+                            : option.value === "enhancer"
+                              ? "内容增强与任务编排"
+                              : option.value === "enricher"
+                                ? "元数据补充与富集"
+                                : "向量索引前处理"
+                    }}
+                  </p>
                 </div>
               </div>
             </article>
-
-            <div class="admin-toolbar" style="margin-top: 8px;">
-              <div class="admin-toolbar-left">
-                <select v-model="pipelineNodeTypeDraft" class="admin-select">
-                  <option v-for="option in NODE_TYPE_OPTIONS" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </div>
-              <div class="admin-toolbar-right">
-                <button class="admin-button--ghost" type="button" @click="addPipelineNode(pipelineNodeTypeDraft)">添加节点</button>
-              </div>
-            </div>
-          </template>
+          </aside>
         </div>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closePipelineDialog">取消</button>
@@ -1540,58 +1565,101 @@ onMounted(() => {
     </div>
 
     <div v-if="taskDialogOpen" class="admin-dialog-overlay" @click.self="closeTaskDialog">
-      <div class="admin-dialog admin-dialog--wide">
+      <div class="admin-dialog admin-dialog--wide ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closeTaskDialog">&times;</button>
-        <h3>新建任务</h3>
-        <p>支持 file / url / feishu / s3 四类来源，本地文件会直接上传，限制为 {{ taskFileSizeLabel }}。</p>
-        <div class="admin-dialog-body">
-          <div class="admin-dialog-field">
-            <label>Pipeline</label>
-            <select v-model="taskForm.pipelineId" class="admin-select">
-              <option value="" disabled>请选择 pipeline</option>
-              <option v-for="pipeline in pipelineOptions" :key="pipeline.id" :value="pipeline.id">
-                {{ pipeline.name || pipeline.id }}
-              </option>
-            </select>
+        <div class="admin-dialog-header-stack">
+          <h3>新建任务</h3>
+          <p>支持 file / url / feishu / s3 四类来源，本地文件会直接上传，限制为 {{ taskFileSizeLabel }}。</p>
+          <div class="ingestion-dialog-chips">
+            <span class="admin-badge is-muted">Pipeline：{{ taskForm.pipelineId || "--" }}</span>
+            <span class="admin-badge is-muted">来源：{{ taskSourceTypeLabel }}</span>
+            <span class="admin-badge is-muted">文件上限：{{ taskFileSizeLabel }}</span>
           </div>
-          <div class="admin-dialog-field">
-            <label>来源类型</label>
-            <select v-model="taskForm.sourceType" class="admin-select">
-              <option value="file">file</option>
-              <option value="url">url</option>
-              <option value="feishu">feishu</option>
-              <option value="s3">s3</option>
-            </select>
-          </div>
-          <div v-if="taskForm.sourceType === 'file'" class="admin-dialog-field">
-            <label>本地文件</label>
-            <input type="file" class="admin-input" @change="handleTaskFileChange" />
-            <p class="admin-page-count">上传大小上限 {{ taskFileSizeLabel }}</p>
-          </div>
-          <template v-else>
+        </div>
+
+        <div class="ingestion-dialog-layout">
+          <div class="admin-dialog-body ingestion-dialog-main">
             <div class="admin-dialog-field">
-              <label>来源地址</label>
-              <input v-model="taskForm.location" class="admin-input" :placeholder="taskSourceMeta.locationPlaceholder" />
-              <p class="admin-page-count">{{ taskSourceMeta.locationHint }}</p>
+              <label>Pipeline</label>
+              <select v-model="taskForm.pipelineId" class="admin-select">
+                <option value="" disabled>请选择 pipeline</option>
+                <option v-for="pipeline in pipelineOptions" :key="pipeline.id" :value="pipeline.id">
+                  {{ pipeline.name || pipeline.id }}
+                </option>
+              </select>
             </div>
             <div class="admin-dialog-field">
-              <label>文件名</label>
-              <input v-model="taskForm.fileName" class="admin-input" placeholder="可选" />
+              <label>来源类型</label>
+              <select v-model="taskForm.sourceType" class="admin-select">
+                <option value="file">file</option>
+                <option value="url">url</option>
+                <option value="feishu">feishu</option>
+                <option value="s3">s3</option>
+              </select>
             </div>
-            <div v-if="showTaskCredentials" class="admin-dialog-field">
-              <label>凭证 JSON</label>
-              <textarea
-                v-model="taskForm.credentialsJson"
-                class="admin-textarea"
-                rows="4"
-                :placeholder="taskSourceMeta.credentialsHint || '{&quot;token&quot;:&quot;xxx&quot;}'"
-              />
+            <div v-if="taskForm.sourceType === 'file'" class="ingestion-subsection">
+              <div class="admin-dialog-field">
+                <label>本地文件</label>
+                <input type="file" class="admin-input" @change="handleTaskFileChange" />
+                <p class="admin-page-count">上传大小上限 {{ taskFileSizeLabel }}</p>
+              </div>
             </div>
-          </template>
-          <div class="admin-dialog-field">
-            <label>元数据 JSON</label>
-            <textarea v-model="taskForm.metadataJson" class="admin-textarea" rows="4" placeholder='{"source":"manual"}' />
+            <template v-else>
+              <div class="ingestion-subsection">
+                <div class="admin-dialog-field">
+                  <label>来源地址</label>
+                  <input v-model="taskForm.location" class="admin-input" :placeholder="taskSourceMeta.locationPlaceholder" />
+                  <p class="admin-page-count">{{ taskSourceMeta.locationHint }}</p>
+                </div>
+                <div class="admin-dialog-field">
+                  <label>文件名</label>
+                  <input v-model="taskForm.fileName" class="admin-input" placeholder="可选" />
+                </div>
+                <div v-if="showTaskCredentials" class="admin-dialog-field">
+                  <label>凭证 JSON</label>
+                  <textarea
+                    v-model="taskForm.credentialsJson"
+                    class="admin-textarea"
+                    rows="4"
+                    :placeholder="taskSourceMeta.credentialsHint || '{&quot;token&quot;:&quot;xxx&quot;}'"
+                  />
+                </div>
+              </div>
+            </template>
+            <div class="admin-dialog-field">
+              <label>元数据 JSON</label>
+              <textarea v-model="taskForm.metadataJson" class="admin-textarea" rows="4" placeholder='{"source":"manual"}' />
+            </div>
           </div>
+
+          <aside class="ingestion-dialog-aside">
+            <article class="admin-detail-card">
+              <h3>创建说明</h3>
+              <p class="admin-detail-card-desc">{{ taskDialogSourceHint }}</p>
+              <div class="admin-kv admin-kv--compact">
+                <div><dt>当前来源</dt><dd>{{ taskSourceTypeLabel }}</dd></div>
+                <div><dt>是否文件</dt><dd>{{ taskForm.sourceType === 'file' ? '是' : '否' }}</dd></div>
+                <div><dt>凭证区</dt><dd>{{ showTaskCredentials ? '显示' : '隐藏' }}</dd></div>
+              </div>
+            </article>
+            <article class="admin-detail-card">
+              <h3>来源参考</h3>
+              <div class="admin-card-list">
+                <div class="admin-card-item">
+                  <h3>file</h3>
+                  <p>本地文件直传，适合快速导入。</p>
+                </div>
+                <div class="admin-card-item">
+                  <h3>url</h3>
+                  <p>远程链接抓取，支持 http / https。</p>
+                </div>
+                <div class="admin-card-item">
+                  <h3>feishu / s3</h3>
+                  <p>适合文档平台和对象存储来源。</p>
+                </div>
+              </div>
+            </article>
+          </aside>
         </div>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeTaskDialog">取消</button>
@@ -1603,10 +1671,16 @@ onMounted(() => {
     </div>
 
     <div v-if="uploadDialogOpen" class="admin-dialog-overlay" @click.self="closeUploadDialog">
-      <div class="admin-dialog">
+      <div class="admin-dialog ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closeUploadDialog">&times;</button>
-        <h3>上传文件</h3>
-        <p>上传后会直接触发对应流水线的摄取任务，文件限制为 {{ taskFileSizeLabel }}。</p>
+        <div class="admin-dialog-header-stack">
+          <h3>上传文件</h3>
+          <p>上传后会直接触发对应流水线的摄取任务，文件限制为 {{ taskFileSizeLabel }}。</p>
+          <div class="ingestion-dialog-chips">
+            <span class="admin-badge is-muted">Pipeline：{{ uploadPipelineId || "--" }}</span>
+            <span class="admin-badge is-muted">限制：{{ taskFileSizeLabel }}</span>
+          </div>
+        </div>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>Pipeline</label>
@@ -1646,78 +1720,75 @@ onMounted(() => {
     </div>
 
     <div v-if="taskDetailOpen" class="admin-dialog-overlay" @click.self="closeTaskDetail">
-      <div class="admin-dialog admin-dialog--wide">
+      <div class="admin-dialog admin-dialog--wide ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closeTaskDetail">&times;</button>
-        <h3>Task 详情</h3>
-        <p>{{ taskDetailTarget?.id }} · {{ normalizeTaskStatus(taskDetailTarget?.status) }}</p>
+        <div class="admin-dialog-header-stack">
+          <h3>Task 详情</h3>
+          <p>{{ taskDetailTarget?.id }} · {{ normalizeTaskStatus(taskDetailTarget?.status) }}</p>
+          <div class="ingestion-dialog-chips">
+            <span class="admin-badge is-muted">Pipeline：{{ taskDetailTarget?.pipelineId || "--" }}</span>
+            <span class="admin-badge is-muted">来源：{{ taskDetailTarget?.sourceType || "--" }}</span>
+            <span class="admin-badge is-muted">分块数：{{ taskDetailTarget?.chunkCount ?? "--" }}</span>
+          </div>
+        </div>
 
         <div v-if="taskDetailLoading" class="admin-empty">加载中...</div>
-        <div v-else>
-          <div class="admin-kv" style="margin-bottom: 16px;">
-            <div>
-              <dt>Pipeline</dt>
-              <dd>{{ taskDetailTarget?.pipelineId || "--" }}</dd>
+        <div v-else class="ingestion-task-detail">
+          <section class="ingestion-task-detail__summary">
+            <div class="admin-kv admin-kv--compact">
+              <div><dt>Pipeline</dt><dd>{{ taskDetailTarget?.pipelineId || "--" }}</dd></div>
+              <div><dt>来源</dt><dd>{{ taskDetailTarget?.sourceLocation || taskDetailTarget?.sourceFileName || "--" }}</dd></div>
+              <div><dt>来源类型</dt><dd>{{ taskDetailTarget?.sourceType || "--" }}</dd></div>
+              <div><dt>分块数</dt><dd>{{ taskDetailTarget?.chunkCount ?? "--" }}</dd></div>
+              <div><dt>开始时间</dt><dd>{{ formatDateTime(taskDetailTarget?.startedAt || taskDetailTarget?.createTime) }}</dd></div>
+              <div><dt>结束时间</dt><dd>{{ formatDateTime(taskDetailTarget?.completedAt) }}</dd></div>
             </div>
-            <div>
-              <dt>来源</dt>
-              <dd>{{ taskDetailTarget?.sourceLocation || taskDetailTarget?.sourceFileName || "--" }}</dd>
-            </div>
-            <div>
-              <dt>来源类型</dt>
-              <dd>{{ taskDetailTarget?.sourceType || "--" }}</dd>
-            </div>
-            <div>
-              <dt>分块数</dt>
-              <dd>{{ taskDetailTarget?.chunkCount ?? "--" }}</dd>
-            </div>
-            <div>
-              <dt>开始时间</dt>
-              <dd>{{ formatDateTime(taskDetailTarget?.startedAt || taskDetailTarget?.createTime) }}</dd>
-            </div>
-            <div>
-              <dt>结束时间</dt>
-              <dd>{{ formatDateTime(taskDetailTarget?.completedAt) }}</dd>
-            </div>
-          </div>
 
-          <div v-if="taskDetailTarget?.errorMessage" class="admin-notice is-error" style="margin-bottom: 16px;">
-            {{ taskDetailTarget.errorMessage }}
-          </div>
+            <div v-if="taskDetailTarget?.errorMessage" class="admin-notice is-error">
+              {{ taskDetailTarget.errorMessage }}
+            </div>
 
-          <div v-if="taskDetailTarget?.metadata" class="admin-dialog-field" style="margin-bottom: 16px;">
-            <label>Metadata</label>
-            <pre class="admin-pre">{{ prettyJson(taskDetailTarget.metadata) }}</pre>
-          </div>
+            <div v-if="taskDetailTarget?.metadata" class="admin-dialog-field">
+              <label>Metadata</label>
+              <pre class="admin-pre">{{ prettyJson(taskDetailTarget.metadata) }}</pre>
+            </div>
+          </section>
 
-          <h3 style="margin-top: 0;">Task Nodes</h3>
-          <div v-if="taskDetailNodes.length === 0" class="admin-empty">暂无节点数据</div>
-          <div v-else class="admin-table-wrap">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>节点</th>
-                  <th>类型</th>
-                  <th>状态</th>
-                  <th>耗时</th>
-                  <th>消息</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="node in taskDetailNodes" :key="node.id">
-                  <td class="is-code">{{ node.nodeId }}</td>
-                  <td>{{ node.nodeType }}</td>
-                  <td>
-                    <span :class="['admin-badge', taskStatusBadgeClass(node.status)]">{{ normalizeTaskStatus(node.status) || "--" }}</span>
-                  </td>
-                  <td>{{ node.durationMs ?? "-" }} ms</td>
-                  <td>
-                    <div class="admin-list-meta">{{ node.message || node.errorMessage || "-" }}</div>
-                    <pre class="admin-pre" v-if="node.output">{{ prettyJson(node.output) }}</pre>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <section class="ingestion-task-detail__nodes">
+            <div class="admin-toolbar" style="margin-bottom: 12px;">
+              <div class="admin-toolbar-left">
+                <span class="admin-page-count">Task Nodes</span>
+              </div>
+            </div>
+            <div v-if="taskDetailNodes.length === 0" class="admin-empty">暂无节点数据</div>
+            <div v-else class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>节点</th>
+                    <th>类型</th>
+                    <th>状态</th>
+                    <th>耗时</th>
+                    <th>消息</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="node in taskDetailNodes" :key="node.id">
+                    <td class="is-code">{{ node.nodeId }}</td>
+                    <td>{{ node.nodeType }}</td>
+                    <td>
+                      <span :class="['admin-badge', taskStatusBadgeClass(node.status)]">{{ normalizeTaskStatus(node.status) || "--" }}</span>
+                    </td>
+                    <td>{{ node.durationMs ?? "-" }} ms</td>
+                    <td>
+                      <div class="admin-list-meta">{{ node.message || node.errorMessage || "-" }}</div>
+                      <pre class="admin-pre" v-if="node.output">{{ prettyJson(node.output) }}</pre>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -1728,8 +1799,15 @@ onMounted(() => {
 .ingestion-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background:
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.88));
+  box-shadow: var(--admin-shadow);
 }
 
 .ingestion-hero-copy {
@@ -1739,7 +1817,8 @@ onMounted(() => {
 
 .ingestion-hero-copy h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1.25;
 }
 
 .ingestion-hero-copy p {
@@ -1753,13 +1832,14 @@ onMounted(() => {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .ingestion-hero-side {
   display: grid;
   gap: 12px;
   min-width: 220px;
-  padding: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-radius-lg);
   background: rgba(255, 255, 255, 0.76);
@@ -1787,6 +1867,13 @@ onMounted(() => {
   display: grid;
   gap: 16px;
   margin: 20px 0;
+  padding: 20px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background:
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.06), transparent 22%),
+    rgba(255, 255, 255, 0.92);
+  box-shadow: var(--admin-shadow);
 }
 
 .ingestion-summary__copy {
@@ -1847,8 +1934,8 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
-  padding: 0 14px;
+  height: 38px;
+  padding: 0 16px;
   border: 1px solid var(--admin-line);
   border-radius: 999px;
   background: var(--admin-bg-soft);
@@ -1862,10 +1949,12 @@ onMounted(() => {
   border-color: var(--admin-accent);
   background: var(--admin-accent);
   color: #fff;
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.18);
 }
 
 .ingestion-layout {
   align-items: start;
+  margin-top: 2px;
 }
 
 .ingestion-main {
@@ -1887,6 +1976,89 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.ingestion-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-dialog-header-stack {
+  display: grid;
+  gap: 8px;
+  padding-right: 24px;
+}
+
+.admin-dialog-header-stack h3 {
+  margin: 0;
+}
+
+.admin-dialog-header-stack p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.ingestion-dialog-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ingestion-dialog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+.ingestion-dialog-main {
+  display: grid;
+  gap: 14px;
+}
+
+.ingestion-dialog-aside {
+  display: grid;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}
+
+.ingestion-dialog-section {
+  display: grid;
+  gap: 12px;
+}
+
+.ingestion-node-card {
+  display: grid;
+  gap: 14px;
+}
+
+.ingestion-task-card {
+  display: grid;
+  gap: 12px;
+}
+
+.ingestion-subsection {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.ingestion-node-footer {
+  margin-top: 8px;
+}
+
+.ingestion-task-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.ingestion-task-detail__summary,
+.ingestion-task-detail__nodes {
+  display: grid;
+  gap: 14px;
+}
+
 @media (max-width: 960px) {
   .ingestion-hero {
     grid-template-columns: 1fr;
@@ -1906,6 +2078,20 @@ onMounted(() => {
 
   .ingestion-hero-side {
     min-width: 0;
+  }
+
+  .ingestion-dialog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ingestion-dialog-aside {
+    position: static;
+  }
+}
+
+@media (max-width: 1100px) {
+  .ingestion-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

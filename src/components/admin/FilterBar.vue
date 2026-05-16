@@ -46,7 +46,7 @@ const status = computed({
       <input v-model="conversationId" class="admin-input" type="search" placeholder="筛选 Conversation ID" />
       <input v-model="taskId" class="admin-input" type="search" placeholder="筛选 Task ID" />
 
-      <select v-model="status" class="admin-input">
+      <select v-model="status" class="admin-select">
         <option v-for="option in statusOptions" :key="option.value || '__all__'" :value="option.value">
           {{ option.label }}
         </option>
@@ -60,7 +60,7 @@ const status = computed({
           刷新
         </button>
         <button class="admin-button" type="button" :disabled="loading" @click="$emit('search')">
-          查询
+          搜索
         </button>
       </div>
     </div>
@@ -72,7 +72,7 @@ const status = computed({
   padding: 18px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-radius-lg);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--admin-shadow);
 }
 
@@ -81,6 +81,10 @@ const status = computed({
   grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
   gap: 12px;
   align-items: center;
+}
+
+.admin-select {
+  width: 100%;
 }
 
 .admin-filter-actions {
@@ -108,4 +112,3 @@ const status = computed({
   }
 }
 </style>
-

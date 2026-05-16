@@ -2,7 +2,7 @@ export const adminNavGroups = [
   {
     title: "导航",
     items: [
-      { label: "Dashboard", to: "/admin/dashboard", icon: "D" },
+      { label: "Dashboard", to: "/admin/dashboard", icon: "DB" },
       { label: "知识库管理", to: "/admin/knowledge", icon: "KB" },
       {
         id: "intent",
@@ -10,8 +10,8 @@ export const adminNavGroups = [
         to: "/admin/intent-tree",
         icon: "IT",
         children: [
-          { label: "意图树配置", to: "/admin/intent-tree", icon: "T" },
-          { label: "意图列表", to: "/admin/intent-list", icon: "L" }
+          { label: "意图树配置", to: "/admin/intent-tree", icon: "TR" },
+          { label: "意图列表", to: "/admin/intent-list", icon: "LS" }
         ]
       },
       {
@@ -20,26 +20,26 @@ export const adminNavGroups = [
         to: "/admin/ingestion",
         icon: "IN",
         children: [
-          { label: "流水线管理", to: "/admin/ingestion?tab=pipelines", icon: "P" },
-          { label: "流水线任务", to: "/admin/ingestion?tab=tasks", icon: "T" }
+          { label: "流水线管理", to: "/admin/ingestion?tab=pipelines", icon: "PL" },
+          { label: "流水线任务", to: "/admin/ingestion?tab=tasks", icon: "TS" }
         ]
       },
-      { label: "关键词映射", to: "/admin/mappings", icon: "M" },
-      { label: "链路追踪", to: "/admin/traces", icon: "R" }
+      { label: "关键词映射", to: "/admin/mappings", icon: "MP" },
+      { label: "链路追踪", to: "/admin/traces", icon: "TR" }
     ]
   },
   {
     title: "设置",
     items: [
-      { label: "用户管理", to: "/admin/users", icon: "U" },
-      { label: "示例问题", to: "/admin/sample-questions", icon: "Q" },
-      { label: "系统设置", to: "/admin/settings", icon: "S" }
+      { label: "用户管理", to: "/admin/users", icon: "US" },
+      { label: "示例问题", to: "/admin/sample-questions", icon: "SQ" },
+      { label: "系统设置", to: "/admin/settings", icon: "ST" }
     ]
   }
 ];
 
 export function formatDateTime(value) {
-  if (!value) {
+  if (!value && value !== 0) {
     return "--";
   }
 
@@ -53,8 +53,33 @@ export function formatDateTime(value) {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
   });
+}
+
+export function formatDuration(value) {
+  if (value === null || value === undefined) {
+    return "--";
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "--";
+  }
+
+  if (numeric < 1000) {
+    return `${Math.round(numeric)}ms`;
+  }
+
+  if (numeric < 60000) {
+    return `${(numeric / 1000).toFixed(2)}s`;
+  }
+
+  const minutes = Math.floor(numeric / 60000);
+  const seconds = ((numeric % 60000) / 1000).toFixed(1);
+  return `${minutes}m ${seconds}s`;
 }
 
 export function formatRelativeStatus(value) {
@@ -89,9 +114,9 @@ export function normalizeBooleanLabel(value) {
 
 export function flattenIntentTree(nodes = [], depth = 0, parent = null, parentNames = [], parentCodes = []) {
   return safeArray(nodes).flatMap((node) => {
+    const children = safeArray(node.children);
     const currentNames = [...parentNames, node.name];
     const currentCodes = [...parentCodes, node.intentCode];
-    const children = node.children || [];
     const current = {
       ...node,
       depth,
@@ -109,13 +134,19 @@ export function flattenIntentTree(nodes = [], depth = 0, parent = null, parentNa
 }
 
 function parseExamplesCount(value) {
-  if (!value) return 0;
+  if (!value) {
+    return 0;
+  }
+
   try {
     const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) return parsed.length;
+    if (Array.isArray(parsed)) {
+      return parsed.length;
+    }
   } catch {
     // ignore parse errors
   }
+
   return String(value).split("\n").filter(Boolean).length;
 }
 

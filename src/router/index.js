@@ -26,12 +26,12 @@ const IntentEditPage = () => import("../views/admin/IntentEditPage.vue");
 
 function resolveRedirectTarget(target) {
   if (typeof target !== "string") {
-    return "/chat";
+    return "/workspace";
   }
 
   const normalizedTarget = target.trim();
   if (!normalizedTarget.startsWith("/") || normalizedTarget.startsWith("/login") || normalizedTarget.startsWith("/register")) {
-    return "/chat";
+    return "/workspace";
   }
 
   return normalizedTarget;
@@ -42,7 +42,7 @@ const router = createRouter({
   routes: [
     {
       path: "/",
-      redirect: "/chat"
+      redirect: "/workspace"
     },
     {
       path: "/workspace",
@@ -270,7 +270,7 @@ router.beforeEach((to) => {
   }
 
   if (requiresAdmin && !isAdminUser(user)) {
-    return "/chat";
+    return "/workspace";
   }
 
   if (to.name === "login" && isAuthenticated) {

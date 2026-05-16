@@ -9,7 +9,7 @@ const route = useRoute();
 const router = useRouter();
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim();
 const AUTH_API_PREFIX = "/luoluo";
-const DEFAULT_AUTH_REDIRECT = "/chat";
+const DEFAULT_AUTH_REDIRECT = "/workspace";
 
 const showPassword = ref(false);
 const authMode = ref(route.query.mode === "register" ? "register" : "login");

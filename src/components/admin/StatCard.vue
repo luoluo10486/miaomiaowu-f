@@ -43,7 +43,9 @@ defineProps({
   padding: 18px 20px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-radius-lg);
-  background: rgba(255, 255, 255, 0.94);
+  background:
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.06), transparent 26%),
+    rgba(255, 255, 255, 0.94);
   box-shadow: var(--admin-shadow);
 }
 
@@ -58,7 +60,7 @@ defineProps({
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 700;
 }
@@ -100,7 +102,7 @@ defineProps({
   display: block;
   margin-top: 4px;
   color: var(--admin-ink);
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.2;
   font-weight: 700;
 }
@@ -112,4 +114,3 @@ defineProps({
   line-height: 1.6;
 }
 </style>
-

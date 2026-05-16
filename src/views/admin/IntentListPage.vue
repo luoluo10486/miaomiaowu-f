@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import {
@@ -12,12 +13,13 @@ import {
 import { flattenIntentTree, formatDateTime } from "./adminShared";
 
 const router = useRouter();
+const route = useRoute();
 
 const loading = ref(false);
 const errorText = ref("");
 const tree = ref([]);
-const keyword = ref("");
 const keywordInput = ref("");
+const keyword = ref("");
 const levelFilter = ref("ALL");
 const kindFilter = ref("ALL");
 const statusFilter = ref("ALL");
@@ -44,6 +46,27 @@ const KIND_OPTIONS = [
   { value: 2, label: "MCP" }
 ];
 
+function resolveLevelLabel(value) {
+  return LEVEL_OPTIONS.find((option) => option.value === value)?.label ?? "UNKNOWN";
+}
+
+function resolveKindLabel(value) {
+  return KIND_OPTIONS.find((option) => option.value === value)?.label ?? "UNKNOWN";
+}
+
+function resolveLevelBadgeClass(value) {
+  if (value === 0) return "is-info";
+  if (value === 1) return "is-success";
+  if (value === 2) return "is-warn";
+  return "is-muted";
+}
+
+function resolveResourceText(row) {
+  if (row.kind === 0) return row.collectionName || "--";
+  if (row.kind === 2) return row.mcpToolId || "--";
+  return "系统意图";
+}
+
 const rows = computed(() => flattenIntentTree(tree.value));
 
 const parentOptions = computed(() => [
@@ -59,7 +82,10 @@ const filteredRows = computed(() => {
   const normalizedKeyword = keyword.value.trim().toLowerCase();
   return rows.value.filter((row) => {
     if (normalizedKeyword) {
-      const searchable = [row.name, row.intentCode, String(row.id), row.pathText].join(" ").toLowerCase();
+      const searchable = [row.name, row.intentCode, String(row.id), row.pathText, row.description]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
       if (!searchable.includes(normalizedKeyword)) return false;
     }
     if (levelFilter.value !== "ALL" && row.level !== Number(levelFilter.value)) return false;
@@ -83,6 +109,7 @@ const currentPage = computed(() => Math.min(pageNo.value, totalPages.value));
 const startIndex = computed(() => (currentPage.value - 1) * pageSize.value);
 const pageRows = computed(() => filteredRows.value.slice(startIndex.value, startIndex.value + pageSize.value));
 const selectedIdSet = computed(() => new Set(selectedIds.value));
+const selectedRows = computed(() => rows.value.filter((row) => selectedIdSet.value.has(row.id)));
 const pageRowIds = computed(() => pageRows.value.map((row) => row.id));
 const allPageSelected = computed(() => pageRowIds.value.length > 0 && pageRowIds.value.every((id) => selectedIdSet.value.has(id)));
 const somePageSelected = computed(() => !allPageSelected.value && pageRowIds.value.some((id) => selectedIdSet.value.has(id)));
@@ -90,29 +117,34 @@ const rangeStart = computed(() => (total.value === 0 ? 0 : startIndex.value + 1)
 const rangeEnd = computed(() => (total.value === 0 ? 0 : Math.min(startIndex.value + pageRows.value.length, total.value)));
 const focusRow = computed(() => pageRows.value[0] || filteredRows.value[0] || null);
 const latestRow = computed(() => rows.value[0] || null);
-const selectedRows = computed(() => rows.value.filter((row) => selectedIdSet.value.has(row.id)));
 const activeFilterCount = computed(
   () => [keyword.value, levelFilter.value, kindFilter.value, statusFilter.value, parentFilter.value].filter((value) => value && value !== "ALL").length
 );
+
 const currentFilterSummary = computed(() => {
   const parts = [];
-  if (keyword.value) parts.push(`关键词: ${keyword.value}`);
+  if (keyword.value) parts.push(`关键字: ${keyword.value}`);
   if (levelFilter.value !== "ALL") parts.push(`层级: ${resolveLevelLabel(Number(levelFilter.value))}`);
   if (kindFilter.value !== "ALL") parts.push(`类型: ${resolveKindLabel(Number(kindFilter.value))}`);
   if (statusFilter.value !== "ALL") parts.push(`状态: ${statusFilter.value}`);
   if (parentFilter.value !== "ALL") parts.push(`父节点: ${parentFilter.value}`);
   return parts.length > 0 ? parts.join(" · ") : "全部";
 });
+
 const latestRowLabel = computed(() => {
   if (!latestRow.value) return "--";
   return `${latestRow.value.name || latestRow.value.intentCode || "--"} · ${resolveLevelLabel(latestRow.value.level)}`;
 });
+
 const focusRowLabel = computed(() => {
   if (!focusRow.value) return "--";
   return `${focusRow.value.name || focusRow.value.intentCode || "--"} · ${resolveKindLabel(focusRow.value.kind)}`;
 });
-const pageSummaryLabel = computed(() => `当前页 ${currentPage.value}/${totalPages.value} · 共 ${total.value}`);
+
+const pageSummaryLabel = computed(() => `第 ${currentPage.value}/${totalPages.value} 页 · 共 ${total.value}`);
 const selectedSummaryLabel = computed(() => (selectedRows.value.length > 0 ? `已选 ${selectedRows.value.length} 项` : "未选择"));
+const currentFromRoute = computed(() => route.fullPath || "/admin/intent-list");
+
 const intentListHeroSummary = computed(() => [
   { label: "当前筛选", value: currentFilterSummary.value },
   { label: "当前页", value: pageSummaryLabel.value },
@@ -122,52 +154,11 @@ const intentListHeroSummary = computed(() => [
 ]);
 
 const stats = computed(() => [
-  {
-    title: "Total",
-    value: rows.value.length,
-    hint: "意图树总节点数",
-    tone: "indigo"
-  },
-  {
-    title: "Visible",
-    value: filteredRows.value.length,
-    hint: "当前筛选命中的节点",
-    tone: "cyan"
-  },
-  {
-    title: "Enabled",
-    value: filteredRows.value.filter((row) => row.enabled !== 0).length,
-    hint: "当前筛选中已启用节点",
-    tone: "emerald"
-  },
-  {
-    title: "Selected",
-    value: selectedIds.value.length,
-    hint: "当前勾选节点数",
-    tone: "amber"
-  }
+  { title: "Total", value: rows.value.length, hint: "意图树总节点数", tone: "indigo" },
+  { title: "Visible", value: filteredRows.value.length, hint: "当前筛选命中的节点", tone: "cyan" },
+  { title: "Enabled", value: filteredRows.value.filter((row) => row.enabled !== 0).length, hint: "当前筛选中已启用节点", tone: "emerald" },
+  { title: "Selected", value: selectedIds.value.length, hint: "当前勾选节点数", tone: "amber" }
 ]);
-
-function resolveLevelLabel(value) {
-  return LEVEL_OPTIONS.find((option) => option.value === value)?.label ?? "UNKNOWN";
-}
-
-function resolveKindLabel(value) {
-  return KIND_OPTIONS.find((option) => option.value === value)?.label ?? "UNKNOWN";
-}
-
-function resolveLevelBadgeClass(value) {
-  if (value === 0) return "is-info";
-  if (value === 1) return "is-success";
-  if (value === 2) return "is-warn";
-  return "is-muted";
-}
-
-function resolveResourceText(row) {
-  if (row.kind === 0) return row.collectionName || "-";
-  if (row.kind === 2) return row.mcpToolId || "-";
-  return "系统意图";
-}
 
 async function loadTree() {
   loading.value = true;
@@ -197,7 +188,6 @@ function handleSearch() {
 }
 
 function handleRefresh() {
-  pageNo.value = 1;
   void loadTree();
 }
 
@@ -233,11 +223,11 @@ function togglePageSelect(checked) {
 }
 
 async function runBatchUpdateEnabled(enabled) {
-  const selectedRows = rows.value.filter((row) => selectedIdSet.value.has(row.id));
-  if (selectedRows.length === 0 || batchSubmitting.value) return;
+  const selected = rows.value.filter((row) => selectedIdSet.value.has(row.id));
+  if (selected.length === 0 || batchSubmitting.value) return;
   batchSubmitting.value = enabled === 1 ? "enable" : "disable";
   try {
-    const targetIds = selectedRows.map((row) => row.id);
+    const targetIds = selected.map((row) => row.id);
     if (enabled === 1) {
       await batchEnableIntentNodes(targetIds);
     } else {
@@ -253,9 +243,9 @@ async function runBatchUpdateEnabled(enabled) {
 }
 
 function openBatchDeleteDialog() {
-  const selectedRows = rows.value.filter((row) => selectedIdSet.value.has(row.id));
-  if (selectedRows.length === 0 || batchSubmitting.value) return;
-  deleteDialogTarget.value = { count: selectedRows.length, ids: selectedRows.map((row) => row.id) };
+  const selected = rows.value.filter((row) => selectedIdSet.value.has(row.id));
+  if (selected.length === 0 || batchSubmitting.value) return;
+  deleteDialogTarget.value = { count: selected.length, ids: selected.map((row) => row.id) };
   deleteDialogOpen.value = true;
 }
 
@@ -275,12 +265,12 @@ async function handleBatchDelete() {
   }
 }
 
-function handleEdit(row) {
-  router.push(`/admin/intent-list/${row.id}/edit?from=${encodeURIComponent("/admin/intent-list")}`);
-}
-
 function handleLocateInTree(row) {
   router.push(`/admin/intent-tree?intentCode=${encodeURIComponent(row.intentCode)}`);
+}
+
+function goToEdit(row) {
+  router.push(`/admin/intent-list/${row.id}/edit?from=${encodeURIComponent(currentFromRoute.value)}`);
 }
 
 onMounted(() => {
@@ -289,11 +279,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page intent-list-page">
     <PageHeader
       tag="Intent List"
       title="意图列表"
-      description="支持多维筛选、批量操作和快速定位到意图树节点。"
+      description="支持多维筛选、分页查看和批量操作，快速定位到意图树中的具体节点。"
     >
       <template #meta>
         <div class="intent-list-header-meta">
@@ -301,7 +291,7 @@ onMounted(() => {
           <span class="admin-badge is-muted">当前页：{{ pageRows.length }}</span>
           <span class="admin-badge is-muted">已选中：{{ selectedRows.length }}</span>
           <span class="admin-badge is-muted">焦点：{{ focusRowLabel }}</span>
-          <span class="admin-badge is-muted">首项：{{ latestRowLabel }}</span>
+          <span class="admin-badge is-muted">最新：{{ latestRowLabel }}</span>
         </div>
       </template>
       <template #actions>
@@ -320,40 +310,10 @@ onMounted(() => {
       <div class="intent-list-hero__copy">
         <p class="trace-hero-tag">Intent Overview</p>
         <h2>当前筛选 {{ activeFilterCount }} 项</h2>
-        <p>先通过多维条件缩小意图节点范围，再用路径跳转进入树视图定位上下文，保留批量启停和删除工作流。</p>
+        <p>先通过多条件缩小节点范围，再用路径跳转定位树视图，保留批量启停和删除的工作流。</p>
       </div>
       <div class="intent-list-hero__grid">
-        <div>
-          <span>总数</span>
-          <strong>{{ total }}</strong>
-        </div>
-        <div>
-          <span>当前页</span>
-          <strong>{{ pageSummaryLabel }}</strong>
-        </div>
-        <div>
-          <span>已选中</span>
-          <strong>{{ selectedSummaryLabel }}</strong>
-        </div>
-        <div>
-          <span>当前页首项</span>
-          <strong>{{ focusRowLabel }}</strong>
-        </div>
-        <div>
-          <span>最新节点</span>
-          <strong>{{ latestRowLabel }}</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="admin-detail-card intent-list-summary">
-      <div class="intent-list-summary__copy">
-        <p class="trace-hero-tag">Intent Summary</p>
-        <h2>节点状态概览</h2>
-        <p>对齐 frontend 的管理页节奏，先给出筛选、分页和选择状态，再进入表格处理具体节点。</p>
-      </div>
-      <div class="intent-list-summary__grid">
-        <div v-for="item in intentListHeroSummary" :key="item.label" class="intent-list-summary__item">
+        <div v-for="item in intentListHeroSummary" :key="item.label" class="intent-list-hero__item">
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
         </div>
@@ -372,7 +332,13 @@ onMounted(() => {
 
         <div class="admin-toolbar">
           <div class="admin-toolbar-left" style="flex-wrap:wrap;gap:8px;">
-            <input v-model="keywordInput" class="admin-input admin-search-input" placeholder="搜索意图名称 / ID / 路径..." style="max-width:280px;" @keydown.enter.prevent="handleSearch" />
+            <input
+              v-model="keywordInput"
+              class="admin-input admin-search-input"
+              placeholder="搜索意图名称 / ID / 路径..."
+              style="max-width:280px;"
+              @keydown.enter.prevent="handleSearch"
+            />
             <select v-model="levelFilter" class="admin-select" @change="pageNo = 1">
               <option value="ALL">全部层级</option>
               <option v-for="opt in LEVEL_OPTIONS" :key="opt.value" :value="String(opt.value)">{{ opt.label }}</option>
@@ -390,7 +356,7 @@ onMounted(() => {
               <option v-for="opt in parentOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleSearch">搜索</button>
-            <button class="admin-button--ghost" type="button" style="color:var(--admin-warn,#dc2626);" @click="resetFilters">清空筛选</button>
+            <button class="admin-button--ghost" type="button" @click="resetFilters">清空筛选</button>
           </div>
           <div class="admin-toolbar-right">
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
@@ -434,8 +400,8 @@ onMounted(() => {
                 </td>
                 <td>
                   <div>
-                    <strong style="color:var(--admin-ink,#1e293b);">{{ row.name }}</strong>
-                    <small class="is-code" style="margin-left:6px;">{{ row.intentCode }}</small>
+                    <strong class="admin-cell-title">{{ row.name }}</strong>
+                    <small class="is-code">{{ row.intentCode }}</small>
                   </div>
                 </td>
                 <td><span :class="['admin-badge', resolveLevelBadgeClass(row.level)]">{{ resolveLevelLabel(row.level) }}</span></td>
@@ -456,7 +422,7 @@ onMounted(() => {
                 </td>
                 <td>
                   <div>
-                    <span style="color:var(--admin-ink,#1e293b);">{{ resolveResourceText(row) }}</span>
+                    <span>{{ resolveResourceText(row) }}</span>
                     <br />
                     <small class="admin-list-meta">TopK: {{ row.topK ?? "全局默认" }}</small>
                   </div>
@@ -469,7 +435,7 @@ onMounted(() => {
                 </td>
                 <td>
                   <div class="admin-inline-actions">
-                    <button class="admin-button--ghost" type="button" @click="handleEdit(row)">编辑</button>
+                    <button class="admin-button--ghost" type="button" @click="goToEdit(row)">编辑</button>
                     <button class="admin-button--ghost" type="button" @click="handleLocateInTree(row)">定位树</button>
                   </div>
                 </td>
@@ -497,10 +463,10 @@ onMounted(() => {
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
           <h3>筛选概览</h3>
-          <p class="admin-detail-card-desc">当前筛选条件与结果数量。</p>
+          <p class="admin-detail-card-desc">当前列表的筛选条件与结果数。</p>
           <div class="admin-kv">
             <div><dt>摘要</dt><dd>{{ currentFilterSummary }}</dd></div>
-            <div><dt>关键词</dt><dd>{{ keyword || "--" }}</dd></div>
+            <div><dt>关键字</dt><dd>{{ keyword || "--" }}</dd></div>
             <div><dt>层级</dt><dd>{{ levelFilter === "ALL" ? "全部" : resolveLevelLabel(Number(levelFilter)) }}</dd></div>
             <div><dt>类型</dt><dd>{{ kindFilter === "ALL" ? "全部" : resolveKindLabel(Number(kindFilter)) }}</dd></div>
             <div><dt>状态</dt><dd>{{ statusFilter === "ALL" ? "全部" : statusFilter }}</dd></div>
@@ -511,7 +477,7 @@ onMounted(() => {
 
         <article class="admin-detail-card">
           <h3>节点预览</h3>
-          <p class="admin-detail-card-desc">展示当前分页的首个节点，帮助快速判断路径和资源归属。</p>
+          <p class="admin-detail-card-desc">显示当前页首条节点的路径和资源信息。</p>
           <div v-if="focusRow" class="admin-kv">
             <div><dt>名称</dt><dd>{{ focusRow.name }}</dd></div>
             <div><dt>Intent Code</dt><dd class="is-code">{{ focusRow.intentCode }}</dd></div>
@@ -542,6 +508,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.intent-list-page {
+  display: grid;
+  gap: 18px;
+}
+
+.intent-list-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .intent-list-hero {
   display: grid;
   gap: 16px;
@@ -573,27 +551,20 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.intent-list-header-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .intent-list-hero__grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
-.intent-list-hero__grid > div {
+.intent-list-hero__item {
   padding: 14px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-radius-md);
   background: rgba(255, 255, 255, 0.84);
 }
 
-.intent-list-hero__grid span {
+.intent-list-hero__item span {
   display: block;
   color: var(--admin-muted);
   font-size: 12px;
@@ -601,7 +572,7 @@ onMounted(() => {
   letter-spacing: 0.08em;
 }
 
-.intent-list-hero__grid strong {
+.intent-list-hero__item strong {
   display: block;
   margin-top: 6px;
   color: var(--admin-ink);
@@ -609,63 +580,44 @@ onMounted(() => {
   word-break: break-word;
 }
 
-.intent-list-summary {
-  display: grid;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.intent-list-summary__copy {
-  display: grid;
-  gap: 8px;
-}
-
-.intent-list-summary__copy h2 {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.25;
-}
-
-.intent-list-summary__copy p {
-  margin: 0;
-  color: var(--admin-ink-soft);
-  line-height: 1.7;
-}
-
-.intent-list-summary__grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.intent-list-summary__item {
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  border: 1px solid var(--admin-line);
-  border-radius: var(--admin-radius-md);
-  background: rgba(255, 255, 255, 0.84);
-}
-
-.intent-list-summary__item span {
-  color: var(--admin-muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.intent-list-summary__item strong {
+.admin-cell-title {
+  display: block;
   color: var(--admin-ink);
   font-size: 15px;
-  word-break: break-word;
+}
+
+.admin-path-segments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.admin-path-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--admin-ink-soft);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.admin-path-btn.is-current {
+  color: var(--admin-ink);
+  font-weight: 600;
+}
+
+.admin-path-sep {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.admin-list-meta {
+  color: var(--admin-muted);
 }
 
 @media (max-width: 960px) {
   .intent-list-hero__grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .intent-list-summary__grid {
     grid-template-columns: 1fr 1fr;
   }
 }

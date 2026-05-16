@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 
 function goHome() {
-  router.replace("/chat");
+  router.replace("/workspace");
 }
 </script>
 
@@ -15,7 +15,7 @@ function goHome() {
       <h1>页面不存在</h1>
       <p>你访问的路径没有匹配到任何页面。可以回到问答页继续，或返回管理入口。</p>
       <div class="not-found-actions">
-        <button type="button" class="not-found-button" @click="goHome">回到问答页</button>
+        <button type="button" class="not-found-button" @click="goHome">回到工作台</button>
       </div>
     </div>
   </div>

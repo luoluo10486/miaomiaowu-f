@@ -66,10 +66,10 @@ function handleFeedback(value) {
             @click="thinkingExpanded = !thinkingExpanded"
           >
             <div class="message-item__thinking-head">
-              <span class="message-item__thinking-icon">鈼?</span>
-              <span class="message-item__thinking-label">娣卞害鎬濊€?</span>
+              <span class="message-item__thinking-icon">◌</span>
+              <span class="message-item__thinking-label">深度思考</span>
               <span v-if="message.thinkingDuration" class="message-item__thinking-badge">
-                {{ message.thinkingDuration }}绉?
+                {{ message.thinkingDuration }}秒
               </span>
             </div>
             <svg
@@ -97,13 +97,13 @@ function handleFeedback(value) {
           <RagMarkdownRenderer v-if="hasContent" :content="message.content" />
 
           <p v-else-if="message.status === 'error'" class="message-item__status is-error">
-            鐢熸垚澶辫触锛岃绋嶅悗閲嶈瘯
+            生成失败，请稍后重试
           </p>
           <p v-else-if="message.status === 'cancelled'" class="message-item__status">
-            宸插仠姝㈢敓鎴?
+            已停止生成
           </p>
           <p v-else-if="message.status === 'streaming'" class="message-item__status">
-            绛夊緟鍥炵瓟...
+            等待回答...
           </p>
 
           <div v-if="showFeedback" class="message-item__actions">

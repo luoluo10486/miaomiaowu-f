@@ -34,8 +34,8 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
   <section class="admin-table-card">
     <div class="admin-table-card__header">
       <div>
-        <h2>运行列表</h2>
-        <p>按时间倒序查看运行记录，点击任一条目进入详情页分析节点执行细节。</p>
+        <h2>链路追踪列表</h2>
+        <p>按时间倒序查看运行记录，点击任意一条即可进入详情页分析节点执行细节。</p>
       </div>
       <span class="admin-page-count">共 {{ total.toLocaleString("zh-CN") }} 条</span>
     </div>
@@ -243,4 +243,3 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
   }
 }
 </style>
-

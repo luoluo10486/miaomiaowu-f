@@ -43,7 +43,7 @@ defineProps({
   border-radius: var(--admin-radius-lg);
   background:
     radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.88));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.9));
   box-shadow: var(--admin-shadow-lg);
 }
 
@@ -63,7 +63,7 @@ defineProps({
 .admin-page-header-title {
   margin: 0;
   color: var(--admin-ink);
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.25;
   font-weight: 700;
 }
@@ -98,4 +98,3 @@ defineProps({
   }
 }
 </style>
-

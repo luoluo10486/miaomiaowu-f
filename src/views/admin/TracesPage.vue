@@ -1,18 +1,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import FilterBar from "../../components/admin/FilterBar.vue";
 import RunsTable from "../../components/admin/RunsTable.vue";
 import { getRagTraceRuns } from "../../services/ragTraceService";
-import {
-  DEFAULT_FILTERS,
-  PAGE_SIZE,
-  STATUS_OPTIONS,
-  normalizeStatus,
-  percentile
-} from "./traceUtils";
+import { DEFAULT_FILTERS, PAGE_SIZE, STATUS_OPTIONS, normalizeStatus, percentile } from "./traceUtils";
 
 const router = useRouter();
 const loading = ref(false);
@@ -20,7 +15,7 @@ const errorText = ref("");
 const pageNo = ref(1);
 const page = ref({ records: [], total: 0, size: PAGE_SIZE });
 const filters = ref({ ...DEFAULT_FILTERS });
-const runsRequestId = ref(0);
+const requestId = ref(0);
 
 const runs = computed(() => (Array.isArray(page.value?.records) ? page.value.records : []));
 const total = computed(() => Number(page.value?.total ?? runs.value.length ?? 0));
@@ -29,7 +24,24 @@ const pages = computed(() => {
   return size > 0 ? Math.max(1, Math.ceil(total.value / size)) : 1;
 });
 
-const stats = computed(() => {
+function formatDurationLabel(value) {
+  const duration = Number(value ?? 0);
+  if (!Number.isFinite(duration) || duration <= 0) return "--";
+  if (duration < 1000) return `${Math.round(duration)}ms`;
+  if (duration < 60_000) return `${(duration / 1000).toFixed(2)}s`;
+  return `${(duration / 60_000).toFixed(1)}m`;
+}
+
+const latestRun = computed(() => runs.value[0] || null);
+const activeFilterCount = computed(
+  () => [filters.value.traceId, filters.value.conversationId, filters.value.taskId, filters.value.status].filter(Boolean).length
+);
+const activeFilterLabel = computed(() => {
+  const count = activeFilterCount.value;
+  return count > 0 ? `${count} 项筛选` : "全部链路";
+});
+
+const traceStats = computed(() => {
   const durations = runs.value
     .map((item) => Number(item.durationMs ?? 0))
     .filter((value) => Number.isFinite(value) && value > 0);
@@ -52,64 +64,45 @@ const stats = computed(() => {
   };
 });
 
+const heroSummary = computed(() => [
+  { label: "当前筛选", value: activeFilterLabel.value },
+  { label: "当前页", value: String(page.value?.current ?? pageNo.value) },
+  { label: "总数", value: String(total.value) },
+  { label: "最新耗时", value: latestRun.value ? formatDurationLabel(latestRun.value.durationMs) : "--" }
+]);
+
 const summaryCards = computed(() => [
   {
     title: "Success / Failed / Running",
-    value: `${stats.value.successCount} / ${stats.value.failedCount} / ${stats.value.runningCount}`,
+    value: `${traceStats.value.successCount} / ${traceStats.value.failedCount} / ${traceStats.value.runningCount}`,
     hint: "当前页状态分布",
     tone: "indigo"
   },
   {
     title: "Success Rate",
-    value: `${stats.value.successRate}%`,
+    value: `${traceStats.value.successRate}%`,
     hint: "当前页成功率",
     tone: "emerald"
   },
   {
     title: "Avg Latency",
-    value: stats.value.avgDuration ? `${stats.value.avgDuration} ms` : "--",
+    value: traceStats.value.avgDuration ? `${traceStats.value.avgDuration} ms` : "--",
     hint: "当前页平均耗时",
     tone: "cyan"
   },
   {
     title: "P95 Latency",
-    value: stats.value.p95Duration ? `${stats.value.p95Duration} ms` : "--",
+    value: traceStats.value.p95Duration ? `${traceStats.value.p95Duration} ms` : "--",
     hint: "当前页 P95 耗时",
     tone: "amber"
   }
 ]);
 
-const latestRun = computed(() => runs.value[0] || null);
-const activeFilterCount = computed(() =>
-  [filters.value.traceId, filters.value.conversationId, filters.value.taskId, filters.value.status].filter(Boolean).length
-);
-const activeFilterLabel = computed(() =>
-  filters.value.traceId || filters.value.conversationId || filters.value.taskId || filters.value.status
-    ? `${activeFilterCount.value} 项筛选`
-    : "全部链路"
-);
-const traceHeroSummary = computed(() => [
-  { label: "当前筛选", value: activeFilterLabel.value },
-  { label: "本页结果", value: String(runs.value.length) },
-  { label: "总数", value: String(total.value) },
-  {
-    label: "最新记录",
-    value: latestRun.value ? formatDurationLabel(latestRun.value.durationMs) : "--"
-  }
-]);
-
-function formatDurationLabel(value) {
-  const duration = Number(value ?? 0);
-  if (!Number.isFinite(duration) || duration <= 0) return "--";
-  if (duration < 1000) return `${Math.round(duration)}ms`;
-  if (duration < 60_000) return `${(duration / 1000).toFixed(2)}s`;
-  return `${(duration / 60_000).toFixed(1)}m`;
-}
-
 async function loadRuns() {
-  const requestId = ++runsRequestId.value;
+  const currentRequestId = ++requestId.value;
   loading.value = true;
   errorText.value = "";
+
   try {
     const result = await getRagTraceRuns(pageNo.value, PAGE_SIZE, {
       traceId: filters.value.traceId,
@@ -117,13 +110,13 @@ async function loadRuns() {
       taskId: filters.value.taskId,
       status: filters.value.status
     });
-    if (runsRequestId.value !== requestId) return;
-    page.value = result;
+    if (requestId.value !== currentRequestId) return;
+    page.value = result || { records: [], total: 0, size: PAGE_SIZE };
   } catch (error) {
-    if (runsRequestId.value !== requestId) return;
+    if (requestId.value !== currentRequestId) return;
     errorText.value = error?.message || "加载 trace 列表失败。";
   } finally {
-    if (runsRequestId.value !== requestId) return;
+    if (requestId.value !== currentRequestId) return;
     loading.value = false;
   }
 }
@@ -176,11 +169,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page trace-page trace-list-page">
     <PageHeader
       tag="Trace Runs"
       title="链路追踪"
-      description="统一查看运行列表、筛选条件和耗时分布，点击任意一条记录可进入详情页查看节点执行轨迹。"
+      description="统一查看运行列表、筛选条件和耗时分布，点击任意记录进入详情页分析节点执行轨迹。"
     >
       <template #meta>
         <div class="trace-header-meta">
@@ -189,7 +182,7 @@ onMounted(() => {
           <span class="admin-badge is-muted">总数：{{ total }}</span>
           <span class="admin-badge is-muted">
             最新：{{ latestRun?.traceName || latestRun?.traceId || "--" }}
-            <template v-if="latestRun">· {{ formatDurationLabel(latestRun.durationMs) }}</template>
+            <template v-if="latestRun"> · {{ formatDurationLabel(latestRun.durationMs) }}</template>
           </span>
         </div>
       </template>
@@ -200,28 +193,16 @@ onMounted(() => {
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
 
-    <section class="admin-detail-card trace-list-hero">
-      <div class="trace-list-hero__copy">
-        <p class="trace-hero-tag">Trace Overview</p>
-        <h2>链路追踪列表</h2>
-        <p>对齐 frontend 的追踪管理页结构，先看筛选摘要和运行概览，再进入列表逐条定位异常链路。</p>
-      </div>
-      <div class="trace-list-hero__grid">
-        <div v-for="item in traceHeroSummary" :key="item.label" class="trace-list-hero__item">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="admin-detail-card trace-hero-card">
+    <section class="trace-hero-card">
       <div class="trace-hero-copy">
         <p class="trace-hero-tag">Trace Overview</p>
         <div class="trace-hero-title-row">
-          <h2>链路追踪</h2>
+          <h2>链路追踪概览</h2>
           <span class="admin-badge is-muted">Page {{ pageNo }} / {{ pages }}</span>
         </div>
-        <p class="trace-hero-subtitle">查看当前筛选条件下的运行记录，并快速跳转到单次 Trace 详情。</p>
+        <p class="trace-hero-subtitle">
+          快速查看当前筛选条件下的运行记录，进一步跳转到单次 Trace 详情页分析慢节点和异常节点。
+        </p>
         <div class="trace-hero-meta">
           <span>Trace {{ filters.traceId || "--" }}</span>
           <span>Conversation {{ filters.conversationId || "--" }}</span>
@@ -231,22 +212,9 @@ onMounted(() => {
       </div>
 
       <div class="trace-hero-side">
-        <div class="trace-hero-cardline">
-          <span class="trace-hero-cardlabel">Current</span>
-          <strong>{{ runs.length }}</strong>
-        </div>
-        <div class="trace-hero-cardline">
-          <span class="trace-hero-cardlabel">Total</span>
-          <strong>{{ total }}</strong>
-        </div>
-        <div class="trace-hero-cardline">
-          <span class="trace-hero-cardlabel">Pages</span>
-          <strong>{{ pages }}</strong>
-        </div>
-        <div v-if="latestRun" class="trace-hero-cardline">
-          <span class="trace-hero-cardlabel">Latest</span>
-          <strong>{{ latestRun.traceName || latestRun.traceId }}</strong>
-          <span class="trace-hero-cardmeta">{{ formatDurationLabel(latestRun.durationMs) }}</span>
+        <div v-for="item in heroSummary" :key="item.label" class="trace-hero-cardline">
+          <span class="trace-hero-cardlabel">{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </div>
       </div>
     </section>
@@ -262,48 +230,12 @@ onMounted(() => {
       />
     </div>
 
-    <section class="admin-detail-card trace-filter-summary">
-      <div class="trace-filter-summary__copy">
-        <p class="trace-hero-tag">Trace Overview</p>
-        <h2>当前筛选 {{ activeFilterCount }} 项</h2>
-        <p>沿着筛选条件快速定位目标运行记录，再进入单条详情查看节点时间线、请求响应和错误信息。</p>
-      </div>
-      <div class="trace-filter-summary__grid">
-        <div>
-          <span class="trace-hero-cardlabel">Trace ID</span>
-          <strong>{{ filters.traceId || "--" }}</strong>
-        </div>
-        <div>
-          <span class="trace-hero-cardlabel">Conversation</span>
-          <strong>{{ filters.conversationId || "--" }}</strong>
-        </div>
-        <div>
-          <span class="trace-hero-cardlabel">Task</span>
-          <strong>{{ filters.taskId || "--" }}</strong>
-        </div>
-        <div>
-          <span class="trace-hero-cardlabel">Status</span>
-          <strong>{{ filters.status || "ALL" }}</strong>
-        </div>
-      </div>
-      <div v-if="latestRun" class="trace-filter-summary__latest">
-        <span class="trace-hero-cardlabel">Latest</span>
-        <strong>{{ latestRun.traceName || latestRun.traceId }}</strong>
-        <p>
-          {{ latestRun.conversationId || "--" }} ·
-          {{ latestRun.taskId || "--" }} ·
-          {{ latestRun.status || "--" }} ·
-          {{ formatDurationLabel(latestRun.durationMs) }}
-        </p>
-      </div>
-    </section>
-
-    <section class="admin-split">
+    <section class="admin-split trace-layout">
       <article class="admin-table-card">
         <div class="admin-table-card__header">
           <div>
             <h2>Trace 列表</h2>
-            <p>支持多条件筛选、分页浏览和运行状态快速定位。</p>
+            <p>支持多条件筛选、分页浏览和运行状态查看，适合快速定位高耗时链路。</p>
           </div>
           <span class="admin-page-count">共 {{ total }} 条</span>
         </div>
@@ -332,7 +264,7 @@ onMounted(() => {
         />
       </article>
 
-      <aside class="admin-dashboard-aside">
+      <aside class="trace-aside">
         <article class="admin-detail-card">
           <h3>筛选概览</h3>
           <p class="admin-detail-card-desc">当前 Trace 列表筛选条件。</p>
@@ -348,7 +280,7 @@ onMounted(() => {
 
         <article class="admin-detail-card">
           <h3>最近记录</h3>
-          <p class="admin-detail-card-desc">打开列表中的任意运行记录查看详情。</p>
+          <p class="admin-detail-card-desc">点击列表中的任意运行记录查看详情。</p>
           <div v-if="runs.length === 0" class="admin-empty-sm">暂无运行记录</div>
           <div v-else class="admin-card-list">
             <div v-for="item in runs.slice(0, 4)" :key="item.traceId" class="admin-card-item">
@@ -364,72 +296,34 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.trace-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .trace-hero-card {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
   gap: 20px;
-}
-
-.trace-list-hero {
-  display: grid;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.trace-list-hero__copy {
-  display: grid;
-  gap: 8px;
-}
-
-.trace-list-hero__copy h2 {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.25;
-}
-
-.trace-list-hero__copy p {
-  margin: 0;
-  color: var(--admin-ink-soft);
-  line-height: 1.7;
-}
-
-.trace-list-hero__grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.trace-list-hero__item {
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
+  padding: 20px;
   border: 1px solid var(--admin-line);
-  border-radius: var(--admin-radius-md);
-  background: rgba(255, 255, 255, 0.84);
-}
-
-.trace-list-hero__item span {
-  color: var(--admin-muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.trace-list-hero__item strong {
-  color: var(--admin-ink);
-  font-size: 16px;
-  font-weight: 700;
-  word-break: break-word;
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--admin-shadow);
 }
 
 .trace-hero-copy {
   min-width: 0;
   flex: 1 1 auto;
+  display: grid;
+  gap: 8px;
 }
 
 .trace-hero-tag {
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--admin-accent);
   font-size: 12px;
   font-weight: 700;
@@ -452,7 +346,7 @@ onMounted(() => {
 }
 
 .trace-hero-subtitle {
-  margin: 12px 0 0;
+  margin: 0;
   color: var(--admin-ink-soft);
   font-size: 14px;
   line-height: 1.7;
@@ -462,13 +356,12 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
-  margin-top: 14px;
   color: var(--admin-muted);
   font-size: 13px;
 }
 
 .trace-hero-side {
-  flex: 0 0 230px;
+  flex: 0 0 240px;
   display: grid;
   gap: 12px;
   align-content: start;
@@ -483,12 +376,6 @@ onMounted(() => {
   gap: 4px;
 }
 
-.trace-hero-cardmeta {
-  color: var(--admin-ink-soft);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 .trace-hero-cardlabel {
   color: var(--admin-muted);
   font-size: 12px;
@@ -496,68 +383,19 @@ onMounted(() => {
   letter-spacing: 0.08em;
 }
 
-.trace-filter-summary {
+.trace-layout {
+  align-items: start;
+}
+
+.trace-aside {
   display: grid;
-  gap: 14px;
-}
-
-.trace-filter-summary__copy {
-  display: grid;
-  gap: 8px;
-}
-
-.trace-filter-summary__copy h2 {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.25;
-}
-
-.trace-filter-summary__copy p,
-.trace-filter-summary__latest p {
-  margin: 0;
-  color: var(--admin-ink-soft);
-  line-height: 1.7;
-}
-
-.trace-filter-summary__grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.trace-filter-summary__grid > div,
-.trace-filter-summary__latest {
-  padding: 14px;
-  border: 1px solid var(--admin-line);
-  border-radius: var(--admin-radius-md);
-  background: rgba(255, 255, 255, 0.84);
-}
-
-.trace-filter-summary__grid strong,
-.trace-filter-summary__latest strong {
-  display: block;
-  margin-top: 6px;
-  color: var(--admin-ink);
-  font-size: 15px;
-}
-
-.trace-filter-summary__latest {
-  display: grid;
-  gap: 4px;
-}
-
-.trace-header-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 16px;
+  position: sticky;
+  top: 16px;
+  align-self: start;
 }
 
 @media (max-width: 960px) {
-  .trace-list-hero__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .trace-hero-card {
     flex-direction: column;
   }
@@ -567,8 +405,12 @@ onMounted(() => {
     width: 100%;
   }
 
-  .trace-filter-summary__grid {
-    grid-template-columns: 1fr 1fr;
+  .trace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .trace-aside {
+    position: static;
   }
 }
 </style>

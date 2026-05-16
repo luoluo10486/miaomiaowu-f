@@ -1,18 +1,21 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+
 import PageHeader from "../../components/admin/PageHeader.vue";
-import {
-  getIntentTree,
-  updateIntentNode
-} from "../../services/intentTreeService";
+import StatCard from "../../components/admin/StatCard.vue";
+import { getIntentTree, updateIntentNode } from "../../services/intentTreeService";
 import { flattenIntentTree, formatDateTime } from "./adminShared";
 
-const router = useRouter();
 const route = useRoute();
+const router = useRouter();
 
 const nodeId = computed(() => Number(route.params.id));
-const fromRoute = computed(() => String(route.query.from || "/admin/intent-list"));
+const fromRoute = computed(() => {
+  const from = String(route.query.from || "");
+  return from.startsWith("/admin/") ? from : "/admin/intent-list";
+});
+
 const loading = ref(true);
 const saving = ref(false);
 const errorText = ref("");
@@ -32,23 +35,42 @@ const KIND_OPTIONS = [
 
 const form = ref(buildEmptyForm());
 
+function buildEmptyForm() {
+  return {
+    name: "",
+    intentCode: "",
+    level: 0,
+    kind: 0,
+    parentCode: "__ROOT__",
+    collectionName: "",
+    mcpToolId: "",
+    description: "",
+    examplesText: "",
+    topK: undefined,
+    sortOrder: 0,
+    enabled: true,
+    promptSnippet: "",
+    promptTemplate: "",
+    paramPromptTemplate: ""
+  };
+}
+
+function parseExamples(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item)).filter(Boolean);
+  } catch {
+    // fall back to line-based examples
+  }
+  return String(value)
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const rows = computed(() => flattenIntentTree(tree.value));
 const currentNode = computed(() => rows.value.find((row) => row.id === nodeId.value) || null);
-const nodeSummary = computed(() => {
-  if (!currentNode.value) return null;
-  const resource =
-    currentNode.value.kind === 0
-      ? currentNode.value.collectionName || "--"
-      : currentNode.value.kind === 2
-        ? currentNode.value.mcpToolId || "--"
-        : "系统意图";
-  return {
-    pathText: currentNode.value.pathText || "--",
-    childCount: currentNode.value.childCount ?? 0,
-    exampleCount: currentNode.value.exampleCount ?? parseExamples(currentNode.value.examples).length,
-    resource
-  };
-});
 
 const excludedCodes = computed(() => {
   if (!currentNode.value) return new Set();
@@ -77,7 +99,7 @@ const excludedCodes = computed(() => {
 });
 
 const parentOptions = computed(() => [
-  { value: "", label: "ROOT" },
+  { value: "__ROOT__", label: "ROOT" },
   ...rows.value
     .filter((row) => !excludedCodes.value.has(row.intentCode))
     .map((row) => ({
@@ -86,39 +108,28 @@ const parentOptions = computed(() => [
     }))
 ]);
 
-function buildEmptyForm() {
+const nodeSummary = computed(() => {
+  if (!currentNode.value) return null;
+  const resource =
+    currentNode.value.kind === 0
+      ? currentNode.value.collectionName || "--"
+      : currentNode.value.kind === 2
+        ? currentNode.value.mcpToolId || "--"
+        : "系统意图";
   return {
-    name: "",
-    intentCode: "",
-    level: 0,
-    kind: 0,
-    parentCode: "",
-    collectionName: "",
-    mcpToolId: "",
-    description: "",
-    examplesText: "",
-    topK: 0,
-    sortOrder: 0,
-    enabled: true,
-    promptSnippet: "",
-    promptTemplate: "",
-    paramPromptTemplate: ""
+    pathText: currentNode.value.pathText || "--",
+    childCount: currentNode.value.childCount ?? 0,
+    exampleCount: currentNode.value.exampleCount ?? parseExamples(currentNode.value.examples).length,
+    resource
   };
-}
+});
 
-function parseExamples(value) {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-  } catch {
-    // ignore parse errors and fall back to line split
-  }
-  return String(value)
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+const stats = computed(() => [
+  { title: "Node", value: rows.value.length, hint: "当前意图树节点总数", tone: "indigo" },
+  { title: "Children", value: currentNode.value?.childCount ?? 0, hint: "当前节点子节点数", tone: "cyan" },
+  { title: "Examples", value: currentNode.value ? parseExamples(currentNode.value.examples).length : 0, hint: "当前节点示例数", tone: "emerald" },
+  { title: "Status", value: currentNode.value?.enabled === 0 ? "Disabled" : "Enabled", hint: "当前节点状态", tone: "amber" }
+]);
 
 function fillForm(node) {
   if (!node) return;
@@ -127,12 +138,12 @@ function fillForm(node) {
     intentCode: node.intentCode || "",
     level: node.level ?? 0,
     kind: node.kind ?? 0,
-    parentCode: node.parentCode || "",
+    parentCode: node.parentCode || "__ROOT__",
     collectionName: node.collectionName || "",
     mcpToolId: node.mcpToolId || "",
     description: node.description || "",
     examplesText: parseExamples(node.examples).join("\n"),
-    topK: node.topK ?? 0,
+    topK: node.topK ?? undefined,
     sortOrder: node.sortOrder ?? 0,
     enabled: node.enabled !== 0,
     promptSnippet: node.promptSnippet || "",
@@ -167,8 +178,8 @@ async function handleSubmit() {
     errorText.value = "MCP 节点必须填写工具 ID。";
     return;
   }
-  if (form.value.topK !== undefined && Number(form.value.topK) < 1) {
-    errorText.value = "TopK 必须大于 0。";
+  if (form.value.topK !== undefined && Number(form.value.topK) < 0) {
+    errorText.value = "TopK 不能小于 0。";
     return;
   }
 
@@ -178,7 +189,7 @@ async function handleSubmit() {
     const payload = {
       name: form.value.name.trim(),
       level: Number(form.value.level) || 0,
-      parentCode: form.value.parentCode || null,
+      parentCode: form.value.parentCode === "__ROOT__" ? null : form.value.parentCode || null,
       description: form.value.description.trim(),
       examples: form.value.examplesText
         ? form.value.examplesText.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -186,7 +197,7 @@ async function handleSubmit() {
       collectionName: form.value.kind === 0 ? form.value.collectionName.trim() : "",
       mcpToolId: form.value.kind === 2 ? form.value.mcpToolId.trim() : "",
       kind: form.value.kind,
-      topK: Number(form.value.topK) || 0,
+      topK: form.value.topK === undefined || form.value.topK === null || form.value.topK === "" ? undefined : Number(form.value.topK),
       sortOrder: Number(form.value.sortOrder) || 0,
       enabled: form.value.enabled ? 1 : 0,
       promptSnippet: form.value.promptSnippet.trim(),
@@ -210,18 +221,26 @@ watch(currentNode, (node) => {
   if (node) fillForm(node);
 }, { immediate: true });
 
-onMounted(async () => {
-  await loadTree();
+onMounted(() => {
+  void loadTree();
 });
 </script>
 
 <template>
-  <section class="admin-page">
+  <section class="admin-page intent-edit-page">
     <PageHeader
       tag="Intent Edit"
       title="编辑意图节点"
       :description="currentNode ? `${currentNode.name || '--'} · ${currentNode.intentCode || '--'}` : '选择一个节点继续编辑。'"
     >
+      <template #meta>
+        <div class="intent-edit-header-meta">
+          <span class="admin-badge is-muted">路径：{{ nodeSummary?.pathText || "--" }}</span>
+          <span class="admin-badge is-muted">资源：{{ nodeSummary?.resource || "--" }}</span>
+          <span class="admin-badge is-muted">子节点：{{ nodeSummary?.childCount ?? 0 }}</span>
+          <span class="admin-badge is-muted">示例：{{ nodeSummary?.exampleCount ?? 0 }}</span>
+        </div>
+      </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="loadTree">刷新</button>
         <button class="admin-button--ghost" type="button" @click="handleCancel">返回列表</button>
@@ -229,6 +248,10 @@ onMounted(async () => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+
+    <div class="admin-stat-grid">
+      <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
+    </div>
 
     <section class="admin-detail-card intent-edit-hero">
       <div class="intent-edit-hero__copy">
@@ -252,7 +275,7 @@ onMounted(async () => {
         <div class="admin-table-card__header">
           <div>
             <h2>节点配置</h2>
-            <p>修改基础信息、父节点、prompt 和资源字段。</p>
+            <p>修改基础信息、Prompt 与高级参数。</p>
           </div>
           <span class="admin-page-count">{{ currentNode ? currentNode.intentCode : "--" }}</span>
         </div>
@@ -262,7 +285,7 @@ onMounted(async () => {
           <p>未找到对应的意图节点。</p>
           <button class="admin-button--ghost" type="button" @click="handleCancel">返回列表</button>
         </div>
-        <form v-else class="admin-dialog-body" @submit.prevent="handleSubmit" style="max-width:720px;">
+        <form v-else class="intent-edit-form" @submit.prevent="handleSubmit">
           <div class="admin-form-grid-2">
             <div class="admin-dialog-field">
               <label>节点名称</label>
@@ -312,27 +335,27 @@ onMounted(async () => {
 
           <div class="admin-dialog-field">
             <label>描述</label>
-            <textarea v-model="form.description" class="admin-input" rows="3" placeholder="节点描述" style="resize:vertical;" />
+            <textarea v-model="form.description" class="admin-textarea" rows="3" placeholder="节点描述" />
           </div>
 
           <div class="admin-dialog-field">
             <label>示例问题</label>
-            <textarea v-model="form.examplesText" class="admin-input" rows="4" placeholder="示例问题1&#10;示例问题2" style="resize:vertical;" />
+            <textarea v-model="form.examplesText" class="admin-textarea" rows="4" placeholder="每行一个示例问题" />
           </div>
 
           <div class="admin-dialog-field">
             <label>Prompt 片段</label>
-            <textarea v-model="form.promptSnippet" class="admin-input" rows="3" placeholder="可选的 prompt 片段" style="resize:vertical;" />
+            <textarea v-model="form.promptSnippet" class="admin-textarea" rows="3" placeholder="可选的 prompt 片段" />
           </div>
 
           <div class="admin-dialog-field">
             <label>Prompt 模板</label>
-            <textarea v-model="form.promptTemplate" class="admin-input" rows="4" placeholder="可选的 prompt 模板" style="resize:vertical;" />
+            <textarea v-model="form.promptTemplate" class="admin-textarea" rows="4" placeholder="可选的 prompt 模板" />
           </div>
 
           <div v-if="form.kind === 2" class="admin-dialog-field">
             <label>参数 Prompt 模板</label>
-            <textarea v-model="form.paramPromptTemplate" class="admin-input" rows="3" placeholder="MCP 节点参数模板" style="resize:vertical;" />
+            <textarea v-model="form.paramPromptTemplate" class="admin-textarea" rows="3" placeholder="MCP 节点参数模板" />
           </div>
 
           <div class="admin-form-grid-2">
@@ -357,7 +380,7 @@ onMounted(async () => {
           <div class="admin-dialog-footer" style="padding-top:16px;">
             <button class="admin-button--ghost" type="button" @click="handleCancel">取消</button>
             <button class="admin-button" type="submit" :disabled="saving || !form.name.trim()">
-              {{ saving ? "保存中..." : "保存" }}
+              {{ saving ? "保存中..." : "保存修改" }}
             </button>
           </div>
         </form>
@@ -366,7 +389,7 @@ onMounted(async () => {
       <aside class="admin-dashboard-aside">
         <article class="admin-detail-card">
           <h3>节点概览</h3>
-          <p class="admin-detail-card-desc">快速查看当前节点的路径、状态和资源归属。</p>
+          <p class="admin-detail-card-desc">路径、父节点、状态和更新时间。</p>
           <div v-if="currentNode" class="admin-kv">
             <div><dt>路径</dt><dd>{{ currentNode.pathText }}</dd></div>
             <div><dt>父节点</dt><dd>{{ currentNode.parentName || currentNode.parentCode || "ROOT" }}</dd></div>
@@ -379,7 +402,7 @@ onMounted(async () => {
 
         <article class="admin-detail-card">
           <h3>Prompt 预览</h3>
-          <p class="admin-detail-card-desc">展示片段、模板和参数模板，便于快速校验。</p>
+          <p class="admin-detail-card-desc">快速查看片段、模板和参数模板。</p>
           <div v-if="currentNode" class="admin-card-list">
             <div class="admin-card-item">
               <h3>Prompt 片段</h3>
@@ -389,7 +412,7 @@ onMounted(async () => {
               <h3>Prompt 模板</h3>
               <p>{{ currentNode.promptTemplate || "--" }}</p>
             </div>
-            <div class="admin-card-item" v-if="currentNode.kind === 2">
+            <div v-if="currentNode.kind === 2" class="admin-card-item">
               <h3>参数模板</h3>
               <p>{{ currentNode.paramPromptTemplate || "--" }}</p>
             </div>
@@ -401,10 +424,21 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.intent-edit-page {
+  display: grid;
+  gap: 18px;
+}
+
+.intent-edit-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .intent-edit-hero {
   display: grid;
   gap: 16px;
-  margin-bottom: 18px;
 }
 
 .intent-edit-hero__copy {
@@ -460,6 +494,12 @@ onMounted(async () => {
   color: var(--admin-ink);
   font-size: 15px;
   word-break: break-word;
+}
+
+.intent-edit-form {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
 }
 
 @media (max-width: 960px) {
