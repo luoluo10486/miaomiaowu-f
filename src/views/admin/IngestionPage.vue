@@ -259,12 +259,14 @@ async function loadIngestion() {
 }
 
 function normalizeTaskStatus(status) {
-  return String(status || "").toUpperCase();
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "SUCCESS") return "COMPLETED";
+  return normalized;
 }
 
 function taskStatusBadgeClass(status) {
   const normalized = normalizeTaskStatus(status);
-  if (normalized === "SUCCESS" || normalized === "COMPLETED") return "is-success";
+  if (normalized === "COMPLETED") return "is-success";
   if (normalized === "FAILED") return "is-danger";
   if (normalized === "RUNNING") return "is-warn";
   return "is-muted";
@@ -1109,7 +1111,6 @@ onMounted(() => {
                 <option value="">全部状态</option>
                 <option value="PENDING">PENDING</option>
                 <option value="RUNNING">RUNNING</option>
-                <option value="SUCCESS">SUCCESS</option>
                 <option value="FAILED">FAILED</option>
                 <option value="COMPLETED">COMPLETED</option>
               </select>

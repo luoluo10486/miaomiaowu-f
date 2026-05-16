@@ -826,7 +826,7 @@ onMounted(() => {
               <p>{{ item.chunkStrategy || item.processMode || "--" }}</p>
               <p>切片数 {{ item.chunkCount ?? "--" }} · 耗时 {{ formatDuration(item.totalDuration ?? item.chunkDuration ?? item.extractDuration) }}</p>
               <p>{{ formatDateTime(item.createTime || item.startTime) }}</p>
-              <p>{{ item.remark || item.errorMessage || "--" }}</p>
+              <p>{{ item.message || item.remark || item.errorMessage || "--" }}</p>
             </div>
           </div>
         </article>
@@ -1041,7 +1041,7 @@ onMounted(() => {
                   <td>{{ logStatusLabel(log.status) }}</td>
                   <td>{{ log.chunkCount ?? "--" }}</td>
                   <td>{{ formatDuration(log.durationMs ?? log.totalDuration ?? log.chunkDuration ?? log.extractDuration) }}</td>
-                  <td>{{ log.remark || log.errorMessage || "--" }}</td>
+                  <td>{{ log.message || log.remark || log.errorMessage || "--" }}</td>
                 </tr>
               </tbody>
             </table>

@@ -562,7 +562,7 @@ onMounted(() => {
               <dt>耗时</dt>
               <dd>{{ formatDuration(latestLog.totalDuration ?? latestLog.chunkDuration ?? latestLog.extractDuration) }}</dd>
             </div>
-            <div><dt>备注</dt><dd>{{ latestLog.remark || latestLog.errorMessage || "--" }}</dd></div>
+            <div><dt>备注</dt><dd>{{ latestLog.message || latestLog.remark || latestLog.errorMessage || "--" }}</dd></div>
           </div>
           <div v-if="recentLogs.length === 0" class="admin-empty-sm">暂无日志</div>
           <div v-else class="admin-card-list">
@@ -571,7 +571,7 @@ onMounted(() => {
               <p>{{ item.chunkStrategy || item.processMode || "--" }}</p>
               <p>切片数 {{ item.chunkCount ?? "--" }} · 耗时 {{ formatDuration(item.totalDuration ?? item.chunkDuration ?? item.extractDuration) }}</p>
               <p>{{ formatDateTime(item.createTime || item.startTime) }}</p>
-              <p>{{ item.remark || item.errorMessage || "--" }}</p>
+              <p>{{ item.message || item.remark || item.errorMessage || "--" }}</p>
             </div>
           </div>
         </article>
