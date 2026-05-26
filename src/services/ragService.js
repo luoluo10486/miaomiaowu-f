@@ -1,12 +1,10 @@
 import { clearStoredAuth, getStoredAuthToken } from "../utils/auth";
+import { API_BASE_URL, joinApiPath } from "./apiBase";
 import { deleteSession, listMessages, listSessions, renameSession } from "./sessionService";
 import { stopTask, submitFeedback } from "./chatService";
 
-const RAG_API_BASE_URL = (import.meta.env.VITE_RAG_API_BASE_URL || "/api/ragent").trim().replace(/\/$/, "");
-
 function joinUrl(path) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${RAG_API_BASE_URL}${normalizedPath}`;
+  return joinApiPath(path, API_BASE_URL);
 }
 
 function buildQuery(params = {}) {
@@ -114,6 +112,10 @@ function parseSseData(raw) {
     return "";
   }
 
+  if (raw === "[DONE]") {
+    return raw;
+  }
+
   try {
     return JSON.parse(raw);
   } catch {
@@ -145,6 +147,10 @@ async function readSseStream(response, handlers, signal) {
         handlers.onMeta?.(payload);
         break;
       case "message":
+        if (payload === "[DONE]") {
+          handlers.onDone?.();
+          break;
+        }
         handlers.onMessage?.(payload);
         break;
       case "title":

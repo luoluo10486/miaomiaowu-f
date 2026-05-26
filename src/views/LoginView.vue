@@ -2,13 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import LoginClothScene from "../components/LoginClothScene.vue";
+import { joinApiPath } from "../services/apiBase";
 import { saveAuthSession } from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
 const route = useRoute();
 const router = useRouter();
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").trim();
-const AUTH_API_PREFIX = "/luoluo";
+const AUTH_API_BASE_URL = "/luoluo";
 const DEFAULT_AUTH_REDIRECT = "/workspace";
 
 const showPassword = ref(false);
@@ -591,7 +591,7 @@ async function requestAuth(path, options = {}) {
     requestInit.body = requestHeaders["Content-Type"] === "application/json" ? JSON.stringify(body) : body;
   }
 
-  const response = await fetch(`${API_BASE_URL}${AUTH_API_PREFIX}${normalizedPath}`, requestInit);
+  const response = await fetch(joinApiPath(normalizedPath, AUTH_API_BASE_URL), requestInit);
 
   const payload = await parseResponsePayload(response);
   const hasBusinessCode = payload && typeof payload === "object" && "code" in payload;
