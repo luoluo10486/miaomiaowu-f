@@ -54,25 +54,25 @@ const strategyOverview = computed(() => [
 
 const stats = computed(() => [
   {
-    title: "Collection",
+    title: "集合",
     value: ragDefaults.value.collectionName || "--",
     hint: "RAG 默认集合",
     tone: "indigo"
   },
   {
-    title: "Rewrite",
+    title: "改写",
     value: normalizeBooleanLabel(queryRewrite.value.enabled),
     hint: "查询改写开关",
     tone: "cyan"
   },
   {
-    title: "Rate Limit",
+    title: "限流",
     value: normalizeBooleanLabel(rateLimit.value.enabled),
     hint: "全局限流开关",
     tone: "emerald"
   },
   {
-    title: "Memory",
+    title: "记忆",
     value: normalizeBooleanLabel(memory.value.summaryEnabled),
     hint: "记忆摘要开关",
     tone: "amber"
@@ -80,9 +80,9 @@ const stats = computed(() => [
 ]);
 
 const modelGroups = computed(() => [
-  { label: "Chat", data: settings.value?.ai?.chat || {}, tone: "indigo" },
-  { label: "Embedding", data: settings.value?.ai?.embedding || {}, tone: "cyan" },
-  { label: "Rerank", data: settings.value?.ai?.rerank || {}, tone: "emerald" }
+  { label: "对话模型", data: settings.value?.ai?.chat || {}, tone: "indigo" },
+  { label: "向量模型", data: settings.value?.ai?.embedding || {}, tone: "cyan" },
+  { label: "重排模型", data: settings.value?.ai?.rerank || {}, tone: "emerald" }
 ]);
 
 async function loadSettings() {
@@ -105,14 +105,14 @@ onMounted(() => {
 <template>
   <section class="admin-page settings-page">
     <PageHeader
-      tag="Settings"
+      tag="系统设置"
       title="系统设置"
       description="只读查看当前应用的 RAG 默认参数、查询改写、限流、记忆策略以及模型路由信息。"
     >
       <template #meta>
         <div class="admin-header-meta">
-          <span class="admin-badge is-muted">Collection：{{ ragDefaults.collectionName || "--" }}</span>
-          <span class="admin-badge is-muted">Provider：{{ providerCount }}</span>
+          <span class="admin-badge is-muted">集合：{{ ragDefaults.collectionName || "--" }}</span>
+          <span class="admin-badge is-muted">供应商：{{ providerCount }}</span>
           <span class="admin-badge is-muted">模型：{{ modelCountLabel }}</span>
         </div>
       </template>
@@ -138,7 +138,7 @@ onMounted(() => {
 
     <section class="admin-detail-card settings-hero">
       <div class="settings-hero-copy">
-        <p class="trace-hero-tag">System Control</p>
+        <p class="trace-hero-tag">系统控制</p>
         <h2>配置总览与模型基线</h2>
         <p>
           这里集中展示系统运行时的关键配置，便于快速确认集合名、查询改写、限流、记忆摘要和模型选择策略是否符合预期。
@@ -147,19 +147,19 @@ onMounted(() => {
 
       <div class="settings-hero-side">
         <div class="settings-hero-cardline">
-          <span class="settings-hero-cardlabel">Collection</span>
+          <span class="settings-hero-cardlabel">集合</span>
           <strong>{{ ragDefaults.collectionName || "--" }}</strong>
         </div>
         <div class="settings-hero-cardline">
-          <span class="settings-hero-cardlabel">Providers</span>
+          <span class="settings-hero-cardlabel">供应商</span>
           <strong>{{ providerCount }}</strong>
         </div>
         <div class="settings-hero-cardline">
-          <span class="settings-hero-cardlabel">Chat / Embedding / Rerank</span>
+          <span class="settings-hero-cardlabel">对话 / 向量 / 重排</span>
           <strong>{{ modelCountLabel }}</strong>
         </div>
         <div class="settings-hero-cardline">
-          <span class="settings-hero-cardlabel">Candidates</span>
+          <span class="settings-hero-cardlabel">候选模型</span>
           <strong>{{ modelCoverageLabel }}</strong>
         </div>
       </div>
@@ -180,15 +180,15 @@ onMounted(() => {
             <h3>RAG 默认配置</h3>
             <div class="admin-kv">
               <div>
-                <dt>Collection</dt>
+                <dt>集合</dt>
                 <dd>{{ ragDefaults.collectionName || "--" }}</dd>
               </div>
               <div>
-                <dt>Dimension</dt>
+                <dt>维度</dt>
                 <dd>{{ ragDefaults.dimension ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Metric</dt>
+                <dt>度量</dt>
                 <dd>{{ ragDefaults.metricType || "--" }}</dd>
               </div>
             </div>
@@ -198,15 +198,15 @@ onMounted(() => {
             <h3>查询改写</h3>
             <div class="admin-kv">
               <div>
-                <dt>Enabled</dt>
+                <dt>启用</dt>
                 <dd>{{ normalizeBooleanLabel(queryRewrite.enabled) }}</dd>
               </div>
               <div>
-                <dt>Max History Messages</dt>
+                <dt>历史消息上限</dt>
                 <dd>{{ queryRewrite.maxHistoryMessages ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Max History Chars</dt>
+                <dt>历史字数上限</dt>
                 <dd>{{ queryRewrite.maxHistoryChars ?? "--" }}</dd>
               </div>
             </div>
@@ -216,23 +216,23 @@ onMounted(() => {
             <h3>全局限流</h3>
             <div class="admin-kv">
               <div>
-                <dt>Enabled</dt>
+                <dt>启用</dt>
                 <dd>{{ normalizeBooleanLabel(rateLimit.enabled) }}</dd>
               </div>
               <div>
-                <dt>Max Concurrent</dt>
+                <dt>最大并发</dt>
                 <dd>{{ rateLimit.maxConcurrent ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Max Wait Seconds</dt>
+                <dt>最大等待秒数</dt>
                 <dd>{{ rateLimit.maxWaitSeconds ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Lease Seconds</dt>
+                <dt>租约秒数</dt>
                 <dd>{{ rateLimit.leaseSeconds ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Poll Interval (ms)</dt>
+                <dt>轮询间隔（毫秒）</dt>
                 <dd>{{ rateLimit.pollIntervalMs ?? "--" }}</dd>
               </div>
             </div>
@@ -242,27 +242,27 @@ onMounted(() => {
             <h3>记忆管理</h3>
             <div class="admin-kv">
               <div>
-                <dt>History Keep Turns</dt>
+                <dt>保留轮次</dt>
                 <dd>{{ memory.historyKeepTurns ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Summary Start Turns</dt>
+                <dt>开始摘要轮次</dt>
                 <dd>{{ memory.summaryStartTurns ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Summary Enabled</dt>
+                <dt>摘要启用</dt>
                 <dd>{{ normalizeBooleanLabel(memory.summaryEnabled) }}</dd>
               </div>
               <div>
-                <dt>TTL Minutes</dt>
+                <dt>生存分钟数</dt>
                 <dd>{{ memory.ttlMinutes ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Summary Max Chars</dt>
+                <dt>摘要最大字数</dt>
                 <dd>{{ memory.summaryMaxChars ?? "--" }}</dd>
               </div>
               <div>
-                <dt>Title Max Length</dt>
+                <dt>标题最大长度</dt>
                 <dd>{{ memory.titleMaxLength ?? "--" }}</dd>
               </div>
             </div>
@@ -286,9 +286,9 @@ onMounted(() => {
         </article>
 
         <article class="admin-detail-card">
-          <h3>AI Provider</h3>
+          <h3>AI 供应商</h3>
           <p class="admin-detail-card-desc">当前供应商与端点配置。</p>
-          <div v-if="providerEntries.length === 0" class="admin-empty-sm">暂无 provider 配置</div>
+          <div v-if="providerEntries.length === 0" class="admin-empty-sm">暂无供应商配置</div>
           <div v-else class="admin-card-list">
             <div v-for="[name, provider] in providerEntries" :key="name" class="admin-card-item">
               <h3>{{ name }}</h3>
@@ -303,7 +303,7 @@ onMounted(() => {
 
         <article class="admin-detail-card">
           <h3>模型分组</h3>
-          <p class="admin-detail-card-desc">Chat、Embedding 和 Rerank 的默认模型与候选模型信息。</p>
+          <p class="admin-detail-card-desc">对话、向量和重排的默认模型与候选模型信息。</p>
           <div class="admin-card-list">
             <div v-for="group in modelGroups" :key="group.label" class="admin-card-item">
               <h3>{{ group.label }}</h3>

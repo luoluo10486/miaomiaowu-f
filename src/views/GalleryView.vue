@@ -2,14 +2,12 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { defaultGalleryDetail, galleryDetails } from "../data/gallerySources";
 import { authorTweetMetaBySourceUrl } from "../data/authorTweetMeta";
 import { officialGalleryDetails, officialGalleryImages } from "../data/officialGallerySources";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
 const router = useRouter();
-gsap.registerPlugin(ScrollTrigger);
 
 const localGalleryImages = [
   "1648137658919.jpg","1648137770487.jpg","1648137785223.jpg","1648137830647.png",
@@ -141,11 +139,9 @@ const loaderVariantKey = ref("rose-orbit");
 const loaderElapsedMs = ref(0);
 const scrollShellRef = ref(null);
 const lightboxViewportRef = ref(null);
-const lightboxScrollRef = ref(null);
 const lightboxIndex = ref(-1);
 const lightboxVisible = ref(false);
 const selectedWallIndex = ref(-1);
-const galleryScrubProgress = ref(0);
 const galleryInteractionState = ref("idle");
 const cursorX = ref(-999);
 const cursorY = ref(-999);
@@ -171,17 +167,13 @@ let activeTweetRequestId = 0;
 let lightboxCloseTimer = 0;
 let lightboxRevealTimer = 0;
 let lightboxFlightCleanupTimer = 0;
-let lightboxFlightFrameA = 0;
-let lightboxFlightFrameB = 0;
 let galleryRevealTimer = 0;
 let loaderAnimId = 0;
 let gallerySequenceToken = 0;
-let galleryScrollContext = null;
-let gallerySelectionTween = null;
 
 const LIGHTBOX_CLOSE_DURATION = 420;
-const LIGHTBOX_FLIGHT_DURATION = 640;
-const LIGHTBOX_REVEAL_DELAY = 110;
+const LIGHTBOX_FLIGHT_DURATION = 780;
+const LIGHTBOX_REVEAL_DELAY = 180;
 const GALLERY_LOADER_MIN_DURATION = 920;
 
 const GALLERY_LOADER_VARIANTS = [
@@ -275,20 +267,6 @@ const activeLoaderVariant = computed(() => {
   return GALLERY_LOADER_VARIANTS.find((variant) => variant.key === loaderVariantKey.value) || GALLERY_LOADER_VARIANTS[0];
 });
 
-const lightboxRailDistance = computed(() => Math.max(viewportHeight.value * 2.1, 1800));
-
-const lightboxRailHeight = computed(() => {
-  return `${Math.round(lightboxRailDistance.value)}px`;
-});
-
-const lightboxScrubDistance = computed(() => {
-  return Math.max(
-    lightboxRailDistance.value - viewportHeight.value * 0.2,
-    viewportHeight.value * 1.15,
-    920
-  );
-});
-
 const galleryStateClasses = computed(() => ({
   "has-lightbox": lightboxIndex.value >= 0,
   "is-idle": galleryInteractionState.value === "idle",
@@ -371,147 +349,15 @@ function getGalleryImageUrl(filename) {
 }
 
 function cleanupLightboxScrollScrub() {
-  if (galleryScrollContext) {
-    galleryScrollContext.revert();
-    galleryScrollContext = null;
-  }
-  if (gallerySelectionTween) {
-    gallerySelectionTween.kill();
-    gallerySelectionTween = null;
-  }
+  return;
 }
 
 function setupLightboxScrollScrub() {
-  cleanupLightboxScrollScrub();
-
-  if (!lightboxScrollRef.value || !lightboxViewportRef.value || lightboxIndex.value < 0) {
+  if (lightboxIndex.value < 0) {
     return;
   }
 
-  const scrollContainer = lightboxScrollRef.value;
-  const viewport = lightboxViewportRef.value;
-  const backdrop = viewport.querySelector(".lightbox__backdrop");
-  const backdropImage = viewport.querySelector(".lightbox__backdrop-img");
-  const infoPanel = viewport.querySelector(".lightbox__info");
-  const stage = viewport.querySelector(".lightbox__stage");
-  const card = lightboxCardRef.value;
-  const cardImage = card?.querySelector("img");
-  const closeBtn = viewport.querySelector(".lightbox__close");
-  const arrows = Array.from(viewport.querySelectorAll(".lightbox__arrow"));
-  const selectedColumns = "minmax(0, 1fr) minmax(320px, 380px)";
-  const fullscreenColumns = "minmax(0, 1fr) 0px";
-  const selectedStageWidth = "min(56vw, 800px)";
-  const fullscreenStageWidth = "100vw";
-
   galleryInteractionState.value = "selected";
-  galleryScrubProgress.value = 0;
-  scrollContainer.scrollTop = 0;
-
-  galleryScrollContext = gsap.context(() => {
-    gsap.set(viewport, { gridTemplateColumns: selectedColumns });
-    gsap.set(stage, { y: 0, scale: 1, filter: "blur(0px)", width: selectedStageWidth, justifySelf: "end" });
-    gsap.set(card, {
-      scale: 1,
-      y: 0,
-      rotateX: 0,
-      rotateZ: 0,
-      padding: "0px",
-      borderRadius: "0px"
-    });
-    gsap.set(infoPanel, { x: 0, opacity: 1, filter: "blur(0px)" });
-    gsap.set(backdrop, { opacity: 0.24, scale: 1.03 });
-    if (backdropImage) {
-      gsap.set(backdropImage, { opacity: 0.18 });
-    }
-    if (cardImage) {
-      gsap.set(cardImage, { scale: 1, transformOrigin: "center center" });
-    }
-
-    gallerySelectionTween = gsap.timeline({
-      scrollTrigger: {
-        scroller: scrollContainer,
-        trigger: viewport,
-        start: "top top",
-        end: () => `+=${Math.round(lightboxScrubDistance.value)}`,
-        scrub: 1,
-        pin: viewport,
-        pinSpacing: false,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-        onUpdate: (self) => {
-          galleryScrubProgress.value = self.progress;
-          if (self.progress > 0.18 && self.progress < 0.82) {
-            if (self.progress < 0.42) {
-              galleryInteractionState.value = "expanding";
-            } else if (self.progress > 0.58) {
-              galleryInteractionState.value = "returning";
-            } else {
-              galleryInteractionState.value = "fullscreen";
-            }
-          } else if (self.progress > 0.78) {
-            galleryInteractionState.value = "settled";
-          } else if (self.progress > 0.12) {
-            galleryInteractionState.value = "scrubbing";
-          } else {
-            galleryInteractionState.value = "selected";
-          }
-        }
-      }
-    });
-
-    if (backdrop) {
-      gallerySelectionTween
-        .to(backdrop, { opacity: 0.86, scale: 1, ease: "none", duration: 0.24 }, 0.08)
-        .to(backdrop, { opacity: 0.52, scale: 1.01, ease: "none", duration: 0.26 }, 0.36)
-        .to(backdrop, { opacity: 0.24, scale: 1.03, ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (backdropImage) {
-      gallerySelectionTween
-        .to(backdropImage, { opacity: 0.32, ease: "none", duration: 0.24 }, 0.08)
-        .to(backdropImage, { opacity: 0.22, ease: "none", duration: 0.26 }, 0.36)
-        .to(backdropImage, { opacity: 0.18, ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (viewport) {
-      gallerySelectionTween
-        .to(viewport, { gridTemplateColumns: fullscreenColumns, ease: "none", duration: 0.24 }, 0.08)
-        .to(viewport, { gridTemplateColumns: fullscreenColumns, ease: "none", duration: 0.26 }, 0.36)
-        .to(viewport, { gridTemplateColumns: selectedColumns, ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (stage) {
-      gallerySelectionTween
-        .to(stage, { y: 0, scale: 1, width: fullscreenStageWidth, justifySelf: "stretch", ease: "none", duration: 0.24 }, 0.08)
-        .to(stage, { y: 0, scale: 1, width: fullscreenStageWidth, justifySelf: "stretch", ease: "none", duration: 0.26 }, 0.36)
-        .to(stage, { y: 0, scale: 1, width: selectedStageWidth, justifySelf: "end", ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (card) {
-      gallerySelectionTween
-        .to(card, { scale: 1.02, padding: "0px", borderRadius: "0px", ease: "none", duration: 0.24 }, 0.08)
-        .to(card, { scale: 1.08, padding: "0px", borderRadius: "0px", ease: "none", duration: 0.26 }, 0.36)
-        .to(card, { scale: 1, padding: "0px", borderRadius: "0px", ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (cardImage) {
-      gallerySelectionTween
-        .to(cardImage, { scale: 1, ease: "none", duration: 0.24 }, 0.08)
-        .to(cardImage, { scale: 1, ease: "none", duration: 0.26 }, 0.36)
-        .to(cardImage, { scale: 1, ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (infoPanel) {
-      gallerySelectionTween
-        .to(infoPanel, { x: 52, opacity: 0, filter: "blur(16px)", ease: "none", duration: 0.24 }, 0.08)
-        .to(infoPanel, { x: 64, opacity: 0, filter: "blur(18px)", ease: "none", duration: 0.26 }, 0.36)
-        .to(infoPanel, { x: 0, opacity: 1, filter: "blur(0px)", ease: "none", duration: 0.24 }, 0.68);
-    }
-    if (closeBtn) {
-      gallerySelectionTween
-        .to(closeBtn, { opacity: 1, scale: 1, ease: "none", duration: 0.18 }, 0.14);
-    }
-    if (arrows.length) {
-      gallerySelectionTween
-        .fromTo(arrows, { opacity: 0, x: (index) => (index === 0 ? -10 : 10) }, { opacity: 1, x: 0, ease: "none", stagger: 0.04, duration: 0.18 }, 0.12);
-    }
-  }, viewport);
-
-  ScrollTrigger.refresh();
 }
 
 /* ── Bodhi Tree Canopy Layout ──
@@ -987,14 +833,6 @@ function cancelLightboxMotion() {
     window.clearTimeout(lightboxFlightCleanupTimer);
     lightboxFlightCleanupTimer = 0;
   }
-  if (lightboxFlightFrameA) {
-    cancelAnimationFrame(lightboxFlightFrameA);
-    lightboxFlightFrameA = 0;
-  }
-  if (lightboxFlightFrameB) {
-    cancelAnimationFrame(lightboxFlightFrameB);
-    lightboxFlightFrameB = 0;
-  }
 }
 
 function cancelGalleryMotion() {
@@ -1008,26 +846,30 @@ function cancelGalleryMotion() {
   }
 }
 
-function createLightboxFlightStyle(sourceRect, targetRect, item) {
+function buildLightboxFlightStyle(sourceRect, targetRect, item) {
   const sourceCenterX = sourceRect.left + sourceRect.width / 2;
   const sourceCenterY = sourceRect.top + sourceRect.height / 2;
-  const offsetX = sourceCenterX / window.innerWidth - 0.5;
-  const offsetY = sourceCenterY / window.innerHeight - 0.5;
-  const rotateZ = clampNumber((item?.sway || 0) * 1.3 + offsetX * 12 - offsetY * 6, -16, 16);
-  const rotateX = clampNumber(18 + Math.abs(offsetY) * 26 + Math.abs(item?.tilt || 0) * 1.2, 16, 36);
-  const rotateY = clampNumber(offsetX * 30 + (item?.angle || 0) * 1, -28, 28);
-  const startRadius = clampNumber(sourceRect.width * 0.012, 2, 5);
-  const endRadius = clampNumber(targetRect.width * 0.012, 6, 12);
-  const frameInset = clampNumber(targetRect.width * 0.018, 10, 18);
-  const flightPadding = clampNumber(sourceRect.width * 0.055, 8, 18);
+  const dx = targetRect.left - sourceRect.left;
+  const dy = targetRect.top - sourceRect.top;
+  const travelDist = Math.hypot(dx, dy);
+  const rise = clampNumber(travelDist * 0.08, 12, 46);
+  const sway = (item?.sway || 0) * 0.7;
+  const tilt = (item?.tilt || 0) * 0.6;
+  const rotateZ = clampNumber(sway + (sourceCenterX / window.innerWidth - 0.5) * 10, -10, 10);
+  const rotateX = clampNumber(14 + Math.abs(sourceCenterY / window.innerHeight - 0.5) * 16 + Math.abs(tilt), 10, 28);
+  const rotateY = clampNumber((sourceCenterX / window.innerWidth - 0.5) * 18, -16, 16);
+  const startRadius = clampNumber(sourceRect.width * 0.02, 3, 7);
+  const endRadius = clampNumber(Math.min(targetRect.width, targetRect.height) * 0.026, 10, 18);
+  const frameInset = clampNumber(Math.min(targetRect.width, targetRect.height) * 0.016, 8, 16);
 
   return {
     left: `${sourceRect.left}px`,
     top: `${sourceRect.top}px`,
     width: `${sourceRect.width}px`,
     height: `${sourceRect.height}px`,
-    "--flight-dx": `${targetRect.left - sourceRect.left}px`,
-    "--flight-dy": `${targetRect.top - sourceRect.top}px`,
+    "--flight-dx": `${dx}px`,
+    "--flight-dy": `${dy}px`,
+    "--flight-arc": `${rise}px`,
     "--flight-scale-x": `${targetRect.width / sourceRect.width}`,
     "--flight-scale-y": `${targetRect.height / sourceRect.height}`,
     "--flight-rotate-x": `${rotateX.toFixed(2)}deg`,
@@ -1035,57 +877,8 @@ function createLightboxFlightStyle(sourceRect, targetRect, item) {
     "--flight-rotate-z": `${rotateZ.toFixed(2)}deg`,
     "--flight-radius-start": `${startRadius.toFixed(2)}px`,
     "--flight-radius-end": `${endRadius.toFixed(2)}px`,
-    "--flight-frame-inset": `${frameInset.toFixed(2)}px`,
-    "--flight-padding": `${flightPadding.toFixed(2)}px`
+    "--flight-frame-inset": `${frameInset.toFixed(2)}px`
   };
-}
-
-function spawnFlightGhost(src, x, y, w, h, rx, ry, rz, radius, blur) {
-  var ghost = document.createElement("div");
-  var img = document.createElement("img");
-  img.src = src;
-  img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
-  ghost.appendChild(img);
-  ghost.style.cssText =
-    "position:fixed;left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;" +
-    "overflow:hidden;border-radius:" + radius + "px;pointer-events:none;z-index:10025;" +
-    "opacity:0.36;transform:perspective(1200px) rotateX(" + rx + "deg) rotateY(" + ry + "deg) rotateZ(" + rz + "deg);" +
-    "filter:blur(" + (blur + 3) + "px) brightness(1.12);" +
-    "transition:opacity 0.44s ease-out,filter 0.44s ease-out,transform 0.44s ease-out;" +
-    "box-shadow:0 0 20px rgba(255,235,160,0.28);";
-  document.body.appendChild(ghost);
-  requestAnimationFrame(function () {
-    ghost.style.opacity = "0";
-    ghost.style.filter = "blur(" + (blur + 12) + "px) brightness(1.28)";
-    ghost.style.transform += " scale(0.8)";
-  });
-  setTimeout(function () { ghost.remove(); }, 500);
-}
-
-function spawnArrivalParticles(cx, cy) {
-  for (var i = 0; i < 16; i++) {
-    var p = document.createElement("div");
-    var angle = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-    var dist = 45 + Math.random() * 100;
-    var tx = Math.cos(angle) * dist;
-    var ty = Math.sin(angle) * dist;
-    var size = 3 + Math.random() * 5;
-    p.style.cssText =
-      "position:fixed;left:" + cx + "px;top:" + cy + "px;" +
-      "width:" + size + "px;height:" + size + "px;border-radius:50%;" +
-      "background:rgba(255,235,160,0.92);pointer-events:none;z-index:10035;" +
-      "transform:translate(-50%,-50%);opacity:1;" +
-      "transition:all 0.58s cubic-bezier(0.16,1,0.3,1);" +
-      "box-shadow:0 0 8px rgba(255,235,160,0.6);";
-    document.body.appendChild(p);
-    (function (el, dx, dy) {
-      requestAnimationFrame(function () {
-        el.style.transform = "translate(" + dx + "px," + dy + "px)";
-        el.style.opacity = "0";
-      });
-    })(p, tx, ty);
-    setTimeout((function (el) { return function () { el.remove(); }; })(p), 650);
-  }
 }
 
 async function runLightboxOpenFlight(sourceRect, item) {
@@ -1100,135 +893,51 @@ async function runLightboxOpenFlight(sourceRect, item) {
   }
 
   const src = getGalleryImageUrl(activeFilename.value);
-
-  const sx = sourceRect.left;
-  const sy = sourceRect.top;
-  const sw = sourceRect.width;
-  const sh = sourceRect.height;
-  const tx = targetRect.left;
-  const ty = targetRect.top;
-  const tw = targetRect.width;
-  const th = targetRect.height;
-
-  const travelDist = Math.hypot(tx - sx, ty - sy);
-  const arcHeight = -Math.min(travelDist * 0.14, 80);
-
-  const normX = (sx + sw / 2) / window.innerWidth - 0.5;
-  const normY = (sy + sh / 2) / window.innerHeight - 0.5;
-  const startRotZ = clampNumber((item?.sway || 0) * 1.3 + normX * 14, -16, 16);
-  const startRotX = clampNumber(22 + Math.abs(normY) * 24, 18, 40);
-  const startRotY = clampNumber(normX * 32, -30, 30);
-
-  const startRadius = clampNumber(sw * 0.012, 2, 5);
-  const endRadius = clampNumber(tw * 0.012, 6, 12);
-  const frameInset = clampNumber(tw * 0.018, 10, 18);
+  const style = buildLightboxFlightStyle(sourceRect, targetRect, item);
 
   lightboxFlight.value = {
     src,
     style: {
-      left: sx + "px",
-      top: sy + "px",
-      width: sw + "px",
-      height: sh + "px",
-      transition: "none",
-      transform: "translate(0px,0px) perspective(1200px) rotateX(" + startRotX + "deg) rotateY(" + startRotY + "deg) rotateZ(" + startRotZ + "deg) scale(1,1)",
-      filter: "none",
-      borderRadius: startRadius + "px",
-      "--flight-radius-start": startRadius + "px",
-      "--flight-radius-end": endRadius + "px",
-      "--flight-frame-inset": frameInset + "px"
+      ...style,
+      transition:
+        "transform 0.78s cubic-bezier(0.16, 1, 0.3, 1), " +
+        "opacity 0.5s ease, filter 0.7s ease, border-radius 0.78s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.78s cubic-bezier(0.16, 1, 0.3, 1)",
+      transform:
+        "perspective(1500px) translate3d(0, 0, 0) " +
+        "rotateX(var(--flight-rotate-x)) rotateY(var(--flight-rotate-y)) rotateZ(var(--flight-rotate-z)) scale3d(1, 1, 1)",
+      opacity: 0.98
     },
-    phase: "active"
+    phase: "initial"
   };
 
   await nextTick();
-  await nextTick();
-
-  const flightEl = document.querySelector(".lightbox-flight");
-  if (!flightEl) {
-    lightboxSettled.value = true;
-    lightboxFlight.value = null;
-    return;
-  }
-
-  const duration = 840;
-  const startTime = performance.now();
-  let prevPosT = 0;
-  let lastGhostTime = 0;
-
-  function easeOutExpo(t) {
-    return t >= 1 ? 1 : 1 - Math.pow(2, -13 * t);
-  }
-  function easeOutQuint(t) {
-    return 1 - Math.pow(1 - t, 5);
-  }
-
-  function tick(now) {
-    const elapsed = now - startTime;
-    const rawT = Math.min(elapsed / duration, 1);
-
-    const posT = easeOutExpo(rawT);
-    const rotT = easeOutQuint(rawT);
-
-    const cx = sx + (tx - sx) * posT;
-    const cy = sy + (ty - sy) * posT + arcHeight * Math.sin(posT * Math.PI);
-    const cw = sw + (tw - sw) * posT;
-    const ch = sh + (th - sh) * posT;
-
-    const rx = startRotX * (1 - rotT);
-    const ry = startRotY * (1 - rotT);
-    const rz = startRotZ * (1 - rotT);
-
-    const speed = Math.abs(posT - prevPosT);
-    prevPosT = posT;
-    const motionBlur = Math.min(speed * 200, 7);
-
-    const scaleBoost = rawT > 0.72 && rawT < 1
-      ? Math.sin((rawT - 0.72) / 0.28 * Math.PI) * 0.012
-      : 0;
-
-    const dx = cx - sx;
-    const dy = cy - sy;
-    const scaleX = cw / sw + scaleBoost;
-    const scaleY = ch / sh + scaleBoost;
-    const radius = startRadius + (endRadius - startRadius) * posT;
-
-    flightEl.style.transform =
-      "translate(" + dx.toFixed(2) + "px," + dy.toFixed(2) + "px) " +
-      "perspective(1200px) rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg) rotateZ(" + rz.toFixed(2) + "deg) " +
-      "scale(" + scaleX.toFixed(4) + "," + scaleY.toFixed(4) + ")";
-    flightEl.style.borderRadius = radius.toFixed(1) + "px";
-
-    if (motionBlur > 0.4) {
-      flightEl.style.filter = "blur(" + motionBlur.toFixed(1) + "px) brightness(" + (1 + (1 - posT) * 0.06).toFixed(3) + ")";
-    } else if (rawT < 0.96) {
-      flightEl.style.filter = "brightness(" + (1 + (1 - posT) * 0.03).toFixed(3) + ")";
-    } else {
-      flightEl.style.filter = "none";
-    }
-
-    if (now - lastGhostTime > 65 && rawT > 0.04 && rawT < 0.88) {
-      lastGhostTime = now;
-      spawnFlightGhost(src, cx, cy, cw, ch, rx, ry, rz, radius, motionBlur);
-    }
-
-    if (rawT < 1) {
-      requestAnimationFrame(tick);
-    } else {
-      spawnArrivalParticles(tx + tw / 2, ty + th / 2);
-      window.setTimeout(function () {
-        lightboxFlight.value = null;
-      }, 80);
-    }
-  }
-
-  requestAnimationFrame(function () {
-    requestAnimationFrame(tick);
+  requestAnimationFrame(() => {
+    if (!lightboxFlight.value) return;
+    lightboxFlight.value = {
+      ...lightboxFlight.value,
+      phase: "active",
+      style: {
+        ...lightboxFlight.value.style,
+        transform:
+          "perspective(1500px) " +
+          "translate3d(var(--flight-dx), calc(var(--flight-dy) - var(--flight-arc)), 0) " +
+          "rotateX(0deg) rotateY(0deg) rotateZ(0deg) " +
+          "scale3d(var(--flight-scale-x), var(--flight-scale-y), 1)",
+        opacity: 0.08,
+        filter: "saturate(1.04) brightness(1.03)"
+      }
+    };
   });
 
-  window.setTimeout(function () {
+  lightboxRevealTimer = window.setTimeout(() => {
+    lightboxRevealTimer = 0;
     lightboxSettled.value = true;
-  }, 130);
+  }, LIGHTBOX_REVEAL_DELAY);
+
+  lightboxFlightCleanupTimer = window.setTimeout(() => {
+    lightboxFlightCleanupTimer = 0;
+    lightboxFlight.value = null;
+  }, LIGHTBOX_FLIGHT_DURATION);
 }
 
 async function openLightbox(index, event, item) {
@@ -1243,7 +952,6 @@ async function openLightbox(index, event, item) {
   lightboxFlight.value = null;
   selectedWallIndex.value = index;
   galleryInteractionState.value = "selected";
-  galleryScrubProgress.value = 0;
   lightboxOriginX.value = sourceRect
     ? ((sourceRect.left + sourceRect.width / 2) / window.innerWidth * 100).toFixed(1)
     : 50;
@@ -1259,9 +967,9 @@ async function openLightbox(index, event, item) {
 
   if (sourceRect?.width && sourceRect?.height) {
     runLightboxOpenFlight(sourceRect, item);
+  } else {
+    lightboxSettled.value = true;
   }
-
-  lightboxSettled.value = true;
   await nextTick();
   setupLightboxScrollScrub();
 }
@@ -1275,7 +983,6 @@ function closeLightbox() {
   lightboxFlight.value = null;
   selectedWallIndex.value = -1;
   galleryInteractionState.value = "idle";
-  galleryScrubProgress.value = 0;
   document.body.style.overflow = "";
   lightboxCloseTimer = window.setTimeout(() => {
     lightboxIndex.value = -1;
@@ -1288,7 +995,7 @@ function prevImage() {
     : galleryImages.value.length - 1;
   selectedWallIndex.value = lightboxIndex.value;
   galleryInteractionState.value = "selected";
-  window.setTimeout(() => setupLightboxScrollScrub(), 0);
+  setupLightboxScrollScrub();
 }
 
 function nextImage() {
@@ -1297,7 +1004,7 @@ function nextImage() {
     : 0;
   selectedWallIndex.value = lightboxIndex.value;
   galleryInteractionState.value = "selected";
-  window.setTimeout(() => setupLightboxScrollScrub(), 0);
+  setupLightboxScrollScrub();
 }
 
 function handleRefresh() {
@@ -1950,11 +1657,10 @@ onBeforeUnmount(() => {
           :class="galleryStateClasses"
           :style="{
             '--origin-x': lightboxOriginX + '%',
-            '--origin-y': lightboxOriginY + '%',
-            '--scrub-progress': galleryScrubProgress
+            '--origin-y': lightboxOriginY + '%'
           }"
         >
-          <div ref="lightboxScrollRef" class="lightbox__scroll" :style="{ '--rail-height': lightboxRailHeight }">
+          <div class="lightbox__scroll">
             <div ref="lightboxViewportRef" class="lightbox__viewport" :class="{
               'is-visible': lightboxVisible,
               'is-settled': lightboxSettled,
@@ -1993,26 +1699,18 @@ onBeforeUnmount(() => {
                   @click="openSourceLink"
                 >
                   <div class="lightbox__card-shimmer" aria-hidden="true"></div>
-                  <img
-                    :src="getGalleryImageUrl(activeFilename)"
-                    :alt="localizedGalleryDetail.title"
-                  />
+                  <Transition name="lightbox-image" mode="out-in">
+                    <img
+                      :key="activeFilename"
+                      :src="getGalleryImageUrl(activeFilename)"
+                      :alt="localizedGalleryDetail.title"
+                    />
+                  </Transition>
                 </button>
                 <div class="lightbox__shadow" aria-hidden="true"></div>
               </div>
 
               <aside class="lightbox__info">
-                <div class="lightbox__progress">
-                  <span class="lightbox__progress-label">Scrub</span>
-                  <span class="lightbox__progress-value">{{ Math.round(galleryScrubProgress * 100) }}%</span>
-                  <div class="lightbox__progress-track" aria-hidden="true">
-                    <i
-                      class="lightbox__progress-line"
-                      :style="{ '--scrub-progress': Math.max(0, Math.min(1, galleryScrubProgress)) }"
-                    ></i>
-                  </div>
-                </div>
-
                 <p class="lightbox__eyebrow">{{ localizedGalleryDetail.collection }}</p>
                 <h2>
                   <button
@@ -2057,7 +1755,6 @@ onBeforeUnmount(() => {
                 </svg>
               </button>
             </div>
-            <div class="lightbox__rail" :style="{ height: lightboxRailHeight }" aria-hidden="true"></div>
           </div>
         </div>
     </Transition>
@@ -4498,6 +4195,7 @@ onBeforeUnmount(() => {
 
 .lightbox__scroll {
   background: transparent !important;
+  overflow: hidden !important;
 }
 
 .lightbox__viewport {
@@ -4540,6 +4238,34 @@ onBeforeUnmount(() => {
   max-width: min(52vw, 760px);
   max-height: 76vh;
   background: rgba(250, 248, 244, 0.98);
+}
+
+.lightbox-image-enter-active,
+.lightbox-image-leave-active {
+  transition:
+    opacity 0.36s ease,
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.42s ease;
+  will-change: transform, opacity, filter;
+}
+
+.lightbox-image-enter-from {
+  opacity: 0;
+  transform: translateY(8px) scale(1.035);
+  filter: blur(8px) saturate(0.9);
+}
+
+.lightbox-image-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  filter: blur(6px) saturate(0.94);
+}
+
+.lightbox-image-enter-to,
+.lightbox-image-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0) saturate(1);
 }
 
 .lightbox__info {
@@ -4590,5 +4316,125 @@ onBeforeUnmount(() => {
 
 .lightbox__rail {
   margin-top: 0;
+}
+
+/* Make the main artwork visible as soon as the lightbox is open.
+   This guards against earlier animation states leaving the card/image transparent. */
+.lightbox__viewport.is-visible .lightbox__stage {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: translateY(0) scale(1) !important;
+}
+
+.lightbox__viewport.is-visible .lightbox__card {
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* Reworked open-flight: one calm source card that glides into the final frame. */
+.lightbox-flight {
+  position: fixed;
+  z-index: 10030;
+  inset: auto auto auto auto;
+  overflow: hidden;
+  pointer-events: none;
+  transform-origin: top left;
+  border-radius: var(--flight-radius-start);
+  background: rgba(255, 250, 241, 0.88);
+  box-shadow:
+    0 22px 44px rgba(106, 116, 104, 0.18),
+    0 0 34px rgba(255, 233, 169, 0.18);
+  opacity: 0.98;
+  filter: saturate(1.03) brightness(1.03);
+  will-change: transform, opacity, filter, border-radius, box-shadow;
+  transition:
+    transform 0.78s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.5s ease,
+    filter 0.7s ease,
+    border-radius 0.78s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.78s cubic-bezier(0.16, 1, 0.3, 1);
+  transform:
+    perspective(1500px)
+    translate3d(0, 0, 0)
+    rotateX(var(--flight-rotate-x))
+    rotateY(var(--flight-rotate-y))
+    rotateZ(var(--flight-rotate-z))
+    scale3d(1, 1, 1);
+}
+
+.lightbox-flight.is-active {
+  border-radius: var(--flight-radius-end);
+  box-shadow:
+    0 38px 84px rgba(104, 116, 96, 0.18),
+    0 0 54px rgba(255, 226, 153, 0.14);
+  opacity: 0.08;
+  filter: saturate(1.05) brightness(1.05);
+  transform:
+    perspective(1500px)
+    translate3d(var(--flight-dx), calc(var(--flight-dy) - var(--flight-arc)), 0)
+    rotateX(0deg)
+    rotateY(0deg)
+    rotateZ(0deg)
+    scale3d(var(--flight-scale-x), var(--flight-scale-y), 1);
+}
+
+.lightbox-flight img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.01);
+}
+
+.lightbox-flight__veil,
+.lightbox-flight__frame,
+.lightbox-flight__dust {
+  position: absolute;
+  inset: 0;
+}
+
+.lightbox-flight__veil {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.34), transparent 30%),
+    radial-gradient(circle at 50% 16%, rgba(255, 244, 211, 0.34), transparent 36%);
+  opacity: 0.72;
+  mix-blend-mode: screen;
+}
+
+.lightbox-flight__frame {
+  inset: var(--flight-frame-inset);
+  border: 1px solid rgba(255, 247, 226, 0.66);
+  border-radius: calc(var(--flight-radius-start) * 0.78);
+  box-shadow: inset 0 0 0 1px rgba(126, 154, 113, 0.06);
+  transition:
+    inset 0.78s cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 0.78s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lightbox-flight.is-active .lightbox-flight__frame {
+  border-radius: calc(var(--flight-radius-end) - 6px);
+}
+
+.lightbox-flight__dust {
+  display: none;
+}
+
+.lightbox-flight::before {
+  content: "";
+  position: absolute;
+  inset: -34%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 240, 175, 0.18) 0%, rgba(255, 240, 175, 0.07) 28%, transparent 62%);
+  filter: blur(24px);
+  opacity: 0.72;
+  pointer-events: none;
+  transform: scale(0.82);
+  transition: transform 0.78s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.62s ease;
+}
+
+.lightbox-flight.is-active::before {
+  transform: scale(1.14);
+  opacity: 0.14;
 }
 </style>

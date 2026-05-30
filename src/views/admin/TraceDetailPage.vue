@@ -145,7 +145,7 @@ const overviewCards = computed(() => [
 ]);
 
 const traceDetailSummary = computed(() => [
-  { label: "Trace ID", value: traceIdDisplay.value },
+  { label: "追踪编号", value: traceIdDisplay.value },
   { label: "状态", value: traceStatus.value },
   { label: "节点数", value: String(nodeStats.value.total) },
   { label: "总耗时", value: formatDuration(run.value.durationMs ?? undefined) }
@@ -242,8 +242,8 @@ onMounted(() => {
 <template>
   <section class="admin-page admin-trace-detail">
     <PageHeader
-      tag="Trace Detail"
-      :title="traceId ? `Trace ${traceId}` : 'Trace 详情'"
+      tag="追踪详情"
+      :title="traceId ? `追踪 ${traceId}` : '追踪详情'"
       description="查看链路运行摘要、请求响应、错误信息和节点时间线，快速定位异常与耗时瓶颈。"
     >
       <template #meta>
@@ -256,7 +256,7 @@ onMounted(() => {
       </template>
       <template #actions>
         <button class="admin-button--ghost" type="button" @click="router.push('/admin/traces')">返回列表</button>
-        <button class="admin-button--ghost" type="button" @click="copyTraceId" :disabled="!traceId">复制 Trace ID</button>
+        <button class="admin-button--ghost" type="button" @click="copyTraceId" :disabled="!traceId">复制追踪编号</button>
         <button class="admin-button" type="button" :disabled="loading" @click="loadTraceDetail">
           {{ loading ? "刷新中..." : "刷新" }}
         </button>
@@ -267,7 +267,7 @@ onMounted(() => {
 
     <div v-if="isInitialLoading" class="trace-loading-banner">
       <span class="trace-loading-dot" />
-      <span>加载 Trace 详情中...</span>
+      <span>正在加载追踪详情...</span>
     </div>
 
     <template v-else>
@@ -291,11 +291,11 @@ onMounted(() => {
         </div>
         <div class="trace-hero-side">
           <div class="trace-hero-cardline">
-            <span class="trace-hero-cardlabel">会话 ID</span>
+            <span class="trace-hero-cardlabel">会话编号</span>
             <strong>{{ run.conversationId || "--" }}</strong>
           </div>
           <div class="trace-hero-cardline">
-            <span class="trace-hero-cardlabel">任务 ID</span>
+            <span class="trace-hero-cardlabel">任务编号</span>
             <strong>{{ run.taskId || "--" }}</strong>
           </div>
           <div class="trace-hero-cardline">
@@ -334,7 +334,7 @@ onMounted(() => {
           <h3>基础信息</h3>
           <p class="admin-detail-card-desc">Trace 标识、会话、任务和状态概览。</p>
           <div class="admin-kv">
-            <div><dt>Trace ID</dt><dd class="is-code">{{ traceId || "--" }}</dd></div>
+            <div><dt>追踪编号</dt><dd class="is-code">{{ traceId || "--" }}</dd></div>
             <div><dt>链路名称</dt><dd>{{ run.traceName || "--" }}</dd></div>
             <div><dt>会话 ID</dt><dd class="is-code">{{ run.conversationId || "--" }}</dd></div>
             <div><dt>任务 ID</dt><dd class="is-code">{{ run.taskId || "--" }}</dd></div>

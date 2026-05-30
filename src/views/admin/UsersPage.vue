@@ -76,10 +76,10 @@ const selectedUserLabel = computed(() => {
 });
 
 const stats = computed(() => [
-  { title: "Total", value: String(totalUsers.value), hint: "用户总数", tone: "indigo" },
-  { title: "Page", value: String(pageUsers.value.length), hint: "当前页数量", tone: "cyan" },
-  { title: "Admins", value: String(adminCount.value), hint: "当前页管理员", tone: "emerald" },
-  { title: "Enabled", value: String(enabledCount.value), hint: "当前页启用账户", tone: "amber" }
+  { title: "总数", value: String(totalUsers.value), hint: "用户总数", tone: "indigo" },
+  { title: "当前页", value: String(pageUsers.value.length), hint: "当前页数量", tone: "cyan" },
+  { title: "管理员", value: String(adminCount.value), hint: "当前页管理员", tone: "emerald" },
+  { title: "启用", value: String(enabledCount.value), hint: "当前页启用账户", tone: "amber" }
 ]);
 
 const heroSummary = computed(() => [
@@ -268,7 +268,7 @@ onMounted(() => {
 
     <section class="admin-detail-card users-hero">
       <div class="users-hero-copy">
-        <p class="trace-hero-tag">User Center</p>
+        <p class="trace-hero-tag">用户中心</p>
         <h2>账户与权限概览</h2>
         <p>快速搜索后台账户，查看角色、状态和头像，并在右侧锁定当前选中用户的完整资料。</p>
       </div>

@@ -454,7 +454,7 @@ async function loadDashboard(nextWindow = windowValue.value) {
   } catch (error) {
     if (requestId.value !== currentRequestId) return;
     console.error(error);
-    errorText.value = "Dashboard 数据加载失败，请稍后重试。";
+    errorText.value = "后台总览数据加载失败，请稍后重试。";
   } finally {
     if (requestId.value === currentRequestId) {
       loading.value = false;
@@ -476,7 +476,7 @@ onMounted(() => {
 <template>
   <section class="admin-page">
     <PageHeader
-      tag="Dashboard"
+      tag="后台总览"
       title="后台总览"
       description="聚焦会话、消息、性能和知识召回，快速判断当前服务状态。"
     >
@@ -511,7 +511,7 @@ onMounted(() => {
 
     <section class="admin-detail-card dashboard-hero">
       <div class="dashboard-hero-copy">
-        <p class="trace-hero-tag">Overview</p>
+        <p class="trace-hero-tag">概览</p>
         <h2>{{ dashboardWindowLabel }}</h2>
         <p>最后更新时间：{{ formatLastUpdated(lastUpdated) }}</p>
       </div>

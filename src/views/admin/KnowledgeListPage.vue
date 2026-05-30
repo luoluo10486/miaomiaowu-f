@@ -56,7 +56,7 @@ const latestKnowledgeBase = computed(() => records.value[0] || null);
 const latestKnowledgeBaseLabel = computed(() => {
   if (!latestKnowledgeBase.value) return "--";
   const name = latestKnowledgeBase.value.name || latestKnowledgeBase.value.id || "--";
-  const collection = latestKnowledgeBase.value.collectionName || "未设置 Collection";
+  const collection = latestKnowledgeBase.value.collectionName || "未设置集合";
   return `${name} · ${collection}`;
 });
 const knowledgeHeroSummary = computed(() => [
@@ -302,16 +302,16 @@ onMounted(() => {
 <template>
   <section class="admin-page">
     <PageHeader
-      tag="Knowledge"
+      tag="知识库"
       title="知识库管理"
       description="管理知识库集合、embedding 模型和文档总量，支持搜索、新建、重命名和删除。"
     >
       <template #meta>
         <div class="admin-page-header-meta">
-          <span class="admin-badge is-outline">Total {{ formatStatValue(stats.totalCount) }}</span>
-          <span class="admin-badge is-outline">Docs {{ formatStatValue(stats.documentCount) }}</span>
-          <span class="admin-badge is-outline">Active {{ formatStatValue(stats.activeCount) }}</span>
-          <span class="admin-badge is-outline">Query {{ currentKeywordLabel }}</span>
+          <span class="admin-badge is-outline">总数 {{ formatStatValue(stats.totalCount) }}</span>
+          <span class="admin-badge is-outline">文档 {{ formatStatValue(stats.documentCount) }}</span>
+          <span class="admin-badge is-outline">活跃 {{ formatStatValue(stats.activeCount) }}</span>
+          <span class="admin-badge is-outline">筛选 {{ currentKeywordLabel }}</span>
         </div>
       </template>
       <template #actions>
@@ -332,7 +332,7 @@ onMounted(() => {
 
     <section class="admin-detail-card knowledge-hero">
       <div class="knowledge-hero-copy">
-        <p class="trace-hero-tag">Knowledge</p>
+        <p class="trace-hero-tag">知识库概览</p>
         <h2>{{ currentKeywordLabel === "全部" ? "全部知识库" : `搜索结果：${currentKeywordLabel}` }}</h2>
         <p>集合、文档和 embedding 模型一眼可见，方便继续进入文档管理。</p>
       </div>
@@ -402,8 +402,8 @@ onMounted(() => {
             <thead>
               <tr>
                 <th>名称</th>
-                <th>Embedding 模型</th>
-                <th>Collection</th>
+                <th>向量模型</th>
+                <th>集合</th>
                 <th>文档数</th>
                 <th>创建者</th>
                 <th>创建时间</th>
@@ -463,11 +463,11 @@ onMounted(() => {
 
         <div class="admin-card-list" style="margin-top: 16px;">
           <div class="admin-card-item">
-            <h3>Collection</h3>
+            <h3>集合</h3>
             <p>支持自动生成，也可以手动指定规范名称。</p>
           </div>
           <div class="admin-card-item">
-            <h3>Embedding</h3>
+            <h3>向量模型</h3>
             <p>新建时可直接选择默认嵌入模型。</p>
           </div>
           <div class="admin-card-item">
@@ -486,18 +486,18 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeCreateDialog">&times;</button>
         <h3>新建知识库</h3>
-        <p>填写知识库基础信息，Collection 名称可留空自动生成。</p>
+        <p>填写知识库基础信息，集合名称可留空自动生成。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>名称</label>
             <input v-model="createForm.name" class="admin-input" placeholder="请输入知识库名称" />
           </div>
           <div class="admin-dialog-field">
-            <label>Collection 名称</label>
+            <label>集合名称</label>
             <input v-model="createForm.collectionName" class="admin-input" placeholder="留空将自动生成" />
           </div>
           <div class="admin-dialog-field">
-            <label>Embedding 模型</label>
+            <label>向量模型</label>
             <input v-model="createForm.embeddingModel" class="admin-input" placeholder="text-embedding-3-large" />
           </div>
         </div>
@@ -514,7 +514,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeRenameDialog">&times;</button>
         <h3>重命名知识库</h3>
-        <p>修改当前知识库的显示名称，不影响 Collection。</p>
+        <p>修改当前知识库的显示名称，不影响集合。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>名称</label>

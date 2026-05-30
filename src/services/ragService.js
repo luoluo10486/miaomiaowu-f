@@ -1,4 +1,5 @@
 import { clearStoredAuth, getStoredAuthToken } from "../utils/auth";
+import { translateUserMessage } from "../utils/errorMessages";
 import { API_BASE_URL, joinApiPath } from "./apiBase";
 import { deleteSession, listMessages, listSessions, renameSession } from "./sessionService";
 import { stopTask, submitFeedback } from "./chatService";
@@ -97,7 +98,7 @@ export async function requestRag(path, options = {}) {
     businessCode !== undefined && businessCode !== 0 && businessCode !== "0";
 
   if (!response.ok || isBusinessError) {
-    throw new Error(payload?.message || payload?.error || "请求失败，请稍后重试");
+    throw new Error(translateUserMessage(payload?.message || payload?.error, "请求失败，请稍后重试"));
   }
 
   if (payload && typeof payload === "object" && "data" in payload) {
@@ -170,7 +171,7 @@ async function readSseStream(response, handlers, signal) {
         break;
       case "error":
         handlers.onError?.(
-          new Error(String(payload?.error || payload?.message || payload || "生成失败"))
+          new Error(translateUserMessage(payload?.error || payload?.message || payload || "生成失败", "生成失败"))
         );
         break;
       default:
@@ -270,7 +271,9 @@ export function createRagChatStream(params, handlers = {}) {
 
       if (!response.ok) {
         const payload = await parseResponsePayload(response);
-        throw new Error(payload?.message || `流式请求失败：${response.status}`);
+        throw new Error(
+          translateUserMessage(payload?.message || `流式请求失败：${response.status}`, `流式请求失败：${response.status}`)
+        );
       }
 
       await readSseStream(response, handlers, controller.signal);

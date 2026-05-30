@@ -20,12 +20,13 @@ export function normalizeStatus(status) {
 
 export function statusLabel(status) {
   const normalized = normalizeStatus(status);
-  if (!normalized) return "UNKNOWN";
-  if (normalized === "success") return "SUCCESS";
-  if (normalized === "failed") return "FAILED";
-  if (normalized === "running") return "RUNNING";
-  if (normalized === "timeout") return "TIMEOUT";
-  return normalized.toUpperCase();
+  if (!normalized) return "未知";
+  if (normalized === "success") return "成功";
+  if (normalized === "failed") return "失败";
+  if (normalized === "running") return "运行中";
+  if (normalized === "timeout") return "超时";
+  if (normalized === "pending") return "待处理";
+  return normalized;
 }
 
 export function statusBadgeClass(status) {

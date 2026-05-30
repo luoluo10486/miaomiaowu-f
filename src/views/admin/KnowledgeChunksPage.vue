@@ -130,10 +130,10 @@ const stats = computed(() => {
   const tokenCount = records.reduce((sum, item) => sum + Number(item.tokenCount || 0), 0);
 
   return [
-    { title: "Chunks", value: total, hint: "当前文档切片总数", tone: "indigo" },
-    { title: "Enabled", value: enabledCount.value, hint: "当前页已启用切片", tone: "emerald" },
-    { title: "Selected", value: selectedIds.value.size, hint: "当前已选切片数", tone: "amber" },
-    { title: "Tokens", value: tokenCount, hint: "当前页 token 总量", tone: "blue" }
+    { title: "切片数", value: total, hint: "当前文档切片总数", tone: "indigo" },
+    { title: "已启用", value: enabledCount.value, hint: "当前页已启用切片", tone: "emerald" },
+    { title: "已选中", value: selectedIds.value.size, hint: "当前已选切片数", tone: "amber" },
+    { title: "Token 数", value: tokenCount, hint: "当前页 token 总量", tone: "blue" }
   ];
 });
 
@@ -421,7 +421,7 @@ onMounted(() => {
 
     <section class="admin-detail-card chunks-summary">
       <div class="chunks-summary__copy">
-        <p class="trace-hero-tag">Chunks Summary</p>
+        <p class="trace-hero-tag">切片总览</p>
         <h2>切片状态概览</h2>
         <p>先确认当前文档、筛选和最近执行状态，再进入切片表格和预览弹窗，结构上更贴近 frontend 的后台页面。</p>
       </div>
@@ -479,7 +479,7 @@ onMounted(() => {
                 <th>内容</th>
                 <th class="w-[96px]">状态</th>
                 <th class="w-[96px]">字符</th>
-                <th class="w-[96px]">Token</th>
+                <th class="w-[96px]">Token 数</th>
                 <th class="w-[170px]">更新时间</th>
                 <th class="w-[170px]">操作</th>
               </tr>
@@ -588,7 +588,7 @@ onMounted(() => {
           </div>
           <div class="admin-kv">
             <div><dt>字符数</dt><dd>{{ previewTarget.charCount ?? "--" }}</dd></div>
-            <div><dt>Token</dt><dd>{{ previewTarget.tokenCount ?? "--" }}</dd></div>
+            <div><dt>Token 数</dt><dd>{{ previewTarget.tokenCount ?? "--" }}</dd></div>
             <div><dt>哈希</dt><dd>{{ previewTarget.contentHash || "--" }}</dd></div>
             <div><dt>创建时间</dt><dd>{{ formatDateTime(previewTarget.createTime || previewTarget.updateTime) }}</dd></div>
             <div>

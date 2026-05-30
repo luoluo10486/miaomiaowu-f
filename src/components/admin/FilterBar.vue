@@ -42,9 +42,9 @@ const status = computed({
 <template>
   <section class="admin-filter-card">
     <div class="admin-filter-grid">
-      <input v-model="traceId" class="admin-input" type="search" placeholder="筛选 Trace ID" />
-      <input v-model="conversationId" class="admin-input" type="search" placeholder="筛选 Conversation ID" />
-      <input v-model="taskId" class="admin-input" type="search" placeholder="筛选 Task ID" />
+      <input v-model="traceId" class="admin-input" type="search" placeholder="筛选追踪编号" />
+      <input v-model="conversationId" class="admin-input" type="search" placeholder="筛选会话编号" />
+      <input v-model="taskId" class="admin-input" type="search" placeholder="筛选任务编号" />
 
       <select v-model="status" class="admin-select">
         <option v-for="option in statusOptions" :key="option.value || '__all__'" :value="option.value">

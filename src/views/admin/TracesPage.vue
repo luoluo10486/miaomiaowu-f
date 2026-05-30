@@ -73,25 +73,25 @@ const heroSummary = computed(() => [
 
 const summaryCards = computed(() => [
   {
-    title: "Success / Failed / Running",
+    title: "成功 / 失败 / 运行中",
     value: `${traceStats.value.successCount} / ${traceStats.value.failedCount} / ${traceStats.value.runningCount}`,
     hint: "当前页状态分布",
     tone: "indigo"
   },
   {
-    title: "Success Rate",
+    title: "成功率",
     value: `${traceStats.value.successRate}%`,
     hint: "当前页成功率",
     tone: "emerald"
   },
   {
-    title: "Avg Latency",
+    title: "平均耗时",
     value: traceStats.value.avgDuration ? `${traceStats.value.avgDuration} ms` : "--",
     hint: "当前页平均耗时",
     tone: "cyan"
   },
   {
-    title: "P95 Latency",
+    title: "P95 耗时",
     value: traceStats.value.p95Duration ? `${traceStats.value.p95Duration} ms` : "--",
     hint: "当前页 P95 耗时",
     tone: "amber"
@@ -171,7 +171,7 @@ onMounted(() => {
 <template>
   <section class="admin-page trace-page trace-list-page">
     <PageHeader
-      tag="Trace Runs"
+      tag="追踪运行"
       title="链路追踪"
       description="统一查看运行列表、筛选条件和耗时分布，点击任意记录进入详情页分析节点执行轨迹。"
     >
@@ -195,19 +195,19 @@ onMounted(() => {
 
     <section class="trace-hero-card">
       <div class="trace-hero-copy">
-        <p class="trace-hero-tag">Trace Overview</p>
+        <p class="trace-hero-tag">追踪概览</p>
         <div class="trace-hero-title-row">
           <h2>链路追踪概览</h2>
-          <span class="admin-badge is-muted">Page {{ pageNo }} / {{ pages }}</span>
+          <span class="admin-badge is-muted">第 {{ pageNo }} / {{ pages }} 页</span>
         </div>
         <p class="trace-hero-subtitle">
           快速查看当前筛选条件下的运行记录，进一步跳转到单次 Trace 详情页分析慢节点和异常节点。
         </p>
         <div class="trace-hero-meta">
-          <span>Trace {{ filters.traceId || "--" }}</span>
-          <span>Conversation {{ filters.conversationId || "--" }}</span>
-          <span>Task {{ filters.taskId || "--" }}</span>
-          <span>Status {{ filters.status || "ALL" }}</span>
+          <span>追踪 {{ filters.traceId || "--" }}</span>
+          <span>会话 {{ filters.conversationId || "--" }}</span>
+          <span>任务 {{ filters.taskId || "--" }}</span>
+          <span>状态 {{ filters.status || "全部" }}</span>
         </div>
       </div>
 
@@ -234,7 +234,7 @@ onMounted(() => {
       <article class="admin-table-card">
         <div class="admin-table-card__header">
           <div>
-            <h2>Trace 列表</h2>
+            <h2>追踪列表</h2>
             <p>支持多条件筛选、分页浏览和运行状态查看，适合快速定位高耗时链路。</p>
           </div>
           <span class="admin-page-count">共 {{ total }} 条</span>
@@ -269,10 +269,10 @@ onMounted(() => {
           <h3>筛选概览</h3>
           <p class="admin-detail-card-desc">当前 Trace 列表筛选条件。</p>
           <div class="admin-kv">
-            <div><dt>Trace ID</dt><dd>{{ filters.traceId || "--" }}</dd></div>
-            <div><dt>Conversation ID</dt><dd>{{ filters.conversationId || "--" }}</dd></div>
-            <div><dt>Task ID</dt><dd>{{ filters.taskId || "--" }}</dd></div>
-            <div><dt>Status</dt><dd>{{ filters.status || "全部" }}</dd></div>
+            <div><dt>追踪编号</dt><dd>{{ filters.traceId || "--" }}</dd></div>
+            <div><dt>会话编号</dt><dd>{{ filters.conversationId || "--" }}</dd></div>
+            <div><dt>任务编号</dt><dd>{{ filters.taskId || "--" }}</dd></div>
+            <div><dt>状态</dt><dd>{{ filters.status || "全部" }}</dd></div>
             <div><dt>当前页</dt><dd>{{ pageNo }} / {{ pages }}</dd></div>
             <div><dt>当前数量</dt><dd>{{ runs.length }}</dd></div>
           </div>

@@ -22,8 +22,9 @@ export default defineConfig({
         secure: false
       },
       "/luoluo": {
-        target: "http://localhost:8080",
-        changeOrigin: true
+        target: "http://localhost:9090",
+        changeOrigin: true,
+        secure: false
       }
     }
   }

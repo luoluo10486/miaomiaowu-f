@@ -24,15 +24,15 @@ npm run dev
 
 登录/注册页面目前会请求以下接口：
 
-- `POST /api/ragent/luoluo/system/public/member/auth/code/send`
-- `POST /api/ragent/luoluo/system/public/member/auth/register`
-- `POST /api/ragent/luoluo/system/public/member/auth/login`
+- `POST /luoluo/system/public/member/auth/code/send`
+- `POST /luoluo/system/public/member/auth/register`
+- `POST /luoluo/system/public/member/auth/login`
 
 当前前端登录/注册参数约定：
 
-- 发送邮箱验证码：`POST /api/ragent/luoluo/system/public/member/auth/code/send`
-- 登录：`POST /api/ragent/luoluo/system/public/member/auth/login`
-- 邮箱注册：`POST /api/ragent/luoluo/system/public/member/auth/register`
+- 发送邮箱验证码：`POST /luoluo/system/public/member/auth/code/send`
+- 登录：`POST /luoluo/system/public/member/auth/login`
+- 邮箱注册：`POST /luoluo/system/public/member/auth/register`
 
 当前前端登录/注册请求体约定：
 
@@ -55,10 +55,10 @@ npm run dev
 - `GET /api/ragent/conversations`
 - `GET /api/ragent/conversations/{conversationId}/messages`
 - `DELETE /api/ragent/conversations/{conversationId}`
-- `GET /api/ragent/luoluo/system/public/captcha/image`
-- `POST /api/ragent/luoluo/system/public/member/auth/login`
-- `POST /api/ragent/luoluo/system/public/member/auth/register`
-- `POST /api/ragent/luoluo/system/public/member/auth/code/send`
+- `GET /luoluo/system/public/captcha/image`
+- `POST /luoluo/system/public/member/auth/login`
+- `POST /luoluo/system/public/member/auth/register`
+- `POST /luoluo/system/public/member/auth/code/send`
 - `GET /api/ragent/rag/sample-questions`
 - `GET /api/ragent/rag/v3/chat`
 - `POST /api/ragent/rag/v3/stop`
@@ -78,6 +78,6 @@ VITE_RAG_API_BASE_URL=/api/ragent
 开发环境内置了两组代理：
 
 - `/api/*` 转发到 `http://localhost:9090`
-- `/luoluo/*` 保留为旧后端直连代理，当前前端主流程已不再依赖它
+- `/luoluo/*` 转发到 `http://localhost:9090`
 
 这样本地联调时可以避免浏览器跨域拦截。

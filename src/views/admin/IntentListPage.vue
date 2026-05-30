@@ -154,10 +154,10 @@ const intentListHeroSummary = computed(() => [
 ]);
 
 const stats = computed(() => [
-  { title: "Total", value: rows.value.length, hint: "意图树总节点数", tone: "indigo" },
-  { title: "Visible", value: filteredRows.value.length, hint: "当前筛选命中的节点", tone: "cyan" },
-  { title: "Enabled", value: filteredRows.value.filter((row) => row.enabled !== 0).length, hint: "当前筛选中已启用节点", tone: "emerald" },
-  { title: "Selected", value: selectedIds.value.length, hint: "当前勾选节点数", tone: "amber" }
+  { title: "总数", value: rows.value.length, hint: "意图树总节点数", tone: "indigo" },
+  { title: "可见", value: filteredRows.value.length, hint: "当前筛选命中的节点", tone: "cyan" },
+  { title: "启用", value: filteredRows.value.filter((row) => row.enabled !== 0).length, hint: "当前筛选中已启用节点", tone: "emerald" },
+  { title: "已选", value: selectedIds.value.length, hint: "当前勾选节点数", tone: "amber" }
 ]);
 
 async function loadTree() {
@@ -281,7 +281,7 @@ onMounted(() => {
 <template>
   <section class="admin-page intent-list-page">
     <PageHeader
-      tag="Intent List"
+      tag="意图列表"
       title="意图列表"
       description="支持多维筛选、分页查看和批量操作，快速定位到意图树中的具体节点。"
     >
@@ -308,7 +308,7 @@ onMounted(() => {
 
     <section class="admin-detail-card intent-list-hero">
       <div class="intent-list-hero__copy">
-        <p class="trace-hero-tag">Intent Overview</p>
+        <p class="trace-hero-tag">意图概览</p>
         <h2>当前筛选 {{ activeFilterCount }} 项</h2>
         <p>先通过多条件缩小节点范围，再用路径跳转定位树视图，保留批量启停和删除的工作流。</p>
       </div>

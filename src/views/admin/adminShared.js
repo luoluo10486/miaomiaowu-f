@@ -2,7 +2,7 @@ export const adminNavGroups = [
   {
     title: "导航",
     items: [
-      { label: "Dashboard", to: "/admin/dashboard", icon: "DB" },
+      { label: "仪表盘", to: "/admin/dashboard", icon: "DB" },
       { label: "知识库管理", to: "/admin/knowledge", icon: "KB" },
       {
         id: "intent",
@@ -32,7 +32,7 @@ export const adminNavGroups = [
     title: "设置",
     items: [
       { label: "用户管理", to: "/admin/users", icon: "US" },
-      { label: "示例问题", to: "/admin/sample-questions", icon: "SQ" },
+      { label: "样例问题", to: "/admin/sample-questions", icon: "SQ" },
       { label: "系统设置", to: "/admin/settings", icon: "ST" }
     ]
   }

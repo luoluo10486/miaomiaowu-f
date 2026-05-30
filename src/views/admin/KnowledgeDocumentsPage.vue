@@ -607,7 +607,7 @@ onMounted(() => {
     >
       <template #meta>
         <div class="documents-header-meta">
-          <span class="admin-badge is-muted">Collection：{{ kb?.collectionName || "--" }}</span>
+          <span class="admin-badge is-muted">集合：{{ kb?.collectionName || "--" }}</span>
           <span class="admin-badge is-muted">筛选：{{ currentFilterSummary }}</span>
           <span class="admin-badge is-muted">状态：{{ currentStatusLabel }}</span>
           <span class="admin-badge is-muted">文档：{{ visibleDocumentCount }}</span>
@@ -776,7 +776,7 @@ onMounted(() => {
               <dd>{{ kb?.name || kbId }}</dd>
             </div>
             <div>
-              <dt>Collection</dt>
+              <dt>集合</dt>
               <dd>{{ kb?.collectionName || "--" }}</dd>
             </div>
             <div>

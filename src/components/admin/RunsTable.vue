@@ -34,7 +34,7 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
   <section class="admin-table-card">
     <div class="admin-table-card__header">
       <div>
-        <h2>链路追踪列表</h2>
+      <h2>追踪列表</h2>
         <p>按时间倒序查看运行记录，点击任意一条即可进入详情页分析节点执行细节。</p>
       </div>
       <span class="admin-page-count">共 {{ total.toLocaleString("zh-CN") }} 条</span>
@@ -46,8 +46,8 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
       <table class="admin-table">
         <thead>
           <tr>
-            <th>Trace Name</th>
-            <th>Trace ID</th>
+            <th>追踪名称</th>
+            <th>追踪编号</th>
             <th>会话 / 任务</th>
             <th>用户</th>
             <th>耗时</th>
@@ -66,7 +66,7 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
             </td>
             <td>
               <p class="admin-cell-subtitle">{{ run.conversationId || "-" }}</p>
-              <p class="admin-cell-subtitle is-secondary">{{ run.taskId || "-" }}</p>
+            <p class="admin-cell-subtitle is-secondary">{{ run.taskId || "-" }}</p>
             </td>
             <td>{{ run.userName || run.username || run.userId || "-" }}</td>
             <td>{{ formatDuration(run.durationMs ?? undefined) }}</td>

@@ -1,0 +1,1 @@
+const a="/api/ragent".trim().replace(/\/$/,"");function e(r,t=a){const i=String(t||"").trim().replace(/\/$/,""),n=String(r||"").trim().startsWith("/")?String(r||"").trim():`/${String(r||"").trim()}`;return`${i}${n}`}export{a as A,e as j};

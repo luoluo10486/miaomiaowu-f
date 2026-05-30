@@ -66,10 +66,10 @@ const latestMappingLabel = computed(() => {
 const currentFilterLabel = computed(() => (keyword.value ? keyword.value : "全部词条"));
 
 const stats = computed(() => [
-  { title: "Total", value: pageTotal(page.value), hint: "映射规则总数", tone: "indigo" },
-  { title: "Enabled", value: enabledCount.value, hint: "当前页启用数量", tone: "emerald" },
-  { title: "Disabled", value: disabledCount.value, hint: "当前页停用数量", tone: "amber" },
-  { title: "Visible", value: mappings.value.length, hint: "当前页显示数量", tone: "cyan" }
+  { title: "总数", value: pageTotal(page.value), hint: "映射规则总数", tone: "indigo" },
+  { title: "启用", value: enabledCount.value, hint: "当前页启用数量", tone: "emerald" },
+  { title: "停用", value: disabledCount.value, hint: "当前页停用数量", tone: "amber" },
+  { title: "可见数", value: mappings.value.length, hint: "当前页显示数量", tone: "cyan" }
 ]);
 
 const heroSummary = computed(() => [
@@ -262,7 +262,7 @@ onMounted(() => {
 
     <section class="admin-detail-card mappings-hero">
       <div class="mappings-hero-copy">
-        <p class="trace-hero-tag">Query Normalization</p>
+        <p class="trace-hero-tag">查询归一化</p>
         <h2>映射规则总览</h2>
         <p>先看当前筛选、命中规则和最新规则，再进入具体编辑或删除操作。</p>
       </div>

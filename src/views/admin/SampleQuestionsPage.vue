@@ -68,10 +68,10 @@ const titledCount = computed(() => questions.value.filter((item) => Boolean(item
 const describedCount = computed(() => questions.value.filter((item) => Boolean(item.description?.trim())).length);
 
 const stats = computed(() => [
-  { title: "Total", value: pageTotal(page.value), hint: "样例问题总数", tone: "indigo" },
-  { title: "Titled", value: titledCount.value, hint: "带标题的样例问题", tone: "emerald" },
-  { title: "No Desc", value: questions.value.filter((item) => !item.description).length, hint: "缺少描述的记录", tone: "amber" },
-  { title: "Visible", value: questions.value.length, hint: "当前页显示数量", tone: "cyan" }
+  { title: "总数", value: pageTotal(page.value), hint: "样例问题总数", tone: "indigo" },
+  { title: "有标题", value: titledCount.value, hint: "带标题的样例问题", tone: "emerald" },
+  { title: "无描述", value: questions.value.filter((item) => !item.description).length, hint: "缺少描述的记录", tone: "amber" },
+  { title: "可见数", value: questions.value.length, hint: "当前页显示数量", tone: "cyan" }
 ]);
 
 const heroSummary = computed(() => [
@@ -244,7 +244,7 @@ onMounted(() => {
 
     <section class="admin-detail-card sample-questions-hero">
       <div class="sample-questions-hero__copy">
-        <p class="trace-hero-tag">Sample Question Overview</p>
+        <p class="trace-hero-tag">样例问题概览</p>
         <h2>{{ selectedQuestion?.title || "样例问题总览" }}</h2>
         <p>
           {{ selectedQuestion?.description || "在同一页面维护样例问题内容，搜索、编辑和删除保持在清晰的管理流程里。" }}

@@ -143,13 +143,13 @@ const stats = computed(() => {
   const allRows = rows.value;
   return [
     {
-      title: "Nodes",
+      title: "节点数",
       value: allRows.length,
       hint: "意图树总节点数",
       tone: "indigo"
     },
     {
-      title: "Enabled",
+      title: "启用",
       value: allRows.filter((item) => item.enabled === 1 || item.enabled === true).length,
       hint: "当前已启用节点",
       tone: "emerald"
@@ -413,7 +413,7 @@ onMounted(() => {
 <template>
   <section class="admin-page">
     <PageHeader
-      tag="Intent Tree"
+      tag="意图树"
       title="意图树"
       description="从树形结构查看和维护意图节点，支持新建、编辑、启停和删除。"
     >
@@ -448,7 +448,7 @@ onMounted(() => {
 
     <section class="admin-detail-card intent-tree-summary">
       <div class="intent-tree-summary__copy">
-        <p class="trace-hero-tag">Intent Summary</p>
+        <p class="trace-hero-tag">意图总览</p>
         <h2>树形节点概览</h2>
         <p>对齐 frontend 的树页阅读顺序，先确认当前焦点节点和路径，再进行新建、编辑与启停操作。</p>
       </div>
@@ -462,7 +462,7 @@ onMounted(() => {
 
     <section class="admin-detail-card intent-hero-card">
       <div class="intent-hero-copy">
-        <p class="trace-hero-tag">Intent Overview</p>
+        <p class="trace-hero-tag">意图概览</p>
         <h2>{{ selectedNode ? "当前树形焦点已定位" : "当前树形焦点未定位" }}</h2>
         <p>先用树形结构定位节点，再在右侧补全路径、资源归属和 prompt 配置，编辑、创建和删除都保留原有工作流。</p>
       </div>
@@ -550,7 +550,7 @@ onMounted(() => {
               <span class="admin-badge is-muted">TopK {{ item.topK ?? "--" }}</span>
               <span v-if="item.hasChildren" class="admin-badge is-muted">{{ item.childCount }} 子节点</span>
               <span v-if="item.kind === 0 && item.collectionName" class="admin-badge is-success">
-                Collection: {{ item.collectionName }}
+                集合：{{ item.collectionName }}
               </span>
               <span v-if="item.kind === 2 && item.mcpToolId" class="admin-badge is-warn">Tool: {{ item.mcpToolId }}</span>
               <span v-if="item.parentName" class="admin-badge is-muted">{{ item.parentName }}</span>
@@ -652,8 +652,8 @@ onMounted(() => {
           </div>
 
           <div v-if="form.kind === 0" class="admin-dialog-field">
-            <label>Collection 名称</label>
-            <input v-model="form.collectionName" class="admin-input" placeholder="知识库 Collection 名称" />
+            <label>集合名称</label>
+            <input v-model="form.collectionName" class="admin-input" placeholder="知识库集合名称" />
           </div>
 
           <div v-if="form.kind === 2" class="admin-dialog-field">

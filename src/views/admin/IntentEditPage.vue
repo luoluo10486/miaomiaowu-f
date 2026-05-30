@@ -128,7 +128,7 @@ const stats = computed(() => [
   { title: "Node", value: rows.value.length, hint: "当前意图树节点总数", tone: "indigo" },
   { title: "Children", value: currentNode.value?.childCount ?? 0, hint: "当前节点子节点数", tone: "cyan" },
   { title: "Examples", value: currentNode.value ? parseExamples(currentNode.value.examples).length : 0, hint: "当前节点示例数", tone: "emerald" },
-  { title: "Status", value: currentNode.value?.enabled === 0 ? "Disabled" : "Enabled", hint: "当前节点状态", tone: "amber" }
+  { title: "状态", value: currentNode.value?.enabled === 0 ? "禁用" : "启用", hint: "当前节点状态", tone: "amber" }
 ]);
 
 function fillForm(node) {
@@ -229,7 +229,7 @@ onMounted(() => {
 <template>
   <section class="admin-page intent-edit-page">
     <PageHeader
-      tag="Intent Edit"
+      tag="意图编辑"
       title="编辑意图节点"
       :description="currentNode ? `${currentNode.name || '--'} · ${currentNode.intentCode || '--'}` : '选择一个节点继续编辑。'"
     >
@@ -255,7 +255,7 @@ onMounted(() => {
 
     <section class="admin-detail-card intent-edit-hero">
       <div class="intent-edit-hero__copy">
-        <p class="trace-hero-tag">Intent Overview</p>
+        <p class="trace-hero-tag">意图概览</p>
         <h2>{{ currentNode?.name || "--" }}</h2>
         <p>
           {{ nodeSummary?.pathText || "--" }} · {{ currentNode?.intentCode || "--" }} ·
@@ -324,8 +324,8 @@ onMounted(() => {
           </div>
 
           <div v-if="form.kind === 0" class="admin-dialog-field">
-            <label>Collection 名称</label>
-            <input v-model="form.collectionName" class="admin-input" placeholder="知识库 Collection 名称" />
+            <label>集合名称</label>
+            <input v-model="form.collectionName" class="admin-input" placeholder="知识库集合名称" />
           </div>
 
           <div v-if="form.kind === 2" class="admin-dialog-field">

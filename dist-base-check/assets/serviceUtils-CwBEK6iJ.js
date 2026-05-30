@@ -1,0 +1,1 @@
+function c(e,r={}){const t=new URLSearchParams;Object.entries(r).forEach(([o,i])=>{i==null||i===""||t.set(o,String(i))});const n=t.toString();return n?`${e}?${n}`:e}function f(e={}){const r=new FormData;return Object.entries(e).forEach(([t,n])=>{if(!(n==null||n==="")){if(n instanceof Blob){r.append(t,n);return}r.append(t,String(n))}}),r}export{f as b,c as w};

@@ -35,7 +35,7 @@ const noticeTone = ref("info");
 let searchTimeout = null;
 
 const breadcrumbMap = {
-  dashboard: "Dashboard",
+  dashboard: "仪表盘",
   knowledge: "知识库管理",
   "intent-tree": "意图树配置",
   "intent-list": "意图列表",
@@ -112,7 +112,7 @@ const breadcrumbs = computed(() => {
   }
 
   if (section === "traces" && segments.length > 2) {
-    items.push({ label: "链路详情" });
+    items.push({ label: "追踪详情" });
   }
 
   return items;
@@ -311,7 +311,7 @@ async function handlePasswordSubmit() {
           <template v-if="!collapsed">
             <div>
               <h1>RAG 管理后台</h1>
-              <small>Knowledge Console</small>
+              <small>知识控制台</small>
             </div>
           </template>
         </div>
@@ -379,10 +379,10 @@ async function handlePasswordSubmit() {
         </div>
         <div class="admin-button-row">
           <button class="admin-button--sidebar" type="button" @click="router.push('/workspace')">
-            {{ collapsed ? "W" : "Workspace" }}
+            {{ collapsed ? "W" : "工作区" }}
           </button>
           <button class="admin-button--sidebar" type="button" @click="router.push('/chat')">
-            {{ collapsed ? "C" : "Chat" }}
+            {{ collapsed ? "C" : "聊天" }}
           </button>
           <button class="admin-button--sidebar-logout" type="button" @click="logout">
             {{ collapsed ? "×" : "退出登录" }}
@@ -395,7 +395,7 @@ async function handlePasswordSubmit() {
       <header class="admin-topbar">
         <div class="admin-topbar-inner">
           <div class="admin-topbar-copy">
-            <p class="admin-topbar-eyebrow">RAG Admin Console</p>
+            <p class="admin-topbar-eyebrow">RAG 管理控制台</p>
             <h2>管理控制台</h2>
             <p>统一查看知识库、摄取链路、意图、追踪和系统设置。</p>
           </div>
@@ -427,7 +427,7 @@ async function handlePasswordSubmit() {
                     @mousedown.prevent="handleSearchSelect(kb)"
                   >
                     <span style="font-weight:600;color:var(--admin-ink,#1e293b);">{{ kb.name }}</span>
-                    <small class="admin-muted">{{ kb.collectionName || "未设置 Collection" }}</small>
+                    <small class="admin-muted">{{ kb.collectionName || "未设置集合" }}</small>
                   </button>
                 </template>
 
@@ -453,14 +453,14 @@ async function handlePasswordSubmit() {
           </div>
 
           <div class="admin-topbar-actions">
-            <button class="admin-button--ghost" type="button" @click="router.push('/chat')">返回聊天</button>
-            <a
-              class="admin-button--ghost"
+          <button class="admin-button--ghost" type="button" @click="router.push('/chat')">返回聊天</button>
+          <a
+            class="admin-button--ghost"
               href="https://github.com/nageoffer/ragent"
               target="_blank"
               rel="noreferrer"
             >
-              GitHub Star
+              GitHub 收藏
               <span class="admin-badge is-outline">{{ starLabel }}</span>
             </a>
             <button class="admin-button--ghost" type="button" @click="openPasswordDialog">修改密码</button>

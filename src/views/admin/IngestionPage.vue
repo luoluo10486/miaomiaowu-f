@@ -1297,7 +1297,7 @@ onMounted(() => {
               </div>
 
               <div v-if="pipelineNodeMode === 'json'" class="admin-dialog-field">
-                <label>Nodes JSON</label>
+                <label>节点 JSON</label>
                 <textarea
                   v-model="pipelineForm.nodesJson"
                   class="admin-textarea"
@@ -1493,7 +1493,7 @@ onMounted(() => {
 
                   <div v-if="node.nodeType === 'indexer'" class="admin-info-grid is-2 ingestion-subsection">
                     <div class="admin-dialog-field">
-                      <label>Embedding Model</label>
+                      <label>向量模型</label>
                       <input v-model="node.indexer.embeddingModel" class="admin-input" placeholder="可选" />
                     </div>
                     <div class="admin-dialog-field">
@@ -1758,7 +1758,7 @@ onMounted(() => {
           <section class="ingestion-task-detail__nodes">
             <div class="admin-toolbar" style="margin-bottom: 12px;">
               <div class="admin-toolbar-left">
-                <span class="admin-page-count">Task Nodes</span>
+                <span class="admin-page-count">任务节点</span>
               </div>
             </div>
             <div v-if="taskDetailNodes.length === 0" class="admin-empty">暂无节点数据</div>

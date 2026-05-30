@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import LoginClothScene from "../components/LoginClothScene.vue";
 import { joinApiPath } from "../services/apiBase";
+import { translateUserMessage } from "../utils/errorMessages";
 import { saveAuthSession } from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
@@ -597,7 +598,7 @@ async function requestAuth(path, options = {}) {
   const hasBusinessCode = payload && typeof payload === "object" && "code" in payload;
 
   if (!response.ok || (hasBusinessCode && payload.code !== 0 && payload.code !== "0")) {
-    throw new Error(payload?.message || payload?.error || "请求失败，请稍后重试");
+    throw new Error(translateUserMessage(payload?.message || payload?.error, "请求失败，请稍后重试"));
   }
 
   return payload;
@@ -708,7 +709,7 @@ async function onSendCode() {
         captchaCode: captchaCode.value.trim()
       }
     });
-    setTip(payload?.message || "验证码已发送，请查收邮箱", "success");
+    setTip(translateUserMessage(payload?.message || "验证码已发送，请查收邮箱", "验证码已发送，请查收邮箱"), "success");
     startCountdown(60);
   } catch (error) {
     setTip(error?.message || "验证码发送失败，请稍后重试", "error");
@@ -791,13 +792,13 @@ async function onSubmit() {
       countdown.value = 0;
 
       if (token) {
-        setTip(payload?.message || "注册成功，正在跳转", "success");
+        setTip(translateUserMessage(payload?.message || "注册成功，正在跳转", "注册成功，正在跳转"), "success");
         await router.push(resolvePostLoginRedirect());
         return;
       }
 
       switchAuthMode("login");
-      setTip(payload?.message || "注册成功，请登录", "success");
+      setTip(translateUserMessage(payload?.message || "注册成功，请登录", "注册成功，请登录"), "success");
       return;
     }
 
@@ -811,10 +812,10 @@ async function onSubmit() {
     });
 
     saveAuthToken(payload);
-    setTip(payload?.message || "登录成功，正在跳转", "success");
+    setTip(translateUserMessage(payload?.message || "登录成功，正在跳转", "登录成功，正在跳转"), "success");
     await router.push(resolvePostLoginRedirect());
   } catch (error) {
-    setTip(error?.message || "请求失败，请稍后重试", "error");
+    setTip(translateUserMessage(error?.message, "请求失败，请稍后重试"), "error");
   } finally {
     submitting.value = false;
   }

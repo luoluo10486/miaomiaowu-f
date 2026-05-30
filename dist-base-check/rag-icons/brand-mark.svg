@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RAG brand mark">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#24433B"/>
+  <rect x="7.5" y="7.5" width="49" height="49" rx="11" stroke="#F7F0DF" stroke-opacity=".22"/>
+  <path d="M18 22.8c4.4-2.2 9.2-2 14 .6v23.2c-4.8-2.6-9.6-2.8-14-.6V22.8Z" stroke="#F7F0DF" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M32 23.4c4.8-2.6 9.6-2.8 14-.6V46c-4.4-2.2-9.2-2-14 .6V23.4Z" stroke="#F7F0DF" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M23.5 30.2c1.5-.35 3.05-.22 4.65.38" stroke="#F7F0DF" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+  <path d="M36 30.55c1.65-.62 3.2-.75 4.7-.4" stroke="#F7F0DF" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+  <path d="M42.5 16.5c0 4.3-2.2 6.5-6.5 6.5 4.3 0 6.5 2.2 6.5 6.5 0-4.3 2.2-6.5 6.5-6.5-4.3 0-6.5-2.2-6.5-6.5Z" fill="#D8B56D"/>
+</svg>
