@@ -16,6 +16,7 @@ const viewportRef = ref(null);
 const trackRef = ref(null);
 const progress = ref(0);
 const activeChapter = ref(0);
+
 let animationContext = null;
 
 const artworkUrls = {
@@ -23,19 +24,59 @@ const artworkUrls = {
   admin: resolvePublicAssetUrl("artwork/workbench-person-admin.png"),
   ideas: resolvePublicAssetUrl("artwork/workbench-person-idea.png"),
   gallery: resolvePublicAssetUrl("artwork/workbench-person-gallery.png"),
+  articles: resolvePublicAssetUrl("artwork/workbench-person-articles.png"),
   todo: resolvePublicAssetUrl("artwork/workbench-person-choice.png")
 };
 
 const chapters = [
-  { key: "home", label: "首页" },
-  { key: "rag", label: "问答" },
-  { key: "admin", label: "管理" },
-  { key: "ideas", label: "小巧思" },
-  { key: "gallery", label: "美图鉴赏" },
-  { key: "todo", label: "待开发" }
+  {
+    key: "home",
+    label: "起始",
+    title: "工作台总览",
+    description: "向右滚动浏览模块。"
+  },
+  {
+    key: "rag",
+    label: "问答",
+    title: "RAG 问答",
+    description: "进入对话工作台。",
+    action: () => router.push("/chat")
+  },
+  {
+    key: "admin",
+    label: "后台",
+    title: "管理控制台",
+    description: "进入后台管理。",
+    action: () => router.push("/admin")
+  },
+  {
+    key: "ideas",
+    label: "灵感",
+    title: "灵感随记",
+    description: "记录想法与草稿。",
+    action: () => router.push("/ideas")
+  },
+  {
+    key: "gallery",
+    label: "画廊",
+    title: "美图鉴赏",
+    description: "浏览图片内容。",
+    action: () => router.push("/gallery")
+  },
+  {
+    key: "articles",
+    label: "文章",
+    title: "文章馆",
+    description: "阅读整理后的文章。",
+    action: () => router.push("/articles")
+  },
+  {
+    key: "todo",
+    label: "待开发",
+    title: "待开发区域",
+    description: "后续功能预留。"
+  }
 ];
-
-const visibleChapters = computed(() => chapters);
 
 const currentUserName = computed(() => {
   const user = currentUser.value;
@@ -44,13 +85,16 @@ const currentUserName = computed(() => {
 
 function scrollToChapter(index) {
   const trigger = ScrollTrigger.getById("workbench-horizontal-scroll");
-  if (!trigger) {
+  if (!trigger || chapters.length <= 1) {
     return;
   }
 
   const nextProgress = index / (chapters.length - 1);
   const nextScroll = trigger.start + (trigger.end - trigger.start) * nextProgress;
-  window.scrollTo({ top: nextScroll, behavior: "smooth" });
+  window.scrollTo({
+    top: nextScroll,
+    behavior: "smooth"
+  });
 }
 
 function handleLogout() {
@@ -63,31 +107,35 @@ function setupHorizontalStory() {
 
   animationContext = gsap.context(() => {
     const track = trackRef.value;
-    if (!track || !viewportRef.value || !shellRef.value) {
+    const viewport = viewportRef.value;
+    const shell = shellRef.value;
+
+    if (!track || !viewport || !shell) {
       return;
     }
 
     const distance = () => Math.max(track.scrollWidth - window.innerWidth, 0);
 
-    gsap.set(".scene-label", {
+    gsap.set(".scene-copy", {
       autoAlpha: 0,
-      y: 34,
+      y: 28,
       filter: "blur(10px)"
     });
 
     gsap.set(".person-asset", {
-      y: 42,
-      scale: 0.96,
-      filter: "blur(10px) saturate(0.95) contrast(0.98)"
+      autoAlpha: 0,
+      y: 34,
+      scale: 0.97,
+      filter: "blur(12px) saturate(0.95)"
     });
 
-    gsap.to(track, {
+    const horizontalTween = gsap.to(track, {
       x: () => -distance(),
       ease: "none",
       scrollTrigger: {
         id: "workbench-horizontal-scroll",
-        trigger: shellRef.value,
-        pin: viewportRef.value,
+        trigger: shell,
+        pin: viewport,
         scrub: 0.9,
         start: "top top",
         end: () => `+=${distance()}`,
@@ -95,8 +143,8 @@ function setupHorizontalStory() {
         onUpdate: (self) => {
           progress.value = self.progress;
           activeChapter.value = Math.min(
-            visibleChapters.value.length - 1,
-            Math.round(self.progress * (visibleChapters.value.length - 1))
+            chapters.length - 1,
+            Math.round(self.progress * (chapters.length - 1))
           );
         }
       }
@@ -104,21 +152,22 @@ function setupHorizontalStory() {
 
     gsap.utils.toArray(".person-asset").forEach((item) => {
       gsap.to(item, {
+        autoAlpha: 1,
         y: 0,
         scale: 1,
-        filter: "blur(0px) saturate(0.98) contrast(0.99)",
+        filter: "blur(0px) saturate(1)",
         ease: "power2.out",
         scrollTrigger: {
           trigger: item,
-          containerAnimation: ScrollTrigger.getById("workbench-horizontal-scroll")?.animation,
-          start: "left 82%",
-          end: "left 38%",
+          containerAnimation: horizontalTween,
+          start: "left 86%",
+          end: "left 40%",
           scrub: true
         }
       });
     });
 
-    gsap.utils.toArray(".scene-label").forEach((item) => {
+    gsap.utils.toArray(".scene-copy").forEach((item) => {
       gsap.to(item, {
         autoAlpha: 1,
         y: 0,
@@ -127,8 +176,8 @@ function setupHorizontalStory() {
         ease: "power2.out",
         scrollTrigger: {
           trigger: item,
-          containerAnimation: ScrollTrigger.getById("workbench-horizontal-scroll")?.animation,
-          start: "left 70%",
+          containerAnimation: horizontalTween,
+          start: "left 72%",
           toggleActions: "play none none reverse"
         }
       });
@@ -151,14 +200,14 @@ onBeforeUnmount(() => {
 
 <template>
   <section ref="shellRef" class="workbench-shell">
-    <header class="gallery-nav">
-      <button class="gallery-nav__brand" type="button" @click="scrollToChapter(0)">
-        落落妙妙屋
+    <header class="workbench-nav">
+      <button type="button" class="workbench-nav__brand" @click="scrollToChapter(0)">
+        落落妙香居
       </button>
 
-      <nav class="gallery-nav__links" aria-label="工作台导航">
+      <nav class="workbench-nav__links" aria-label="工作台导航">
         <button
-          v-for="(chapter, index) in visibleChapters"
+          v-for="(chapter, index) in chapters"
           :key="chapter.key"
           type="button"
           :class="{ 'is-active': activeChapter === index }"
@@ -168,7 +217,7 @@ onBeforeUnmount(() => {
         </button>
       </nav>
 
-      <div class="gallery-nav__actions">
+      <div class="workbench-nav__actions">
         <span>当前登录 {{ currentUserName }}</span>
         <button type="button" class="dark-button" @click="handleLogout">退出</button>
       </div>
@@ -177,60 +226,76 @@ onBeforeUnmount(() => {
     <div ref="viewportRef" class="story-viewport">
       <div ref="trackRef" class="story-track">
         <section class="story-panel story-panel--home">
+          <div class="scene-copy scene-copy--home">
+            <span class="scene-copy__eyebrow">Workspace</span>
+            <h1>工作台总览</h1>
+            <p>向右滚动进入不同模块。</p>
+          </div>
           <WorkbenchLive2DScene class="person-asset person-asset--home" />
         </section>
 
         <section class="story-panel story-panel--rag">
-          <button class="scene-label scene-label--button" type="button" @click="router.push('/chat')">
-            RAG 问答
-          </button>
-          <img
-            class="person-asset person-asset--rag"
-            :src="artworkUrls.rag"
-            alt="RAG 问答人物主体"
-          />
+          <div class="scene-copy">
+            <span class="scene-copy__eyebrow">RAG</span>
+            <button type="button" class="scene-copy__action" @click="chapters[1].action()">
+              {{ chapters[1].title }}
+            </button>
+            <p>{{ chapters[1].description }}</p>
+          </div>
+          <img class="person-asset person-asset--rag" :src="artworkUrls.rag" alt="RAG 问答人物" />
         </section>
 
         <section class="story-panel story-panel--admin">
-          <button class="scene-label scene-label--button" type="button" @click="router.push('/admin')">
-            后台管理
-          </button>
-          <img
-            class="person-asset person-asset--admin"
-            :src="artworkUrls.admin"
-            alt="后台管理人物主体"
-          />
+          <div class="scene-copy">
+            <span class="scene-copy__eyebrow">Admin</span>
+            <button type="button" class="scene-copy__action" @click="chapters[2].action()">
+              {{ chapters[2].title }}
+            </button>
+            <p>{{ chapters[2].description }}</p>
+          </div>
+          <img class="person-asset person-asset--admin" :src="artworkUrls.admin" alt="后台管理人物" />
         </section>
 
         <section class="story-panel story-panel--ideas">
-          <button class="scene-label scene-label--button" type="button" @click="router.push('/ideas')">
-            小巧思
-          </button>
-          <img
-            class="person-asset person-asset--ideas"
-            :src="artworkUrls.ideas"
-            alt="小巧思人物主题"
-          />
+          <div class="scene-copy">
+            <span class="scene-copy__eyebrow">Ideas</span>
+            <button type="button" class="scene-copy__action" @click="chapters[3].action()">
+              {{ chapters[3].title }}
+            </button>
+            <p>{{ chapters[3].description }}</p>
+          </div>
+          <img class="person-asset person-asset--ideas" :src="artworkUrls.ideas" alt="灵感随记人物" />
         </section>
 
         <section class="story-panel story-panel--gallery">
-          <button class="scene-label scene-label--button" type="button" @click="router.push('/gallery')">
-            美图鉴赏
-          </button>
-          <img
-            class="person-asset person-asset--gallery"
-            :src="artworkUrls.gallery"
-            alt="美图鉴赏人物主体"
-          />
+          <div class="scene-copy">
+            <span class="scene-copy__eyebrow">Gallery</span>
+            <button type="button" class="scene-copy__action" @click="chapters[4].action()">
+              {{ chapters[4].title }}
+            </button>
+            <p>{{ chapters[4].description }}</p>
+          </div>
+          <img class="person-asset person-asset--gallery" :src="artworkUrls.gallery" alt="美图鉴赏人物" />
+        </section>
+
+        <section class="story-panel story-panel--articles">
+          <div class="scene-copy">
+            <span class="scene-copy__eyebrow">Articles</span>
+            <button type="button" class="scene-copy__action" @click="chapters[5].action()">
+              {{ chapters[5].title }}
+            </button>
+            <p>{{ chapters[5].description }}</p>
+          </div>
+          <img class="person-asset person-asset--articles" :src="artworkUrls.articles" alt="文章馆人物" />
         </section>
 
         <section class="story-panel story-panel--todo">
-          <div class="scene-label scene-label--static">待开发</div>
-          <img
-            class="person-asset person-asset--todo"
-            :src="artworkUrls.todo"
-            alt="待开发人物主题"
-          />
+          <div class="scene-copy">
+            <span class="scene-copy__eyebrow">Next</span>
+            <div class="scene-copy__static">{{ chapters[6].title }}</div>
+            <p>{{ chapters[6].description }}</p>
+          </div>
+          <img class="person-asset person-asset--todo" :src="artworkUrls.todo" alt="待开发人物" />
         </section>
       </div>
 
@@ -260,23 +325,24 @@ onBeforeUnmount(() => {
     linear-gradient(90deg, rgba(185, 190, 180, 0.2) 1px, transparent 1px),
     linear-gradient(180deg, rgba(185, 190, 180, 0.14) 1px, transparent 1px);
   background-size: 44px 44px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.92), transparent 96%);
 }
 
-.gallery-nav {
+.workbench-nav {
   position: fixed;
   inset: 0 0 auto;
   z-index: 30;
-  height: 52px;
+  height: 58px;
   padding: 0 30px;
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 44px;
+  gap: 36px;
   align-items: center;
   font-size: 14px;
   mix-blend-mode: multiply;
 }
 
-.gallery-nav button {
+.workbench-nav button {
   border: 0;
   background: transparent;
   color: inherit;
@@ -284,37 +350,42 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.gallery-nav__brand {
-  font-size: 22px !important;
+.workbench-nav__brand {
+  font-family: "STSong", "Songti SC", serif;
+  font-size: 24px;
   letter-spacing: 0.02em;
 }
 
-.gallery-nav__links {
+.workbench-nav__links {
   display: flex;
-  gap: 40px;
+  gap: 28px;
   align-items: center;
+  justify-content: center;
 }
 
-.gallery-nav__links button {
+.workbench-nav__links button {
   color: #444940;
+  transition: color 0.22s ease, transform 0.22s ease;
 }
 
-.gallery-nav__links button.is-active,
-.gallery-nav__links button:hover {
+.workbench-nav__links button.is-active,
+.workbench-nav__links button:hover {
   color: #0f120f;
   font-weight: 700;
+  transform: translateY(-1px);
 }
 
-.gallery-nav__actions {
+.workbench-nav__actions {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   align-items: center;
   font-size: 13px;
 }
 
 .dark-button {
-  height: 32px;
+  height: 34px;
   padding: 0 18px;
+  border-radius: 999px;
   background: #0d0d0b !important;
   color: #fff !important;
 }
@@ -364,18 +435,74 @@ onBeforeUnmount(() => {
   filter: blur(12px);
 }
 
-.story-panel--ideas::before {
+.story-panel--ideas::before,
+.story-panel--articles::before {
   background:
-    radial-gradient(ellipse at 60% 42%, rgba(255, 255, 255, 0.78), transparent 30%),
-    radial-gradient(ellipse at 68% 82%, rgba(122, 146, 132, 0.18), transparent 34%),
+    radial-gradient(ellipse at 60% 42%, rgba(255, 255, 255, 0.8), transparent 30%),
+    radial-gradient(ellipse at 68% 82%, rgba(122, 146, 132, 0.2), transparent 34%),
     radial-gradient(ellipse at 22% 18%, rgba(212, 223, 215, 0.34), transparent 24%);
+}
+
+.scene-copy {
+  position: absolute;
+  left: 12vw;
+  top: 25vh;
+  z-index: 8;
+  max-width: min(440px, 34vw);
+}
+
+.scene-copy--home {
+  top: 20vh;
+  max-width: min(520px, 38vw);
+}
+
+.scene-copy__eyebrow {
+  display: inline-flex;
+  margin-bottom: 18px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(20, 22, 19, 0.06);
+  color: rgba(20, 22, 19, 0.72);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.scene-copy h1,
+.scene-copy__action,
+.scene-copy__static {
+  margin: 0;
+  color: #111611;
+  font-family: "STSong", "Songti SC", serif;
+  font-size: clamp(46px, 5vw, 88px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.scene-copy__action {
+  display: inline-block;
+  border-bottom: 2px solid currentColor !important;
+  padding: 0 0 10px;
+  cursor: pointer;
+  transition: color 0.24s ease, transform 0.24s ease;
+}
+
+.scene-copy__action:hover {
+  color: #8f3a32;
+  transform: translateY(-2px);
+}
+
+.scene-copy p {
+  margin: 18px 0 0;
+  color: rgba(17, 22, 17, 0.78);
+  font-size: 16px;
+  line-height: 1.85;
 }
 
 .person-asset {
   position: absolute;
   z-index: 6;
   height: auto;
-  max-height: none;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
@@ -388,12 +515,6 @@ onBeforeUnmount(() => {
 
 .person-asset--home {
   left: 35vw;
-  top: 7vh;
-  width: min(620px, 44vw);
-}
-
-.person-asset--home.live2d-stage {
-  left: 33vw;
   top: 4vh;
   width: min(620px, 40vw);
   height: min(760px, 82vh);
@@ -424,37 +545,16 @@ onBeforeUnmount(() => {
   width: min(700px, 52vw);
 }
 
+.person-asset--articles {
+  left: 40vw;
+  top: 8vh;
+  width: min(640px, 46vw);
+}
+
 .person-asset--todo {
   left: 38vw;
   top: 5vh;
   width: min(720px, 54vw);
-}
-
-.scene-label {
-  position: absolute;
-  left: 14vw;
-  top: 45vh;
-  z-index: 8;
-  color: #111611;
-  font-size: clamp(48px, 6vw, 92px);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.scene-label--button {
-  border: 0;
-  border-bottom: 2px solid currentColor;
-  padding: 0 0 10px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.scene-label--button:hover {
-  color: #8f3a32;
-}
-
-.scene-label--static {
-  color: rgba(17, 22, 17, 0.86);
 }
 
 .progress-line {
@@ -462,50 +562,65 @@ onBeforeUnmount(() => {
   right: 28px;
   bottom: 24px;
   z-index: 40;
-  width: 48px;
-  height: 1px;
-  background: rgba(20, 22, 19, 0.2);
+  width: 68px;
+  height: 2px;
+  background: rgba(20, 22, 19, 0.18);
 }
 
 .progress-line span {
   display: block;
   height: 100%;
-  background: rgba(20, 22, 19, 0.76);
+  background: rgba(20, 22, 19, 0.78);
 }
 
-@media (max-width: 900px) {
-  .gallery-nav {
+@media (max-width: 980px) {
+  .workbench-nav {
+    grid-template-columns: 1fr auto;
     gap: 12px;
-    padding: 0 16px;
+    height: auto;
+    padding: 14px 16px 10px;
+    align-items: start;
   }
 
-  .gallery-nav__links {
-    gap: 18px;
+  .workbench-nav__brand {
+    font-size: 22px;
   }
 
-  .gallery-nav__actions span {
+  .workbench-nav__links {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .workbench-nav__actions span {
     display: none;
   }
 
-  .person-asset {
-    left: 24vw;
-    top: 18vh;
-    width: 66vw;
-    max-height: 72vh;
+  .scene-copy {
+    left: 8vw;
+    top: 20vh;
+    max-width: 76vw;
   }
 
-  .person-asset--home.live2d-stage {
+  .scene-copy h1,
+  .scene-copy__action,
+  .scene-copy__static {
+    font-size: 48px;
+  }
+
+  .person-asset {
+    left: 23vw;
+    top: 26vh;
+    width: 66vw;
+  }
+
+  .person-asset--home {
     left: 17vw;
-    top: 15vh;
+    top: 24vh;
     width: 66vw;
     height: min(62vh, 560px);
-    max-height: none;
-  }
-
-  .scene-label {
-    left: 8vw;
-    top: 24vh;
-    font-size: 48px;
   }
 }
 </style>

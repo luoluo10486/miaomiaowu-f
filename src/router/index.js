@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getStoredAuthToken, getStoredAuthUser, isAdminUser } from "../utils/auth";
+import {
+  getStoredAuthToken,
+  getStoredAuthUser,
+  isAdminUser
+} from "../utils/auth";
 
 const LoginView = () => import("../views/LoginView.vue");
 const NotFoundView = () => import("../views/NotFoundView.vue");
@@ -7,18 +11,22 @@ const RagChatView = () => import("../views/RagChatView.vue");
 const WorkbenchView = () => import("../views/WorkbenchView.vue");
 const IdeaNotesView = () => import("../views/IdeaNotesView.vue");
 const GalleryView = () => import("../views/GalleryView.vue");
+const ArticlesView = () => import("../views/ArticlesView.vue");
 
 const AdminLayoutView = () => import("../views/admin/AdminLayoutView.vue");
 const DashboardPage = () => import("../views/admin/DashboardPage.vue");
 const KnowledgeListPage = () => import("../views/admin/KnowledgeListPage.vue");
-const KnowledgeDocumentsPage = () => import("../views/admin/KnowledgeDocumentsPage.vue");
-const KnowledgeChunksPage = () => import("../views/admin/KnowledgeChunksPage.vue");
+const KnowledgeDocumentsPage = () =>
+  import("../views/admin/KnowledgeDocumentsPage.vue");
+const KnowledgeChunksPage = () =>
+  import("../views/admin/KnowledgeChunksPage.vue");
 const IntentTreePage = () => import("../views/admin/IntentTreePage.vue");
 const IngestionPage = () => import("../views/admin/IngestionPage.vue");
 const TracesPage = () => import("../views/admin/TracesPage.vue");
 const TraceDetailPage = () => import("../views/admin/TraceDetailPage.vue");
 const SettingsPage = () => import("../views/admin/SettingsPage.vue");
-const SampleQuestionsPage = () => import("../views/admin/SampleQuestionsPage.vue");
+const SampleQuestionsPage = () =>
+  import("../views/admin/SampleQuestionsPage.vue");
 const MappingsPage = () => import("../views/admin/MappingsPage.vue");
 const UsersPage = () => import("../views/admin/UsersPage.vue");
 const IntentListPage = () => import("../views/admin/IntentListPage.vue");
@@ -30,7 +38,11 @@ function resolveRedirectTarget(target) {
   }
 
   const normalizedTarget = target.trim();
-  if (!normalizedTarget.startsWith("/") || normalizedTarget.startsWith("/login") || normalizedTarget.startsWith("/register")) {
+  if (
+    !normalizedTarget.startsWith("/") ||
+    normalizedTarget.startsWith("/login") ||
+    normalizedTarget.startsWith("/register")
+  ) {
     return "/workspace";
   }
 
@@ -51,7 +63,7 @@ const router = createRouter({
       meta: {
         requiresAuth: true,
         title: "Workspace",
-        description: "登录后的默认入口。"
+        description: "登录后的默认工作台入口。"
       }
     },
     {
@@ -190,6 +202,15 @@ const router = createRouter({
       }
     },
     {
+      path: "/articles/:slug?",
+      name: "articles",
+      component: ArticlesView,
+      meta: {
+        title: "Articles",
+        description: "Markdown 文章阅读页。"
+      }
+    },
+    {
       path: "/login",
       name: "login",
       component: LoginView,
@@ -200,10 +221,6 @@ const router = createRouter({
     {
       path: "/register",
       redirect: { path: "/login", query: { mode: "register" } }
-    },
-    {
-      path: "/articles",
-      redirect: "/workspace"
     },
     {
       path: "/about",
