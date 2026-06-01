@@ -6,6 +6,7 @@ dist/
 .codex-*.log
 .codex-*.err.log
 dist-base-check/
+相关文档/
 .tools/
 
 # Local/temporary content
@@ -13,4 +14,3 @@ awesome-design-md-main/
 frontend/
 design-assets/source-match-contact-sheets/
 高木壁纸(适合全部取用)(2)/
-相关文档/
