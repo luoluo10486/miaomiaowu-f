@@ -48,7 +48,7 @@ const filteredArticles = computed(() => {
       return true;
     }
 
-    return `${item.title} ${item.excerpt} ${item.fileName}`
+    return `${item.title || ""} ${item.excerpt || ""} ${item.fileName || ""}`
       .toLowerCase()
       .includes(keyword);
   });
@@ -72,6 +72,10 @@ const outlineHeadings = computed(() => {
 
 const currentIndex = computed(() =>
   currentArticle.value ? catalog.findIndex((item) => item.slug === currentArticle.value.slug) : -1
+);
+
+const currentArticleOrder = computed(() =>
+  currentIndex.value >= 0 ? String(currentIndex.value + 1).padStart(2, "0") : "--"
 );
 
 const previousArticle = computed(() =>
@@ -214,10 +218,10 @@ function setupEntranceAnimation() {
   animationContext = gsap.context(() => {
     gsap.from(".article-fade-up", {
       autoAlpha: 0,
-      y: 20,
-      duration: 0.72,
+      y: 18,
+      duration: 0.7,
       ease: "power2.out",
-      stagger: 0.06
+      stagger: 0.05
     });
   }, pageRef.value);
 }
@@ -253,20 +257,17 @@ watch(
   { immediate: true }
 );
 
-watch(
-  filteredArticles,
-  (list) => {
-    if (!list.length) {
-      articleContent.value = "";
-      return;
-    }
-
-    const currentSlug = currentArticle.value?.slug;
-    if (!currentSlug || !list.some((item) => item.slug === currentSlug)) {
-      void selectArticle(list[0].slug, true);
-    }
+watch(filteredArticles, (list) => {
+  if (!list.length) {
+    articleContent.value = "";
+    return;
   }
-);
+
+  const currentSlug = currentArticle.value?.slug;
+  if (!currentSlug || !list.some((item) => item.slug === currentSlug)) {
+    void selectArticle(list[0].slug, true);
+  }
+});
 
 onMounted(async () => {
   await nextTick();
@@ -286,250 +287,283 @@ onBeforeUnmount(() => {
 
 <template>
   <section ref="pageRef" class="articles-page">
-    <header class="articles-header article-fade-up">
-      <div>
+    <header class="articles-hero article-fade-up">
+      <div class="hero-topline">
         <button type="button" class="header-link" @click="goBackToWorkspace">返回控制台</button>
-        <h1>文章馆</h1>
-        <p>整理后的 Markdown 长文阅读页。</p>
+        <span>Reading Archive</span>
       </div>
 
-      <div class="header-meta">
-        <span>{{ catalog.length }} 篇文章</span>
-        <span>{{ categories.length - 1 }} 个主题</span>
-        <span>{{ currentArticle?.readTime || "--" }}</span>
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <p class="hero-kicker">文章馆</p>
+          <h1>让正文重新成为屏幕中心。</h1>
+          <p class="hero-summary">
+            上方负责选文与切换，下方只负责阅读。文章不再被长期挤在侧边栏旁边，而是回到完整、舒展的主视野里。
+          </p>
+        </div>
+
+        <div class="hero-stats">
+          <article>
+            <span>馆藏总量</span>
+            <strong>{{ catalog.length }}</strong>
+          </article>
+          <article>
+            <span>主题分区</span>
+            <strong>{{ categories.length - 1 }}</strong>
+          </article>
+          <article>
+            <span>当前序号</span>
+            <strong>{{ currentArticleOrder }}</strong>
+          </article>
+          <article>
+            <span>阅读时长</span>
+            <strong>{{ currentArticle?.readTime || "--" }}</strong>
+          </article>
+        </div>
       </div>
     </header>
 
-    <div class="articles-layout">
-      <aside class="article-sidebar article-fade-up">
-        <div class="sidebar-card">
-          <label class="search-box">
-            <span>检索文章</span>
-            <input
-              v-model="searchTerm"
-              type="search"
-              placeholder="搜索标题或摘要"
-            />
-          </label>
+    <section class="catalog-board article-fade-up">
+      <div class="catalog-board__controls">
+        <div class="catalog-heading">
+          <p>馆藏索引</p>
+          <h2>先选文章，再沉浸阅读</h2>
+        </div>
 
-          <div class="category-pills">
-            <button
-              v-for="category in categories"
-              :key="category"
-              type="button"
-              :class="{ 'is-active': activeCategory === category }"
-              @click="activeCategory = category"
-            >
-              {{ category }}
-            </button>
-          </div>
+        <label class="catalog-search">
+          <span>检索文章</span>
+          <input
+            v-model="searchTerm"
+            type="search"
+            placeholder="搜索标题、摘要或文件名"
+          />
+        </label>
 
+        <div class="catalog-categories">
+          <button
+            v-for="category in categories"
+            :key="category"
+            type="button"
+            :class="{ 'is-active': activeCategory === category }"
+            @click="activeCategory = category"
+          >
+            {{ category }}
+          </button>
+        </div>
+
+        <div class="catalog-tools">
+          <span>共找到 {{ filteredArticles.length }} 篇文章</span>
           <button
             v-if="searchTerm || activeCategory !== '全部'"
             type="button"
             class="clear-button"
             @click="resetFilters"
           >
-            清除筛选
+            清空筛选
           </button>
         </div>
+      </div>
 
-        <div class="sidebar-card article-list-card">
-          <div class="sidebar-title">
-            <span>文章列表</span>
-            <strong>{{ filteredArticles.length }}</strong>
+      <div v-if="filteredArticles.length" class="catalog-grid">
+        <button
+          v-for="(item, index) in filteredArticles"
+          :key="item.slug"
+          type="button"
+          :class="['catalog-card', { 'is-active': currentArticle?.slug === item.slug }]"
+          @click="selectArticle(item.slug)"
+        >
+          <div class="catalog-card__top">
+            <span>{{ String(index + 1).padStart(2, "0") }}</span>
+            <span>{{ item.readTime }}</span>
+          </div>
+          <p class="catalog-card__category">{{ item.category }}</p>
+          <strong>{{ item.title }}</strong>
+          <p class="catalog-card__excerpt">{{ item.excerpt || "暂无摘要" }}</p>
+        </button>
+      </div>
+
+      <div v-else class="catalog-empty">
+        当前筛选条件下没有匹配文章，请尝试调整关键词或分类。
+      </div>
+    </section>
+
+    <main class="reader-stage">
+      <section class="reading-intro article-fade-up">
+        <div class="reading-intro__mark">{{ currentArticleOrder }}</div>
+
+        <div class="reading-intro__main">
+          <p class="reading-intro__eyebrow">{{ currentArticle?.category || "文章" }}</p>
+          <h2>{{ currentArticle?.title || "正在载入文章" }}</h2>
+          <p>{{ currentArticle?.excerpt || "内容正在准备中，稍后即可开始阅读。" }}</p>
+        </div>
+
+        <div class="reading-intro__meta">
+          <div>
+            <span>章节数</span>
+            <strong>{{ currentArticle?.sectionCount || 0 }}</strong>
+          </div>
+          <div>
+            <span>标题锚点</span>
+            <strong>{{ currentArticle?.headingCount || 0 }}</strong>
+          </div>
+          <div>
+            <span>最近更新</span>
+            <strong>{{ formatDate(currentArticle?.updatedAt) }}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="reader-shell article-fade-up">
+        <div class="reader-progress" aria-hidden="true">
+          <span :style="{ width: `${readingProgress * 100}%` }" />
+        </div>
+
+        <div class="reader-toolbar">
+          <div class="reader-toolbar__heading">
+            <p>阅读定位</p>
+            <span>{{ outlineHeadings.length }} 节</span>
           </div>
 
-          <div v-if="filteredArticles.length" class="article-list">
+          <div v-if="outlineHeadings.length" class="outline-strip">
             <button
-              v-for="item in filteredArticles"
-              :key="item.slug"
+              v-for="heading in outlineHeadings"
+              :key="heading.id"
               type="button"
-              :class="['article-item', { 'is-active': currentArticle?.slug === item.slug }]"
-              @click="selectArticle(item.slug)"
+              :class="['outline-chip', { 'is-active': activeHeadingId === heading.id }]"
+              @click="scrollToHeading(heading.id)"
             >
-              <div class="article-item__top">
-                <span>{{ item.category }}</span>
-                <span>{{ item.readTime }}</span>
-              </div>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.excerpt }}</p>
+              {{ heading.text }}
             </button>
           </div>
 
-          <div v-else class="sidebar-empty">
-            当前筛选条件下没有匹配文章。
+          <div v-else class="toolbar-empty">这篇文章暂时没有可提取的目录。</div>
+
+          <div class="reader-pager">
+            <button
+              type="button"
+              class="pager-card"
+              :disabled="!previousArticle"
+              @click="previousArticle && selectArticle(previousArticle.slug)"
+            >
+              <small>上一篇</small>
+              <strong>{{ previousArticle?.title || "已经是第一篇" }}</strong>
+            </button>
+
+            <button
+              type="button"
+              class="pager-card"
+              :disabled="!nextArticle"
+              @click="nextArticle && selectArticle(nextArticle.slug)"
+            >
+              <small>下一篇</small>
+              <strong>{{ nextArticle?.title || "已经是最后一篇" }}</strong>
+            </button>
           </div>
         </div>
-      </aside>
 
-      <main class="article-main article-fade-up">
-        <section class="article-summary">
-          <div class="article-summary__copy">
-            <span class="summary-kicker">{{ currentArticle?.category || "文章" }}</span>
-            <h2>{{ currentArticle?.title || "文章加载中" }}</h2>
-            <p>{{ currentArticle?.excerpt || "正在准备文章内容。" }}</p>
-          </div>
-
-          <div class="article-summary__facts">
-            <article>
-              <strong>{{ currentArticle?.readTime || "--" }}</strong>
-              <span>阅读时间</span>
-            </article>
-            <article>
-              <strong>{{ currentArticle?.sectionCount || 0 }}</strong>
-              <span>章节数</span>
-            </article>
-            <article>
-              <strong>{{ formatDate(currentArticle?.updatedAt) }}</strong>
-              <span>最近同步</span>
-            </article>
-          </div>
-        </section>
-
-        <section class="reader-shell">
-          <div class="reader-progress" aria-hidden="true">
-            <span :style="{ width: `${readingProgress * 100}%` }" />
-          </div>
-
-          <div class="reader-layout">
-            <div class="reader-column">
-              <div v-if="articleLoading" class="reader-state">正在载入文章内容...</div>
-              <div v-else-if="articleError" class="reader-state reader-state--error">
-                {{ articleError }}
-              </div>
-              <article v-else ref="readerBodyRef" class="reader-body">
-                <ArticleMarkdownRenderer :catalog="catalog" :content="articleContent" />
-              </article>
+        <article class="reader-paper">
+          <header class="reader-paper__head">
+            <div>
+              <p>馆内阅读</p>
             </div>
+            <span>{{ Math.round(readingProgress * 100) }}%</span>
+          </header>
 
-            <aside class="outline-column">
-              <div class="outline-card">
-                <div class="sidebar-title">
-                  <span>目录</span>
-                  <strong>{{ outlineHeadings.length }}</strong>
-                </div>
-
-                <div v-if="outlineHeadings.length" class="outline-list">
-                  <button
-                    v-for="heading in outlineHeadings"
-                    :key="heading.id"
-                    type="button"
-                    :class="['outline-item', { 'is-active': activeHeadingId === heading.id }]"
-                    @click="scrollToHeading(heading.id)"
-                  >
-                    {{ heading.text }}
-                  </button>
-                </div>
-
-                <div v-else class="sidebar-empty">
-                  这篇文章没有可提取的目录。
-                </div>
-              </div>
-            </aside>
+          <div v-if="articleLoading" class="reader-state">正在载入文章内容...</div>
+          <div v-else-if="articleError" class="reader-state reader-state--error">
+            {{ articleError }}
           </div>
-        </section>
-
-        <section class="article-pagination article-fade-up">
-          <button
-            type="button"
-            class="pager-button"
-            :disabled="!previousArticle"
-            @click="previousArticle && selectArticle(previousArticle.slug)"
-          >
-            {{ previousArticle ? `上一篇 · ${previousArticle.title}` : "已经是第一篇" }}
-          </button>
-
-          <button
-            type="button"
-            class="pager-button"
-            :disabled="!nextArticle"
-            @click="nextArticle && selectArticle(nextArticle.slug)"
-          >
-            {{ nextArticle ? `下一篇 · ${nextArticle.title}` : "已经是最后一篇" }}
-          </button>
-        </section>
-      </main>
-    </div>
+          <div v-else ref="readerBodyRef" class="reader-body">
+            <ArticleMarkdownRenderer :catalog="catalog" :content="articleContent" />
+          </div>
+        </article>
+      </section>
+    </main>
   </section>
 </template>
 
 <style scoped>
 .articles-page {
-  --paper: #f4ecdf;
-  --surface: rgba(255, 251, 244, 0.76);
-  --surface-soft: rgba(255, 255, 255, 0.56);
-  --surface-strong: rgba(255, 252, 247, 0.9);
-  --ink: #1f241f;
-  --ink-soft: rgba(31, 36, 31, 0.66);
-  --line: rgba(31, 36, 31, 0.09);
-  --line-strong: rgba(31, 36, 31, 0.15);
-  --accent: #8a6f41;
-  --accent-deep: #2d5849;
+  --ink: #1e231f;
+  --ink-soft: rgba(30, 35, 31, 0.7);
+  --ink-faint: rgba(30, 35, 31, 0.46);
+  --line: rgba(43, 35, 24, 0.12);
+  --line-soft: rgba(43, 35, 24, 0.08);
+  --accent: #996731;
+  --accent-deep: #2a5448;
+  --paper: rgba(254, 250, 243, 0.92);
+  --paper-strong: rgba(255, 253, 249, 0.96);
+  --dark: #1f2824;
+  --dark-soft: rgba(244, 236, 221, 0.74);
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
   min-height: 100vh;
-  padding: 28px clamp(16px, 3vw, 32px) 48px;
+  padding: 28px clamp(16px, 2.6vw, 34px) 64px;
   color: var(--ink);
   background:
-    radial-gradient(circle at 18% 4%, rgba(255, 255, 255, 0.96), transparent 22%),
-    radial-gradient(circle at 86% 16%, rgba(210, 176, 133, 0.15), transparent 18%),
-    radial-gradient(circle at 18% 82%, rgba(47, 88, 73, 0.1), transparent 24%),
-    linear-gradient(180deg, #f7f0e4 0%, #ede2d2 100%);
+    radial-gradient(circle at 10% 8%, rgba(255, 250, 240, 0.95), transparent 18%),
+    radial-gradient(circle at 88% 14%, rgba(174, 126, 62, 0.18), transparent 20%),
+    radial-gradient(circle at 80% 88%, rgba(42, 84, 72, 0.14), transparent 22%),
+    linear-gradient(135deg, #f7f0e4 0%, #efe0ca 32%, #f8f3ea 64%, #ebdbc3 100%);
+  overflow: hidden;
 }
 
 .articles-page::before {
   content: "";
   position: fixed;
-  inset: -8vh -6vw auto auto;
-  width: min(58vw, 860px);
-  height: min(58vw, 860px);
-  background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.54), transparent 52%),
-    radial-gradient(circle at center, rgba(138, 111, 65, 0.12), transparent 68%);
-  filter: blur(16px);
+  inset: 0;
   pointer-events: none;
-  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.78), transparent 96%);
+  opacity: 0.5;
 }
 
 .articles-page::after {
   content: "";
   position: fixed;
-  inset: 0;
-  pointer-events: none;
+  inset: auto auto -14vh -10vw;
+  width: min(42vw, 640px);
+  height: min(42vw, 640px);
+  border-radius: 50%;
   background:
-    linear-gradient(90deg, rgba(31, 36, 31, 0.025) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(31, 36, 31, 0.025) 1px, transparent 1px),
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.22), transparent 36%);
-  background-size: 56px 56px, 56px 56px, auto;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 96%);
-  opacity: 0.4;
-  z-index: -1;
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.4), transparent 48%),
+    radial-gradient(circle at 52% 52%, rgba(42, 84, 72, 0.08), transparent 62%);
+  filter: blur(24px);
+  pointer-events: none;
 }
 
-.articles-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: end;
-  margin: 0 auto 26px;
-  max-width: 1560px;
+.articles-hero,
+.catalog-board,
+.reader-stage {
+  width: min(1540px, 100%);
+  margin: 0 auto;
+  position: relative;
 }
 
-.articles-header h1 {
-  margin: 10px 0 0;
-  font-family: "STSong", "Songti SC", "Noto Serif SC", serif;
-  font-size: clamp(2.2rem, 4.4vw, 3.8rem);
-  letter-spacing: -0.05em;
-  line-height: 0.95;
+.articles-hero {
+  margin-bottom: 20px;
+  padding: 22px 24px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, rgba(255, 251, 244, 0.88), rgba(248, 240, 227, 0.72));
+  box-shadow:
+    0 24px 72px rgba(48, 35, 21, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
 }
 
-.articles-header p {
-  margin: 10px 0 0;
+.hero-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
   color: var(--ink-soft);
-  font-size: 1.02rem;
-  max-width: 40rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .header-link {
@@ -538,531 +572,577 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--accent-deep);
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.header-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.header-meta span {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 16px;
-  border: 1px solid rgba(31, 36, 31, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.56);
-  color: rgba(31, 36, 31, 0.82);
-  font-size: 0.95rem;
-  box-shadow: 0 12px 26px rgba(39, 34, 24, 0.05);
-  backdrop-filter: blur(12px);
-}
-
-.articles-layout {
+.hero-grid {
   display: grid;
-  grid-template-columns:
-    minmax(300px, 340px)
-    minmax(44px, 5vw, 88px)
-    minmax(0, 1fr);
-  gap: 0;
-  align-items: start;
-  max-width: 1560px;
-  margin: 0 auto;
-  position: relative;
-}
-
-.articles-layout::before {
-  content: "";
-  grid-column: 2;
-  grid-row: 1 / -1;
-  justify-self: center;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, rgba(31, 36, 31, 0.12), transparent);
-  pointer-events: none;
-}
-
-.article-sidebar {
-  grid-column: 1;
-}
-
-.article-sidebar {
-  position: sticky;
-  top: 20px;
-  display: grid;
-  gap: 18px;
-  align-self: start;
-  min-width: 0;
-  padding-right: clamp(8px, 1vw, 18px);
-}
-
-.sidebar-card,
-.article-summary,
-.reader-shell,
-.article-pagination {
-  border: 1px solid rgba(31, 36, 31, 0.08);
-  border-radius: 28px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(252, 248, 240, 0.72));
-  box-shadow:
-    0 24px 54px rgba(32, 32, 28, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(18px);
-}
-
-.sidebar-card {
-  padding: 18px;
-}
-
-.search-box {
-  display: block;
-}
-
-.search-box span {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-
-.search-box input {
-  width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  border: 1px solid rgba(31, 36, 31, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--ink);
-  font: inherit;
-  outline: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-.category-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
+  gap: 28px;
+  align-items: end;
   margin-top: 16px;
 }
 
-.category-pills button,
-.clear-button,
-.article-item,
-.outline-item,
-.pager-button {
-  font: inherit;
-}
-
-.category-pills button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(31, 36, 31, 0.05);
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: transform 0.22s ease, background-color 0.22s ease, color 0.22s ease;
-}
-
-.category-pills button.is-active,
-.category-pills button:hover {
-  background: rgba(45, 88, 73, 0.14);
-  color: var(--accent-deep);
-  transform: translateY(-1px);
-}
-
-.clear-button {
-  margin-top: 14px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+.hero-kicker,
+.catalog-heading p,
+.reading-intro__eyebrow,
+.reader-toolbar__heading p,
+.reader-paper__head p {
+  margin: 0;
   color: var(--accent);
-  cursor: pointer;
-}
-
-.sidebar-title {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.sidebar-title span {
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-}
-
-.article-list {
-  display: grid;
-  gap: 12px;
-  max-height: calc(100vh - 250px);
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.article-item {
-  width: 100%;
-  padding: 16px 16px 16px 18px;
-  border: 1px solid transparent;
-  border-left: 4px solid transparent;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(250, 245, 236, 0.88));
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
-}
-
-.article-item:hover,
-.article-item.is-active {
-  transform: translateY(-2px);
-  border-color: rgba(45, 88, 73, 0.12);
-  border-left-color: rgba(45, 88, 73, 0.5);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 243, 231, 0.96));
-  box-shadow: 0 16px 34px rgba(32, 32, 28, 0.1);
-}
-
-.article-item__top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--ink-soft);
   font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
-.article-item strong {
+.hero-copy h1 {
+  margin: 14px 0 0;
+  max-width: 11ch;
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: clamp(2.5rem, 4.4vw, 4.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.06em;
+}
+
+.hero-summary {
+  max-width: 46rem;
+  margin: 16px 0 0;
+  color: var(--ink-soft);
+  line-height: 1.85;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 22px;
+}
+
+.hero-stats article {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.hero-stats span,
+.reading-intro__meta span {
   display: block;
-  margin-top: 8px;
-  line-height: 1.5;
-  font-size: 1.02rem;
+  color: var(--ink-faint);
+  font-size: 0.84rem;
 }
 
-.article-item p {
-  margin: 8px 0 0;
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-  line-height: 1.65;
+.hero-stats strong,
+.reading-intro__meta strong {
+  display: block;
+  margin-top: 10px;
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: clamp(1.2rem, 1.8vw, 1.55rem);
 }
 
-.sidebar-empty {
-  color: var(--ink-soft);
-  line-height: 1.7;
-}
-
-.article-main {
-  grid-column: 3;
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-  position: relative;
-  padding-left: clamp(6px, 0.6vw, 12px);
-}
-
-.article-main::before {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: 24px;
-  bottom: 24px;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, rgba(31, 36, 31, 0.08), transparent);
-  pointer-events: none;
-}
-
-.article-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
-  padding: clamp(26px, 2.5vw, 34px);
-  position: relative;
+.catalog-board {
+  margin-bottom: 22px;
+  padding: 18px 18px 20px;
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(31, 40, 36, 0.98), rgba(25, 33, 29, 0.96));
+  box-shadow:
+    0 32px 84px rgba(16, 18, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: #fbf2e2;
   overflow: hidden;
 }
 
-.article-summary::before {
+.catalog-board::before {
   content: "";
   position: absolute;
-  inset: auto -8% -36% auto;
-  width: 18rem;
-  height: 18rem;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(138, 111, 65, 0.14), transparent 68%);
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 28%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 34px);
   pointer-events: none;
 }
 
-.article-summary__copy {
-  position: relative;
-  z-index: 1;
-  padding-right: 0;
+.catalog-board__controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(260px, 1fr) auto;
+  gap: 18px 24px;
+  align-items: end;
+  padding: 6px 6px 18px;
+  border-bottom: 1px solid rgba(251, 242, 226, 0.1);
 }
 
-.summary-kicker {
-  display: inline-flex;
-  padding: 7px 12px;
+.catalog-heading h2 {
+  margin: 8px 0 0;
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  color: #fff7ea;
+}
+
+.catalog-search span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--dark-soft);
+  font-size: 0.86rem;
+}
+
+.catalog-search input {
+  width: 100%;
+  height: 46px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(251, 242, 226, 0.18);
+  background: transparent;
+  color: #fff9ee;
+  font: inherit;
+  outline: none;
+}
+
+.catalog-search input::placeholder {
+  color: rgba(251, 242, 226, 0.42);
+}
+
+.catalog-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.catalog-categories button,
+.catalog-card,
+.outline-chip,
+.pager-card,
+.clear-button {
+  font: inherit;
+}
+
+.catalog-categories button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(251, 242, 226, 0.14);
   border-radius: 999px;
-  background: rgba(138, 111, 65, 0.08);
-  color: var(--accent);
+  background: transparent;
+  color: var(--dark-soft);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.catalog-categories button:hover,
+.catalog-categories button.is-active {
+  background: rgba(251, 242, 226, 0.08);
+  border-color: rgba(251, 242, 226, 0.24);
+  color: #fff7ea;
+  transform: translateY(-1px);
+}
+
+.catalog-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  align-items: center;
+  color: var(--dark-soft);
+  font-size: 0.86rem;
+}
+
+.clear-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f5d8aa;
+  cursor: pointer;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.catalog-card {
+  padding: 18px 18px 20px;
+  border: 1px solid rgba(251, 242, 226, 0.08);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    background-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.catalog-card:hover,
+.catalog-card.is-active {
+  transform: translateY(-4px);
+  border-color: rgba(251, 242, 226, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
+}
+
+.catalog-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(251, 242, 226, 0.54);
+  font-size: 0.8rem;
+}
+
+.catalog-card__category {
+  margin: 18px 0 0;
+  color: #d0b283;
   font-size: 0.82rem;
 }
 
-.article-summary h2 {
-  margin: 14px 0 0;
-  font-family: "STSong", "Songti SC", "Noto Serif SC", serif;
-  font-size: clamp(2rem, 3.7vw, 3rem);
+.catalog-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #fff8ec;
+  font-size: 1.08rem;
+  line-height: 1.45;
+}
+
+.catalog-card__excerpt {
+  margin: 10px 0 0;
+  color: rgba(251, 242, 226, 0.64);
+  line-height: 1.7;
+}
+
+.catalog-empty,
+.toolbar-empty,
+.reader-state {
+  color: var(--ink-soft);
+  line-height: 1.72;
+}
+
+.catalog-empty {
+  margin-top: 18px;
+  color: var(--dark-soft);
+}
+
+.reader-stage {
+  display: grid;
+  gap: 22px;
+}
+
+.reading-intro {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) minmax(280px, 340px);
+  gap: 22px 28px;
+  align-items: start;
+  padding: 22px 26px;
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  background:
+    linear-gradient(135deg, rgba(255, 252, 246, 0.9), rgba(247, 238, 223, 0.84));
+  box-shadow:
+    0 24px 70px rgba(48, 35, 21, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.reading-intro__mark {
+  color: rgba(153, 103, 49, 0.9);
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: clamp(2.2rem, 3vw, 3rem);
+  line-height: 1;
+}
+
+.reading-intro__main h2 {
+  margin: 8px 0 0;
+  max-width: 18ch;
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
   line-height: 1.08;
   letter-spacing: -0.05em;
 }
 
-.article-summary p {
-  margin: 12px 0 0;
+.reading-intro__main p:last-child {
+  margin: 10px 0 0;
+  max-width: 56rem;
   color: var(--ink-soft);
-  line-height: 1.82;
-  max-width: 48rem;
+  line-height: 1.76;
 }
 
-.article-summary__facts {
+.reading-intro__meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  align-self: end;
+  gap: 16px;
 }
 
-.article-summary__facts article {
-  min-height: 94px;
-  padding: 16px 16px 15px;
-  border: 1px solid rgba(31, 36, 31, 0.08);
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 241, 231, 0.78));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-
-.article-summary__facts strong {
-  display: block;
-  font-size: 1rem;
-}
-
-.article-summary__facts span {
-  display: block;
-  margin-top: 5px;
-  color: var(--ink-soft);
-  font-size: 0.84rem;
+.reading-intro__meta div {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .reader-shell {
   overflow: hidden;
-  border-radius: 30px;
+  border-radius: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.7), rgba(246, 239, 226, 0.72));
+    linear-gradient(180deg, rgba(255, 252, 246, 0.72), rgba(247, 239, 226, 0.82));
+  box-shadow:
+    0 30px 92px rgba(44, 31, 19, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .reader-progress {
   height: 4px;
-  background: rgba(31, 36, 31, 0.06);
+  background: rgba(30, 35, 31, 0.06);
 }
 
 .reader-progress span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #947744, #315c4d);
+  background: linear-gradient(90deg, #a36d35, #2a5448);
 }
 
-.reader-layout {
-  display: grid;
-  grid-template-columns:
-    minmax(0, 1fr)
-    minmax(28px, 3vw, 52px)
-    minmax(250px, 288px);
-  gap: 0;
-}
-
-.reader-column {
-  grid-column: 1;
-  min-width: 0;
+.reader-toolbar {
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid rgba(43, 35, 24, 0.08);
   background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.45), transparent 20%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 252, 246, 0.56));
+    linear-gradient(180deg, rgba(255, 252, 247, 0.72), rgba(248, 240, 228, 0.48));
 }
 
-.reader-layout::before {
-  content: "";
-  grid-column: 2;
-  grid-row: 1 / -1;
-  justify-self: center;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, rgba(31, 36, 31, 0.08), transparent);
-  pointer-events: none;
+.reader-toolbar__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
 }
 
-.reader-body,
-.reader-state {
-  padding: 38px clamp(24px, 4vw, 48px) 44px;
+.reader-toolbar__heading span {
+  color: var(--ink-faint);
+  font-size: 0.84rem;
 }
 
-.reader-state {
+.outline-strip {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  overflow: auto;
+  padding-bottom: 4px;
+}
+
+.outline-chip {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(43, 35, 24, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
   color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.outline-chip:hover,
+.outline-chip.is-active {
+  transform: translateY(-1px);
+  color: var(--accent-deep);
+  border-color: rgba(42, 84, 72, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.toolbar-empty {
+  margin-top: 14px;
+}
+
+.reader-pager {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.pager-card {
+  padding: 14px 16px;
+  border: 1px solid rgba(43, 35, 24, 0.08);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(248, 241, 230, 0.82));
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.pager-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(42, 84, 72, 0.14);
+  box-shadow: 0 16px 34px rgba(48, 35, 21, 0.08);
+}
+
+.pager-card small {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+
+.pager-card strong {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.56;
+}
+
+.pager-card:disabled {
+  color: rgba(30, 35, 31, 0.36);
+  cursor: default;
+}
+
+.reader-paper {
+  margin: 22px;
+  padding: clamp(22px, 3vw, 40px);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 253, 0.98), rgba(250, 245, 237, 0.97));
+  box-shadow:
+    0 24px 64px rgba(47, 34, 20, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.reader-paper__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(43, 35, 24, 0.1);
+}
+
+.reader-paper__head span {
+  color: var(--accent-deep);
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: 1.28rem;
+  white-space: nowrap;
+}
+
+.reader-state {
+  padding-top: 20px;
 }
 
 .reader-state--error {
   color: #92443d;
 }
 
-.outline-column {
-  grid-column: 3;
-  background:
-    linear-gradient(180deg, rgba(248, 242, 232, 0.9), rgba(244, 236, 221, 0.82));
-}
-
-.outline-card {
-  position: sticky;
-  top: 22px;
-  padding: 24px 18px;
+.reader-body {
+  padding-top: 18px;
 }
 
 .reader-body :deep(.article-markdown) {
-  max-width: 860px;
+  max-width: 82ch;
   margin: 0 auto;
+  --article-ink: #242820;
 }
 
-.outline-list {
-  display: grid;
-  gap: 8px;
-}
-
-.outline-item {
-  padding: 11px 12px;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  color: var(--ink-soft);
-  text-align: left;
-  cursor: pointer;
-}
-
-.outline-item.is-active,
-.outline-item:hover {
-  background: rgba(45, 88, 73, 0.12);
+.reader-body :deep(.article-markdown p:first-of-type)::first-letter {
+  float: left;
+  margin: 0.12em 0.14em 0 0;
   color: var(--accent-deep);
-}
-
-.article-pagination {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-.pager-button {
-  min-height: 64px;
-  padding: 14px 18px;
-  border: 1px solid rgba(31, 36, 31, 0.08);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(250, 244, 234, 0.86));
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 18px 36px rgba(32, 32, 28, 0.08);
-}
-
-.pager-button:disabled {
-  color: rgba(31, 36, 31, 0.36);
-  cursor: default;
-}
-
-@media (max-width: 1180px) {
-  .reader-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .reader-layout::before {
-    display: none;
-  }
-
-  .reader-column,
-  .outline-column {
-    grid-column: auto;
-  }
-
-  .outline-column {
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
-
-  .outline-card {
-    position: relative;
-    top: 0;
-  }
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Songti SC",
+    serif;
+  font-size: 3.2rem;
+  line-height: 0.8;
 }
 
 @media (max-width: 1320px) {
-  .articles-layout {
-    grid-template-columns: 1fr;
-    gap: 18px;
+  .catalog-board__controls {
+    grid-template-columns: minmax(220px, 260px) minmax(220px, 1fr);
   }
 
-  .articles-layout::before {
-    display: none;
+  .catalog-tools {
+    grid-column: 1 / -1;
+    justify-content: space-between;
   }
 
-  .article-sidebar {
-    grid-column: auto;
-    position: relative;
-    top: 0;
-    padding-right: 0;
+  .catalog-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .article-main {
-    grid-column: auto;
-    padding-left: 0;
+  .reading-intro {
+    grid-template-columns: 64px minmax(0, 1fr);
   }
 
-  .article-main::before {
-    display: none;
+  .reading-intro__meta {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 920px) {
-  .articles-header,
-  .article-summary,
-  .articles-layout {
+@media (max-width: 1080px) {
+  .hero-grid {
     grid-template-columns: 1fr;
   }
 
-  .articles-header {
-    align-items: start;
+  .hero-copy h1,
+  .reading-intro__main h2 {
+    max-width: none;
   }
 
-  .article-sidebar {
-    position: relative;
-    top: 0;
+  .catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .article-list {
-    max-height: none;
-  }
-
-  .article-summary__facts {
+  .reader-pager {
     grid-template-columns: 1fr;
-  }
-
-  .article-summary {
-    padding: 24px 20px 22px;
   }
 }
 
-@media (max-width: 760px) {
-  .article-summary__facts {
+@media (max-width: 820px) {
+  .catalog-board__controls,
+  .reading-intro {
     grid-template-columns: 1fr;
+  }
+
+  .reading-intro__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reader-paper {
+    margin: 14px;
+    padding: 22px 18px 26px;
   }
 }
 
@@ -1071,13 +1151,29 @@ onBeforeUnmount(() => {
     padding-inline: 12px;
   }
 
-  .reader-body,
-  .reader-state {
-    padding: 22px 18px 30px;
+  .articles-hero,
+  .catalog-board,
+  .reading-intro,
+  .reader-shell,
+  .reader-paper {
+    border-radius: 26px;
   }
 
-  .article-pagination {
+  .hero-stats {
     grid-template-columns: 1fr;
+  }
+
+  .reader-toolbar {
+    padding: 18px 16px 16px;
+  }
+
+  .outline-chip {
+    min-height: 38px;
+    padding-inline: 14px;
+  }
+
+  .reader-body :deep(.article-markdown p:first-of-type)::first-letter {
+    font-size: 2.6rem;
   }
 }
 </style>

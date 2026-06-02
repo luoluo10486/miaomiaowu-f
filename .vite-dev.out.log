@@ -1,0 +1,21 @@
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m3757[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4173[22m/[39m
+[2m11:50:21[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue?vue&type=style&index=0&scoped=d6580fe4&lang.css[22m
+[2m11:50:41[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m11:50:44[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m11:51:31[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue?vue&type=style&index=0&scoped=d6580fe4&lang.css[22m
+[2m11:51:45[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m11:51:47[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m12:09:14[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue?vue&type=style&index=0&scoped=d6580fe4&lang.css[22m
+[2m12:09:40[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m12:09:43[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m12:13:13[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue?vue&type=style&index=0&scoped=d6580fe4&lang.css[22m
+[2m12:13:35[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m12:13:38[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m12:21:56[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue[22m
+[2m12:28:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue, /src/views/ArticlesView.vue?vue&type=style&index=0&scoped=d6580fe4&lang.css[22m
+[2m12:31:32[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ArticlesView.vue, /src/views/ArticlesView.vue?vue&type=style&index=0&scoped=d6580fe4&lang.css[22m
+[2m12:31:43[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
+[2m12:31:45[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mdist/index.html[22m
