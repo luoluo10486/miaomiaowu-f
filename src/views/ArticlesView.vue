@@ -564,11 +564,29 @@ onBeforeUnmount(() => {
 
 .articles-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
-  gap: 26px;
+  grid-template-columns:
+    minmax(300px, 340px)
+    minmax(44px, 5vw, 88px)
+    minmax(0, 1fr);
+  gap: 0;
   align-items: start;
   max-width: 1560px;
   margin: 0 auto;
+  position: relative;
+}
+
+.articles-layout::before {
+  content: "";
+  grid-column: 2;
+  grid-row: 1 / -1;
+  justify-self: center;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(31, 36, 31, 0.12), transparent);
+  pointer-events: none;
+}
+
+.article-sidebar {
+  grid-column: 1;
 }
 
 .article-sidebar {
@@ -577,6 +595,8 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 18px;
   align-self: start;
+  min-width: 0;
+  padding-right: clamp(8px, 1vw, 18px);
 }
 
 .sidebar-card,
@@ -737,15 +757,30 @@ onBeforeUnmount(() => {
 }
 
 .article-main {
+  grid-column: 3;
   display: grid;
   gap: 18px;
+  min-width: 0;
+  position: relative;
+  padding-left: clamp(6px, 0.6vw, 12px);
+}
+
+.article-main::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 24px;
+  bottom: 24px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(31, 36, 31, 0.08), transparent);
+  pointer-events: none;
 }
 
 .article-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: 18px;
-  padding: 28px 28px 26px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding: clamp(26px, 2.5vw, 34px);
   position: relative;
   overflow: hidden;
 }
@@ -764,7 +799,7 @@ onBeforeUnmount(() => {
 .article-summary__copy {
   position: relative;
   z-index: 1;
-  padding-right: 8px;
+  padding-right: 0;
 }
 
 .summary-kicker {
@@ -799,6 +834,7 @@ onBeforeUnmount(() => {
 }
 
 .article-summary__facts article {
+  min-height: 94px;
   padding: 16px 16px 15px;
   border: 1px solid rgba(31, 36, 31, 0.08);
   border-radius: 20px;
@@ -839,15 +875,29 @@ onBeforeUnmount(() => {
 
 .reader-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(28px, 3vw, 52px)
+    minmax(250px, 288px);
   gap: 0;
 }
 
 .reader-column {
+  grid-column: 1;
   min-width: 0;
   background:
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.45), transparent 20%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 252, 246, 0.56));
+}
+
+.reader-layout::before {
+  content: "";
+  grid-column: 2;
+  grid-row: 1 / -1;
+  justify-self: center;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(31, 36, 31, 0.08), transparent);
+  pointer-events: none;
 }
 
 .reader-body,
@@ -864,15 +914,15 @@ onBeforeUnmount(() => {
 }
 
 .outline-column {
-  border-left: 1px solid rgba(31, 36, 31, 0.08);
+  grid-column: 3;
   background:
     linear-gradient(180deg, rgba(248, 242, 232, 0.9), rgba(244, 236, 221, 0.82));
 }
 
 .outline-card {
   position: sticky;
-  top: 18px;
-  padding: 22px 18px;
+  top: 22px;
+  padding: 24px 18px;
 }
 
 .reader-body :deep(.article-markdown) {
@@ -934,6 +984,15 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .reader-layout::before {
+    display: none;
+  }
+
+  .reader-column,
+  .outline-column {
+    grid-column: auto;
+  }
+
   .outline-column {
     border-top: 1px solid var(--line);
     border-left: 0;
@@ -942,6 +1001,33 @@ onBeforeUnmount(() => {
   .outline-card {
     position: relative;
     top: 0;
+  }
+}
+
+@media (max-width: 1320px) {
+  .articles-layout {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .articles-layout::before {
+    display: none;
+  }
+
+  .article-sidebar {
+    grid-column: auto;
+    position: relative;
+    top: 0;
+    padding-right: 0;
+  }
+
+  .article-main {
+    grid-column: auto;
+    padding-left: 0;
+  }
+
+  .article-main::before {
+    display: none;
   }
 }
 
@@ -971,6 +1057,12 @@ onBeforeUnmount(() => {
 
   .article-summary {
     padding: 24px 20px 22px;
+  }
+}
+
+@media (max-width: 760px) {
+  .article-summary__facts {
+    grid-template-columns: 1fr;
   }
 }
 
