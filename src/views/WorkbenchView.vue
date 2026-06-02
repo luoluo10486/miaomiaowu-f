@@ -226,74 +226,58 @@ onBeforeUnmount(() => {
     <div ref="viewportRef" class="story-viewport">
       <div ref="trackRef" class="story-track">
         <section class="story-panel story-panel--home">
-          <div class="scene-copy scene-copy--home">
-            <span class="scene-copy__eyebrow">Workspace</span>
-            <h1>工作台总览</h1>
-            <p>向右滚动进入不同模块。</p>
-          </div>
+          <div class="scene-copy scene-copy--home"></div>
           <WorkbenchLive2DScene class="person-asset person-asset--home" />
         </section>
 
         <section class="story-panel story-panel--rag">
           <div class="scene-copy">
-            <span class="scene-copy__eyebrow">RAG</span>
             <button type="button" class="scene-copy__action" @click="chapters[1].action()">
               {{ chapters[1].title }}
             </button>
-            <p>{{ chapters[1].description }}</p>
           </div>
           <img class="person-asset person-asset--rag" :src="artworkUrls.rag" alt="RAG 问答人物" />
         </section>
 
         <section class="story-panel story-panel--admin">
           <div class="scene-copy">
-            <span class="scene-copy__eyebrow">Admin</span>
             <button type="button" class="scene-copy__action" @click="chapters[2].action()">
               {{ chapters[2].title }}
             </button>
-            <p>{{ chapters[2].description }}</p>
           </div>
           <img class="person-asset person-asset--admin" :src="artworkUrls.admin" alt="后台管理人物" />
         </section>
 
         <section class="story-panel story-panel--ideas">
           <div class="scene-copy">
-            <span class="scene-copy__eyebrow">Ideas</span>
             <button type="button" class="scene-copy__action" @click="chapters[3].action()">
               {{ chapters[3].title }}
             </button>
-            <p>{{ chapters[3].description }}</p>
           </div>
           <img class="person-asset person-asset--ideas" :src="artworkUrls.ideas" alt="灵感随记人物" />
         </section>
 
         <section class="story-panel story-panel--gallery">
           <div class="scene-copy">
-            <span class="scene-copy__eyebrow">Gallery</span>
             <button type="button" class="scene-copy__action" @click="chapters[4].action()">
               {{ chapters[4].title }}
             </button>
-            <p>{{ chapters[4].description }}</p>
           </div>
           <img class="person-asset person-asset--gallery" :src="artworkUrls.gallery" alt="美图鉴赏人物" />
         </section>
 
         <section class="story-panel story-panel--articles">
           <div class="scene-copy">
-            <span class="scene-copy__eyebrow">Articles</span>
             <button type="button" class="scene-copy__action" @click="chapters[5].action()">
               {{ chapters[5].title }}
             </button>
-            <p>{{ chapters[5].description }}</p>
           </div>
           <img class="person-asset person-asset--articles" :src="artworkUrls.articles" alt="文章馆人物" />
         </section>
 
         <section class="story-panel story-panel--todo">
           <div class="scene-copy">
-            <span class="scene-copy__eyebrow">Next</span>
             <div class="scene-copy__static">{{ chapters[6].title }}</div>
-            <p>{{ chapters[6].description }}</p>
           </div>
           <img class="person-asset person-asset--todo" :src="artworkUrls.todo" alt="待开发人物" />
         </section>
@@ -481,8 +465,10 @@ onBeforeUnmount(() => {
 
 .scene-copy__action {
   display: inline-block;
-  border-bottom: 2px solid currentColor !important;
-  padding: 0 0 10px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
   cursor: pointer;
   transition: color 0.24s ease, transform 0.24s ease;
 }
