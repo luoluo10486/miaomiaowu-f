@@ -651,11 +651,14 @@ onBeforeUnmount(() => {
   padding: 18px 18px 20px;
   border-radius: 32px;
   background:
-    linear-gradient(180deg, rgba(31, 40, 36, 0.98), rgba(25, 33, 29, 0.96));
+    linear-gradient(180deg, rgba(255, 252, 246, 0.9), rgba(247, 239, 227, 0.8)),
+    radial-gradient(circle at 12% 0%, rgba(153, 103, 49, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 12%, rgba(42, 84, 72, 0.08), transparent 24%);
+  border: 1px solid rgba(255, 255, 255, 0.62);
   box-shadow:
-    0 32px 84px rgba(16, 18, 16, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  color: #fbf2e2;
+    0 26px 72px rgba(48, 35, 21, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  color: var(--ink);
   overflow: hidden;
 }
 
@@ -664,8 +667,11 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 28%),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 34px);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 30%),
+    repeating-linear-gradient(90deg, rgba(43, 35, 24, 0.02) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(180deg, rgba(43, 35, 24, 0.018) 0 1px, transparent 1px 28px);
+  background-size: auto, 34px 34px, 28px 28px;
+  opacity: 0.35;
   pointer-events: none;
 }
 
@@ -673,9 +679,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(260px, 1fr) auto;
   gap: 18px 24px;
-  align-items: end;
+  align-items: center;
   padding: 6px 6px 18px;
-  border-bottom: 1px solid rgba(251, 242, 226, 0.1);
+  border-bottom: 1px solid rgba(43, 35, 24, 0.08);
 }
 
 .catalog-heading h2 {
@@ -686,13 +692,13 @@ onBeforeUnmount(() => {
     "Songti SC",
     serif;
   font-size: clamp(1.4rem, 2vw, 1.9rem);
-  color: #fff7ea;
+  color: var(--ink);
 }
 
 .catalog-search span {
   display: block;
   margin-bottom: 8px;
-  color: var(--dark-soft);
+  color: var(--ink-faint);
   font-size: 0.86rem;
 }
 
@@ -701,15 +707,15 @@ onBeforeUnmount(() => {
   height: 46px;
   padding: 0 2px;
   border: 0;
-  border-bottom: 1px solid rgba(251, 242, 226, 0.18);
+  border-bottom: 1px solid rgba(43, 35, 24, 0.1);
   background: transparent;
-  color: #fff9ee;
+  color: var(--ink);
   font: inherit;
   outline: none;
 }
 
 .catalog-search input::placeholder {
-  color: rgba(251, 242, 226, 0.42);
+  color: rgba(43, 35, 24, 0.42);
 }
 
 .catalog-categories {
@@ -729,10 +735,11 @@ onBeforeUnmount(() => {
 .catalog-categories button {
   min-height: 36px;
   padding: 0 14px;
-  border: 1px solid rgba(251, 242, 226, 0.14);
+  border: 1px solid rgba(43, 35, 24, 0.1);
   border-radius: 999px;
-  background: transparent;
-  color: var(--dark-soft);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -743,9 +750,9 @@ onBeforeUnmount(() => {
 
 .catalog-categories button:hover,
 .catalog-categories button.is-active {
-  background: rgba(251, 242, 226, 0.08);
-  border-color: rgba(251, 242, 226, 0.24);
-  color: #fff7ea;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 239, 227, 0.96));
+  border-color: rgba(42, 84, 72, 0.14);
+  color: var(--accent-deep);
   transform: translateY(-1px);
 }
 
@@ -754,7 +761,7 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: 14px;
   align-items: center;
-  color: var(--dark-soft);
+  color: var(--ink-faint);
   font-size: 0.86rem;
 }
 
@@ -762,26 +769,32 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #f5d8aa;
+  color: var(--accent);
   cursor: pointer;
 }
 
 .catalog-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-top: 18px;
 }
 
 .catalog-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 230px;
   padding: 18px 18px 20px;
-  border: 1px solid rgba(251, 242, 226, 0.08);
-  border-radius: 22px;
+  border: 1px solid rgba(43, 35, 24, 0.08);
+  border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 242, 233, 0.94));
   color: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow:
+    0 18px 40px rgba(48, 35, 21, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   transition:
     transform 0.22s ease,
     border-color 0.22s ease,
@@ -792,38 +805,51 @@ onBeforeUnmount(() => {
 .catalog-card:hover,
 .catalog-card.is-active {
   transform: translateY(-4px);
-  border-color: rgba(251, 242, 226, 0.18);
+  border-color: rgba(42, 84, 72, 0.16);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 240, 230, 0.98));
+  box-shadow:
+    0 20px 48px rgba(48, 35, 21, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.catalog-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(42, 84, 72, 0.58), rgba(153, 103, 49, 0.44), transparent);
+  opacity: 0.78;
 }
 
 .catalog-card__top {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: rgba(251, 242, 226, 0.54);
+  color: var(--ink-faint);
   font-size: 0.8rem;
 }
 
 .catalog-card__category {
   margin: 18px 0 0;
-  color: #d0b283;
+  color: var(--accent);
   font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .catalog-card strong {
   display: block;
   margin-top: 8px;
-  color: #fff8ec;
-  font-size: 1.08rem;
-  line-height: 1.45;
+  color: var(--ink);
+  font-size: 1.12rem;
+  line-height: 1.5;
 }
 
 .catalog-card__excerpt {
   margin: 10px 0 0;
-  color: rgba(251, 242, 226, 0.64);
-  line-height: 1.7;
+  color: var(--ink-soft);
+  line-height: 1.75;
 }
 
 .catalog-empty,
@@ -835,7 +861,7 @@ onBeforeUnmount(() => {
 
 .catalog-empty {
   margin-top: 18px;
-  color: var(--dark-soft);
+  color: var(--ink-soft);
 }
 
 .reader-stage {
