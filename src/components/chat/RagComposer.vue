@@ -101,14 +101,6 @@ onMounted(() => {
           @keydown="
             (event) => {
               handleKeydown(event);
-              if (event.key === 'Enter' && !event.shiftKey) {
-                const nativeEvent = event.nativeEvent || event;
-                if (nativeEvent.isComposing || isComposingRef.value || nativeEvent.keyCode === 229) {
-                  return;
-                }
-                event.preventDefault();
-                submit();
-              }
             }
           "
         />
