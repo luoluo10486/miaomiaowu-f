@@ -200,7 +200,9 @@ function openAdminPanel() {
     sans-serif;
 
   position: relative;
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
   padding: 18px;
   overflow: hidden;
   color: var(--chat-text);
@@ -315,10 +317,12 @@ function openAdminPanel() {
 }
 
 .chat-layout {
+  flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
   gap: 0;
-  min-height: calc(100vh - 96px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .chat-main {
@@ -326,6 +330,7 @@ function openAdminPanel() {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   border: 1px solid #f0f0f0;
   border-left: 0;
   border-radius: 0;
@@ -480,6 +485,7 @@ function openAdminPanel() {
 
   .chat-layout {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .chat-topbar__title {

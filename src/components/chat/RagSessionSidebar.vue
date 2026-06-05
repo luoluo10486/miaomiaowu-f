@@ -257,6 +257,7 @@ onBeforeUnmount(() => {
 .sidebar-shell {
   position: relative;
   min-width: 0;
+  height: 100%;
 }
 
 .sidebar-shell__overlay {
@@ -268,16 +269,17 @@ onBeforeUnmount(() => {
 }
 
 .sidebar {
-  position: sticky;
-  top: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: calc(100vh - 36px);
+  min-height: 0;
+  height: 100%;
   padding: 14px 12px 12px;
   background: #fafafa;
   box-shadow: none;
   backdrop-filter: none;
+  overflow: hidden;
 }
 
 .sidebar__brand,
@@ -481,6 +483,8 @@ onBeforeUnmount(() => {
   margin-top: 14px;
   background: transparent;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar__state {
@@ -517,7 +521,9 @@ onBeforeUnmount(() => {
 }
 
 .sidebar__list {
-  max-height: calc(100vh - 430px);
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   padding: 12px;
   scrollbar-width: thin;
@@ -788,6 +794,7 @@ onBeforeUnmount(() => {
     z-index: 31;
     width: min(320px, calc(100vw - 32px));
     min-height: calc(100vh - 32px);
+    height: auto;
     transform: translateX(-110%);
     transition: transform 0.22s ease;
   }
@@ -803,7 +810,6 @@ onBeforeUnmount(() => {
   }
 
   .sidebar {
-    position: sticky;
     transform: none !important;
   }
 }
