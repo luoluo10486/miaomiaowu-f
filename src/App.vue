@@ -6,8 +6,8 @@ import MainLayout from "./layouts/MainLayout.vue";
 <template>
   <RouterView v-slot="{ Component, route }">
     <Transition name="route-fade" mode="out-in">
-      <component v-if="route.meta.fullscreen" :is="Component" :key="route.fullPath" />
-      <MainLayout v-else :key="route.fullPath">
+      <component v-if="route.meta.fullscreen" :is="Component" />
+      <MainLayout v-else>
         <component :is="Component" />
       </MainLayout>
     </Transition>
