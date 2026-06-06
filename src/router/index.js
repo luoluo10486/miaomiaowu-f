@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from "vue-router";
 import {
   getStoredAuthToken,
   getStoredAuthUser,
-  isAdminUser
+  isAdminUser,
+  refreshStoredAuthUser
 } from "../utils/auth";
 
 const LoginView = () => import("../views/LoginView.vue");
@@ -270,9 +271,8 @@ const router = createRouter({
   ]
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const token = getStoredAuthToken();
-  const user = getStoredAuthUser();
   const isAuthenticated = Boolean(token);
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin);
@@ -284,6 +284,11 @@ router.beforeEach((to) => {
         redirect: to.fullPath
       }
     };
+  }
+
+  let user = getStoredAuthUser();
+  if (requiresAdmin && isAuthenticated && !isAdminUser(user)) {
+    user = await refreshStoredAuthUser();
   }
 
   if (requiresAdmin && !isAdminUser(user)) {

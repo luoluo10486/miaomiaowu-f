@@ -11,7 +11,7 @@ import {
   stopRagTask,
   submitRagMessageFeedback
 } from "../services/ragService";
-import { clearStoredAuth, getStoredAuthUser } from "../utils/auth";
+import { clearStoredAuth, getStoredAuthUser, refreshStoredAuthUser } from "../utils/auth";
 
 const DEFAULT_SUGGESTIONS = [
   {
@@ -829,6 +829,7 @@ export function useRagChat() {
   }
 
   onMounted(async () => {
+    currentUser.value = (await refreshStoredAuthUser()) || currentUser.value;
     await Promise.all([loadSuggestions(), loadSessions()]);
     focusComposer();
     resizeComposer();

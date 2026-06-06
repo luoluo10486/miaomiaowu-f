@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import Avatar from "../../components/common/Avatar.vue";
 import { adminNavGroups } from "./adminShared";
-import { clearStoredAuth, getStoredAuthUser } from "../../utils/auth";
+import { clearStoredAuth, getStoredAuthUser, refreshStoredAuthUser } from "../../utils/auth";
 import { changeCurrentUserPassword } from "../../services/userService";
 import { getKnowledgeBases, searchKnowledgeDocuments } from "../../services/knowledgeService";
 
@@ -158,6 +158,14 @@ watch(
 );
 
 onMounted(() => {
+  refreshStoredAuthUser()
+    .then((user) => {
+      if (user) {
+        currentUser.value = user;
+      }
+    })
+    .catch(() => {});
+
   fetch("https://api.github.com/repos/nageoffer/ragent")
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => {

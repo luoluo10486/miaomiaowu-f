@@ -28,6 +28,13 @@ const props = defineProps({
 const emit = defineEmits(["open", "prev", "next"]);
 
 const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 0);
+
+function formatTraceId(value, visibleLength = 10) {
+  const traceId = String(value || "").trim();
+  if (!traceId) return "-";
+  if (traceId.length <= visibleLength + 3) return traceId;
+  return `${traceId.slice(0, visibleLength)}...`;
+}
 </script>
 
 <template>
@@ -62,7 +69,7 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
               <p class="admin-cell-title">{{ run.traceName || "-" }}</p>
             </td>
             <td>
-              <span class="admin-code">{{ run.traceId }}</span>
+              <span class="admin-code" :title="run.traceId">{{ formatTraceId(run.traceId) }}</span>
             </td>
             <td>
               <p class="admin-cell-subtitle">{{ run.conversationId || "-" }}</p>
@@ -184,9 +191,13 @@ const hasRows = computed(() => Array.isArray(props.runs) && props.runs.length > 
 }
 
 .admin-code {
+  display: inline-block;
+  max-width: 160px;
   font-family: var(--admin-mono);
   color: var(--admin-ink-soft);
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .admin-badge {

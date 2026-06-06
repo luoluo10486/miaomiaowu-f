@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import WorkbenchLive2DScene from "../components/WorkbenchLive2DScene.vue";
-import { clearStoredAuth, getStoredAuthUser } from "../utils/auth";
+import { clearStoredAuth, getStoredAuthUser, refreshStoredAuthUser } from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -188,6 +188,7 @@ function setupHorizontalStory() {
 }
 
 onMounted(async () => {
+  currentUser.value = (await refreshStoredAuthUser()) || currentUser.value;
   await nextTick();
   setupHorizontalStory();
 });

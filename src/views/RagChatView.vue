@@ -43,7 +43,11 @@ const {
   handleLogout
 } = useRagChat();
 
-const isAdminUser = computed(() => currentUser.value?.role === "admin");
+const isAdminUser = computed(() => {
+  return String(currentUser.value?.role || currentUser.value?.userType || "")
+    .trim()
+    .toLowerCase() === "admin";
+});
 
 function handleCreateConversation() {
   createConversation();
