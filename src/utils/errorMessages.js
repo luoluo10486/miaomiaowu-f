@@ -1,30 +1,31 @@
 const EXACT_MESSAGES = new Map(
   Object.entries({
     "account or password is invalid": "账号或密码错误",
-    "bad request": "请求参数错误",
+    "bad request": "请求参数有误",
     "emailcode is invalid or expired": "邮箱验证码无效或已过期",
-    "failed to fetch": "网络请求失败，请检查网络或后端服务",
-    forbidden: "无权访问该资源",
+    "failed to fetch": "网络请求失败，请检查后端服务是否已启动",
+    forbidden: "没有权限访问该资源",
     "internal server error": "服务器内部错误",
     "login success": "登录成功",
     "networkerror when attempting to fetch resource": "网络请求失败，请检查网络或后端服务",
-    "not found": "请求的资源不存在",
+    "not found": "资源不存在",
     "register success": "注册成功",
     "request aborted": "请求已取消",
-    "request timeout": "请求超时，请稍后重试",
-    "service unavailable": "服务暂时不可用，请稍后重试",
+    "request timeout": "请求超时",
+    "service unavailable": "服务暂不可用",
     "send code success": "验证码发送成功",
     "smscode is invalid or expired": "短信验证码无效或已过期",
-    unauthorized: "未授权，请先登录",
-    "logout success": "退出成功",
-    "fetch failed": "网络请求失败，请检查网络或后端服务"
+    unauthorized: "未登录或登录已过期",
+    "knowledge base still has documents": "该知识库下仍有文档，请先删除文档后再删除知识库",
+    "logout success": "退出登录成功",
+    "fetch failed": "网络请求失败，请检查后端服务是否可访问"
   })
 );
 
 const FIELD_LABELS = new Map(
   Object.entries({
     account: "账号",
-    captcha: "图形验证码",
+    captcha: "验证码",
     code: "验证码",
     conversation: "会话",
     email: "邮箱",
@@ -106,7 +107,7 @@ export function translateUserMessage(message, fallback = "请求失败，请稍�
   }
 
   if (/^typeerror:\s*fetch failed$/i.test(raw) || /failed to fetch/i.test(raw)) {
-    return "网络请求失败，请检查网络或后端服务";
+    return "网络请求失败，请检查后端服务是否启动";
   }
 
   if (/^aborterror$/i.test(raw) || /aborted/i.test(lower)) {
@@ -140,19 +141,19 @@ export function translateUserMessage(message, fallback = "请求失败，请稍�
   }
 
   if (/^unauthorized$/i.test(raw)) {
-    return "未授权，请先登录";
+    return "未登录或登录已过期";
   }
 
   if (/^forbidden$/i.test(raw)) {
-    return "无权访问该资源";
+    return "没有权限访问该资源";
   }
 
   if (/^bad request$/i.test(raw)) {
-    return "请求参数错误";
+    return "请求参数有误";
   }
 
   if (/^not found$/i.test(raw)) {
-    return "请求的资源不存在";
+    return "资源不存在";
   }
 
   if (/^internal server error$/i.test(raw)) {
@@ -160,15 +161,15 @@ export function translateUserMessage(message, fallback = "请求失败，请稍�
   }
 
   if (/^service unavailable$/i.test(raw)) {
-    return "服务暂时不可用，请稍后重试";
+    return "服务暂不可用";
   }
 
   if (/^gateway timeout$/i.test(raw)) {
-    return "网关超时，请稍后重试";
+    return "网关超时";
   }
 
   if (/^request timeout$/i.test(raw)) {
-    return "请求超时，请稍后重试";
+    return "请求超时";
   }
 
   if (/^[a-z0-9\s,._:-]+$/i.test(raw)) {

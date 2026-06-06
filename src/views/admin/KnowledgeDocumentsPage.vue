@@ -50,6 +50,7 @@ const logs = ref([]);
 
 const strategies = ref([]);
 const pipelines = ref([]);
+const hasPipelines = computed(() => pipelines.value.length > 0);
 
 const uploadDialogOpen = ref(false);
 const uploadSubmitting = ref(false);
@@ -888,12 +889,13 @@ onMounted(() => {
           </div>
           <div v-if="uploadForm.processMode === 'pipeline'" class="admin-dialog-field">
             <label>数据通道</label>
-            <select v-model="uploadForm.pipelineId" class="admin-select">
+            <select v-model="uploadForm.pipelineId" class="admin-select" :disabled="!hasPipelines">
               <option value="">请选择 pipeline</option>
               <option v-for="pipeline in pipelines" :key="pipeline.id" :value="pipeline.id">
                 {{ pipeline.name || pipeline.id }}
               </option>
             </select>
+            <p v-if="!hasPipelines" class="admin-form-hint">当前还没有可用 pipeline；如果只是上传文档并切片，请继续使用“直接切片”。</p>
           </div>
           <div v-if="uploadForm.processMode === 'chunk' && uploadConfigFields.length > 0" class="admin-form-grid-2">
             <div v-for="([key, value]) in uploadConfigFields" :key="key" class="admin-dialog-field">
@@ -953,12 +955,13 @@ onMounted(() => {
           </div>
           <div v-if="detailForm.processMode === 'pipeline'" class="admin-dialog-field">
             <label>数据通道</label>
-            <select v-model="detailForm.pipelineId" class="admin-select">
+            <select v-model="detailForm.pipelineId" class="admin-select" :disabled="!hasPipelines">
               <option value="">请选择 pipeline</option>
               <option v-for="pipeline in pipelines" :key="pipeline.id" :value="pipeline.id">
                 {{ pipeline.name || pipeline.id }}
               </option>
             </select>
+            <p v-if="!hasPipelines" class="admin-form-hint">当前没有可用 pipeline，这里只能查看已有配置；新文档建议直接切片上传。</p>
           </div>
           <div class="admin-kv admin-kv--compact">
             <div><dt>来源类型</dt><dd>{{ formatSourceLabel(detailTarget?.sourceType) }}</dd></div>
