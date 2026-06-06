@@ -14,6 +14,8 @@ import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared
 
 const router = useRouter();
 
+const CREATE_NOTICE_QUERY_KEY = "created";
+
 const PAGE_SIZE = 10;
 const STATS_PAGE_SIZE = 200;
 
@@ -34,10 +36,10 @@ const statsRequestId = ref(0);
 
 const createDialogOpen = ref(false);
 const createSubmitting = ref(false);
+const DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-8B";
 const createForm = ref({
   name: "",
-  collectionName: "",
-  embeddingModel: "text-embedding-3-large"
+  collectionName: ""
 });
 
 const renameDialogOpen = ref(false);
@@ -80,20 +82,10 @@ function getErrorMessage(error, fallback) {
   return error?.message || fallback;
 }
 
-function normalizeCollectionName(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9-_]/g, "")
-    .replace(/-+/g, "-")
-    .toLowerCase();
-}
-
 function resetCreateForm() {
   createForm.value = {
     name: "",
-    collectionName: "",
-    embeddingModel: "text-embedding-3-large"
+    collectionName: ""
   };
 }
 
@@ -211,15 +203,15 @@ async function handleCreate() {
 
   createSubmitting.value = true;
   try {
-    await createKnowledgeBase({
+    const createdId = await createKnowledgeBase({
       name,
-      collectionName: createForm.value.collectionName.trim() || normalizeCollectionName(name),
-      embeddingModel: createForm.value.embeddingModel.trim() || "text-embedding-3-large"
+      collectionName: createForm.value.collectionName.trim() || undefined
     });
     closeCreateDialog();
-    pageNo.value = 1;
-    await loadKnowledgeBases(1, keyword.value);
-    await loadStats(keyword.value);
+    await router.push({
+      path: `/admin/knowledge/${createdId}`,
+      query: { [CREATE_NOTICE_QUERY_KEY]: "1" }
+    });
   } catch (error) {
     errorText.value = getErrorMessage(error, "创建知识库失败，请稍后重试。");
   } finally {
@@ -428,6 +420,7 @@ onMounted(() => {
                 <td>{{ formatDateTime(item.updateTime) }}</td>
                 <td>
                   <div class="admin-inline-actions">
+                    <button class="admin-button--ghost" type="button" @click="goToDocuments(item)">文档管理</button>
                     <button class="admin-button--ghost" type="button" @click="openRenameDialog(item)">重命名</button>
                     <button class="admin-button--danger" type="button" @click="openDeleteDialog(item)">删除</button>
                   </div>
@@ -471,6 +464,14 @@ onMounted(() => {
             <p>新建时可直接选择默认嵌入模型。</p>
           </div>
           <div class="admin-card-item">
+            <h3>上传入口</h3>
+            <p>创建完成后会自动进入文档管理页，右上角“上传文档”就是入口。</p>
+          </div>
+          <div class="admin-card-item">
+            <h3>分块入口</h3>
+            <p>文档上传后，在文档列表右侧点击“切片”即可触发分块任务。</p>
+          </div>
+          <div class="admin-card-item">
             <h3>最新知识库</h3>
             <p>{{ latestKnowledgeBaseLabel }}</p>
           </div>
@@ -486,7 +487,7 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeCreateDialog">&times;</button>
         <h3>新建知识库</h3>
-        <p>填写知识库基础信息，集合名称可留空自动生成。</p>
+        <p>填写知识库基础信息，集合名称可留空自动生成，创建后会自动进入文档管理页。</p>
         <div class="admin-dialog-body">
           <div class="admin-dialog-field">
             <label>名称</label>
@@ -498,7 +499,8 @@ onMounted(() => {
           </div>
           <div class="admin-dialog-field">
             <label>向量模型</label>
-            <input v-model="createForm.embeddingModel" class="admin-input" placeholder="text-embedding-3-large" />
+            <div class="admin-input is-readonly-field">{{ DEFAULT_EMBEDDING_MODEL }}</div>
+            <p class="admin-form-hint">当前默认使用 Qwen/Qwen3-Embedding-8B，无需手动填写。</p>
           </div>
         </div>
         <div class="admin-dialog-footer">
@@ -618,6 +620,21 @@ onMounted(() => {
   align-self: start;
   position: sticky;
   top: 16px;
+}
+
+.admin-form-hint {
+  margin: 6px 0 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.is-readonly-field {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  pointer-events: none;
+  user-select: text;
 }
 
 @media (max-width: 960px) {

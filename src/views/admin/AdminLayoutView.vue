@@ -166,7 +166,7 @@ onMounted(() => {
     })
     .catch(() => {});
 
-  fetch("https://api.github.com/repos/nageoffer/ragent")
+  fetch("https://api.github.com/repos/luoluo10486/miaomiaowu-b")
     .then((res) => (res.ok ? res.json() : null))
     .then((data) => {
       starCount.value = typeof data?.stargazers_count === "number" ? data.stargazers_count : null;
@@ -464,7 +464,7 @@ async function handlePasswordSubmit() {
           <button class="admin-button--ghost" type="button" @click="router.push('/chat')">返回聊天</button>
           <a
             class="admin-button--ghost"
-              href="https://github.com/nageoffer/ragent"
+              href="https://github.com/luoluo10486/miaomiaowu-b"
               target="_blank"
               rel="noreferrer"
             >

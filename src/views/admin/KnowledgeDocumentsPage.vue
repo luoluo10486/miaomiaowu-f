@@ -36,6 +36,8 @@ const kbId = computed(() => String(route.params.kbId || ""));
 const loading = ref(false);
 const metaLoading = ref(false);
 const errorText = ref("");
+const successText = ref("");
+const workflowTip = "上传入口在右上角“上传文档”；分块入口在每条文档右侧“切片”。先上传，再切片。";
 
 const searchInput = ref("");
 const keyword = ref("");
@@ -306,6 +308,14 @@ async function loadDocuments() {
   }
 }
 
+watch(
+  () => route.query.created,
+  (value) => {
+    successText.value = value === "1" ? "知识库已创建，接下来先上传文档，再对文档执行切片。" : "";
+  },
+  { immediate: true }
+);
+
 function handleSearch() {
   pageNo.value = 1;
   keyword.value = searchInput.value.trim();
@@ -423,6 +433,7 @@ async function handleUploadSubmit() {
     await uploadKnowledgeDocument(kbId.value, payload);
     closeUploadDialog();
     await loadDocuments();
+    successText.value = "文档已上传，接下来可以点击“切片”开始分块。";
   } catch (error) {
     errorText.value = getErrorMessage(error, "上传文档失败，请稍后重试。");
   } finally {
@@ -463,6 +474,7 @@ async function handleDetailSave() {
     await updateKnowledgeDocument(detailTarget.value.id, payload);
     closeDetailDialog();
     await loadDocuments();
+    successText.value = "文档已保存。";
   } catch (error) {
     errorText.value = getErrorMessage(error, "保存文档失败，请稍后重试。");
   } finally {
@@ -499,6 +511,7 @@ async function handleChunk() {
     await startKnowledgeDocumentChunk(chunkTarget.value.id);
     closeChunkDialog();
     await loadDocuments();
+    successText.value = "切片任务已提交，日志会在右侧刷新。";
   } catch (error) {
     errorText.value = getErrorMessage(error, "触发切片失败，请稍后重试。");
   } finally {
@@ -526,6 +539,7 @@ async function handleDelete() {
     await deleteKnowledgeDocument(deleteTarget.value.id);
     closeDeleteDialog();
     await loadDocuments();
+    successText.value = "文档已删除。";
   } catch (error) {
     errorText.value = getErrorMessage(error, "删除文档失败，请稍后重试。");
   } finally {
@@ -622,6 +636,8 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+    <p v-if="successText" class="admin-notice is-success">{{ successText }}</p>
+    <p class="admin-notice is-success">{{ workflowTip }}</p>
 
     <div class="admin-stat-grid">
       <StatCard
