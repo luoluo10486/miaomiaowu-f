@@ -482,7 +482,7 @@ onMounted(() => {
       </aside>
     </section>
 
-    <div v-if="createDialogOpen" class="admin-dialog-overlay" @click.self="closeCreateDialog">
+    <div v-if="createDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeCreateDialog">&times;</button>
         <h3>新建知识库</h3>
