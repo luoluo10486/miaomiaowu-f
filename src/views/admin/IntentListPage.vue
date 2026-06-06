@@ -491,7 +491,7 @@ onMounted(() => {
       </aside>
     </section>
 
-    <div v-if="deleteDialogOpen" class="admin-dialog-overlay" @click.self="deleteDialogOpen = false; deleteDialogTarget = null;">
+    <div v-if="deleteDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="deleteDialogOpen = false; deleteDialogTarget = null;">&times;</button>
         <h3>确认批量删除</h3>

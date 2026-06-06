@@ -510,7 +510,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="renameDialogOpen" class="admin-dialog-overlay" @click.self="closeRenameDialog">
+    <div v-if="renameDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeRenameDialog">&times;</button>
         <h3>重命名知识库</h3>
@@ -530,7 +530,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="deleteDialogOpen" class="admin-dialog-overlay" @click.self="closeDeleteDialog">
+    <div v-if="deleteDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>

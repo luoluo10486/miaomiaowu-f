@@ -503,7 +503,7 @@ async function handlePasswordSubmit() {
       </div>
     </main>
 
-    <div v-if="passwordOpen" class="admin-dialog-overlay" @click.self="closePasswordDialog">
+    <div v-if="passwordOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closePasswordDialog">&times;</button>
         <h3>修改密码</h3>

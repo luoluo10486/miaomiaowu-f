@@ -614,7 +614,7 @@ onMounted(() => {
       </aside>
     </section>
 
-    <div v-if="dialogOpen" class="admin-dialog-overlay" @click.self="closeDialog">
+    <div v-if="dialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog" style="width:min(700px,calc(100% - 32px));">
         <button class="admin-dialog-close" type="button" @click="closeDialog">&times;</button>
         <h3>{{ dialogMode === "create" ? (dialogParent ? "新建子节点" : "新建根节点") : "编辑意图节点" }}</h3>
@@ -744,7 +744,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="deleteDialogOpen" class="admin-dialog-overlay" @click.self="closeDeleteDialog">
+    <div v-if="deleteDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>

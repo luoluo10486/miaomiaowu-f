@@ -1229,7 +1229,7 @@ onMounted(() => {
       </aside>
     </section>
 
-    <div v-if="pipelineDetailDialogOpen" class="admin-dialog-overlay" @click.self="closePipelineDetail">
+    <div v-if="pipelineDetailDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closePipelineDetail">&times;</button>
         <h3>Pipeline 节点</h3>
@@ -1261,7 +1261,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="pipelineDialogOpen" class="admin-dialog-overlay" @click.self="closePipelineDialog">
+    <div v-if="pipelineDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closePipelineDialog">&times;</button>
         <div class="admin-dialog-header-stack">
@@ -1565,7 +1565,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="taskDialogOpen" class="admin-dialog-overlay" @click.self="closeTaskDialog">
+    <div v-if="taskDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closeTaskDialog">&times;</button>
         <div class="admin-dialog-header-stack">
@@ -1671,7 +1671,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="uploadDialogOpen" class="admin-dialog-overlay" @click.self="closeUploadDialog">
+    <div v-if="uploadDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closeUploadDialog">&times;</button>
         <div class="admin-dialog-header-stack">
@@ -1706,7 +1706,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="deleteDialogOpen" class="admin-dialog-overlay" @click.self="closeDeleteDialog">
+    <div v-if="deleteDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
@@ -1720,7 +1720,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="taskDetailOpen" class="admin-dialog-overlay" @click.self="closeTaskDetail">
+    <div v-if="taskDetailOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide ingestion-dialog">
         <button class="admin-dialog-close" type="button" @click="closeTaskDetail">&times;</button>
         <div class="admin-dialog-header-stack">

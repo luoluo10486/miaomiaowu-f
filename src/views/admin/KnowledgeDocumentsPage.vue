@@ -833,7 +833,7 @@ onMounted(() => {
       </aside>
     </div>
 
-    <div v-if="uploadDialogOpen" class="admin-dialog-overlay" @click.self="closeUploadDialog">
+    <div v-if="uploadDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeUploadDialog">&times;</button>
         <h3>上传文档</h3>
@@ -908,7 +908,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="detailDialogOpen" class="admin-dialog-overlay" @click.self="closeDetailDialog">
+    <div v-if="detailDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeDetailDialog">&times;</button>
         <h3>文档详情</h3>
@@ -989,7 +989,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="chunkDialogOpen" class="admin-dialog-overlay" @click.self="closeChunkDialog">
+    <div v-if="chunkDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeChunkDialog">&times;</button>
         <h3>确认切片</h3>
@@ -1003,7 +1003,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="deleteDialogOpen" class="admin-dialog-overlay" @click.self="closeDeleteDialog">
+    <div v-if="deleteDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
@@ -1017,7 +1017,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="logDialogOpen" class="admin-dialog-overlay" @click.self="closeLogDialog">
+    <div v-if="logDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeLogDialog">&times;</button>
         <h3>切片日志 · {{ logTarget?.docName || logTarget?.id }}</h3>
