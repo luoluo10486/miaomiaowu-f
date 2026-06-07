@@ -50,6 +50,8 @@ const renameValue = ref("");
 const deleteDialogOpen = ref(false);
 const deleteSubmitting = ref(false);
 const deleteTarget = ref(null);
+const deleteDialogError = ref("");
+const deleteTargetDocumentCount = computed(() => Number(deleteTarget.value?.documentCount ?? 0));
 
 const records = computed(() => pageRecords(page.value));
 const visibleKnowledgeBaseCount = computed(() => pageTotal(page.value));
@@ -250,17 +252,24 @@ async function handleRename() {
 
 function openDeleteDialog(item) {
   deleteTarget.value = item;
+  deleteDialogError.value = "";
   deleteDialogOpen.value = true;
 }
 
 function closeDeleteDialog() {
   deleteDialogOpen.value = false;
   deleteTarget.value = null;
+  deleteDialogError.value = "";
 }
 
 async function handleDelete() {
   const target = deleteTarget.value;
   if (!target) return;
+
+  if (deleteTargetDocumentCount.value > 0) {
+    deleteDialogError.value = `该知识库下还有 ${deleteTargetDocumentCount.value} 个文档，请先删除文档后再删除知识库。`;
+    return;
+  }
 
   deleteSubmitting.value = true;
   try {
@@ -536,7 +545,14 @@ onMounted(() => {
       <div class="admin-dialog">
         <button class="admin-dialog-close" type="button" @click="closeDeleteDialog">&times;</button>
         <h3>确认删除</h3>
-        <p class="admin-confirm-text">删除后该知识库及其文档将无法恢复，是否继续？</p>
+        <p class="admin-confirm-text">
+          {{
+            deleteTargetDocumentCount > 0
+              ? "该知识库当前包含文档，删除前必须先清空文档。"
+              : "删除后该知识库及其文档将无法恢复，是否继续？"
+          }}
+        </p>
+        <p v-if="deleteDialogError" class="admin-notice is-error">{{ deleteDialogError }}</p>
         <div class="admin-dialog-footer">
           <button class="admin-button--ghost" type="button" @click="closeDeleteDialog">取消</button>
           <button class="admin-button--danger" type="button" :disabled="deleteSubmitting" @click="handleDelete">
