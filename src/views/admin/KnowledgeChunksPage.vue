@@ -77,12 +77,25 @@ function statusDotClass(status) {
   return "is-muted";
 }
 
+function parseMetadata(raw) {
+  if (!raw) return {};
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 const chunks = computed(() => pageRecords(chunksPage.value));
 const selectedList = computed(() => Array.from(selectedIds.value));
 const recentLogs = computed(() => pageRecords(logsPage.value).slice(0, 4));
 const allSelected = computed(() => chunks.value.length > 0 && chunks.value.every((item) => selectedIds.value.has(String(item.id))));
 const latestLog = computed(() => recentLogs.value[0] || null);
 const latestChunk = computed(() => chunks.value[0] || null);
+const docMetadata = computed(() => parseMetadata(doc.value?.metadataJson));
+const isChatDocument = computed(() => docMetadata.value.docType === "chat_qq_group");
+const previewMetadata = computed(() => parseMetadata(previewTarget.value?.metadata));
 
 const currentFilterLabel = computed(() => {
   if (enabledFilter.value === "1") return "已启用";
@@ -549,6 +562,8 @@ onMounted(() => {
             <div><dt>平均字符</dt><dd>{{ averageChunkChars || "--" }}</dd></div>
             <div><dt>当前筛选</dt><dd>{{ currentFilterLabel }}</dd></div>
             <div><dt>最新切片</dt><dd>{{ latestChunkSummary }}</dd></div>
+            <div v-if="isChatDocument"><dt>群名</dt><dd>{{ docMetadata.groupName || "--" }}</dd></div>
+            <div v-if="isChatDocument"><dt>月份</dt><dd>{{ docMetadata.bucketMonth || "--" }}</dd></div>
           </div>
         </article>
 
@@ -595,6 +610,16 @@ onMounted(() => {
               <dt>状态</dt>
               <dd><span :class="['admin-badge', enabledBadgeClass(previewTarget)]">{{ isEnabled(previewTarget) ? "启用" : "禁用" }}</span></dd>
             </div>
+          </div>
+          <div v-if="previewMetadata.docType === 'chat_qq_group'" class="admin-kv admin-kv--compact">
+            <div><dt>群名</dt><dd>{{ previewMetadata.groupName || "--" }}</dd></div>
+            <div><dt>月份</dt><dd>{{ previewMetadata.bucketMonth || "--" }}</dd></div>
+            <div><dt>起始时间</dt><dd>{{ previewMetadata.startTime || "--" }}</dd></div>
+            <div><dt>结束时间</dt><dd>{{ previewMetadata.endTime || "--" }}</dd></div>
+            <div><dt>发言人</dt><dd>{{ Array.isArray(previewMetadata.speakerSet) ? previewMetadata.speakerSet.join("、") : "--" }}</dd></div>
+            <div><dt>消息数</dt><dd>{{ previewMetadata.messageCount ?? "--" }}</dd></div>
+            <div><dt>消息范围</dt><dd>{{ previewMetadata.messageStartIndex ?? "--" }} - {{ previewMetadata.messageEndIndex ?? "--" }}</dd></div>
+            <div><dt>行范围</dt><dd>{{ previewMetadata.lineStart ?? "--" }} - {{ previewMetadata.lineEnd ?? "--" }}</dd></div>
           </div>
         </div>
         <div class="admin-dialog-footer">

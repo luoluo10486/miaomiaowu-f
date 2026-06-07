@@ -77,6 +77,7 @@ const router = createRouter({
       component: RagChatView,
       meta: {
         requiresAuth: true,
+        fullscreen: true,
         title: "RAG Chat",
         description: "RAG 问答工作台。"
       }
@@ -87,6 +88,7 @@ const router = createRouter({
       component: RagChatView,
       meta: {
         requiresAuth: true,
+        fullscreen: true,
         title: "RAG Chat",
         description: "支持会话深链的 RAG 问答工作台。"
       }

@@ -149,6 +149,7 @@ onMounted(() => {
 
 <style scoped>
 .composer {
+  flex: 0 0 auto;
   padding: 12px 16px 16px;
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }

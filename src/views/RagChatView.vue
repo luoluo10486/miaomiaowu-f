@@ -63,6 +63,11 @@ function openAdminPanel() {
   router.push("/admin");
   sidebarOpen.value = false;
 }
+
+function goBackToWorkspace() {
+  router.push("/workspace");
+  sidebarOpen.value = false;
+}
 </script>
 
 <template>
@@ -72,10 +77,11 @@ function openAdminPanel() {
         class="chat-topbar__menu"
         type="button"
         aria-label="切换侧边栏"
-        @click="sidebarOpen = !sidebarOpen"
+        @click="goBackToWorkspace"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 7h16M4 12h16M4 17h16" />
+          <path d="M15 18l-6-6 6-6" />
+          <path d="M9 12h10" />
         </svg>
       </button>
 
@@ -162,7 +168,7 @@ function openAdminPanel() {
         </section>
 
         <RagComposer
-          v-if="hasMessages"
+          v-if="currentSessionId || hasMessages"
           :draft="draft"
           :deep-thinking-enabled="deepThinkingEnabled"
           :is-streaming="isStreaming"
@@ -204,8 +210,10 @@ function openAdminPanel() {
     sans-serif;
 
   position: relative;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  height: 100dvh;
   height: 100vh;
   padding: 18px;
   overflow: hidden;
@@ -272,6 +280,8 @@ function openAdminPanel() {
 .chat-topbar__title {
   position: absolute;
   left: 50%;
+  width: min(64vw, 780px);
+  min-width: 0;
   display: grid;
   justify-items: center;
   gap: 2px;
@@ -288,9 +298,14 @@ function openAdminPanel() {
 }
 
 .chat-topbar__title strong {
+  display: block;
+  width: 100%;
+  overflow: hidden;
   color: var(--chat-text);
   font-size: 15px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-notice {
@@ -329,12 +344,15 @@ function openAdminPanel() {
   overflow: hidden;
 }
 
+.chat-layout > * {
+  min-height: 0;
+}
+
 .chat-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  height: 100%;
   border: 1px solid #f0f0f0;
   border-left: 0;
   border-radius: 0;
@@ -349,8 +367,14 @@ function openAdminPanel() {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  flex-shrink: 0;
   padding: 18px 24px 16px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.chat-main__header > div:first-child {
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-main__eyebrow {
@@ -365,15 +389,18 @@ function openAdminPanel() {
 .chat-main__header h1 {
   margin: 0;
   color: var(--chat-text);
-  font-size: 28px;
+  font-size: clamp(24px, 2.5vw, 28px);
   line-height: 1.25;
   font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat-main__actions {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -413,13 +440,15 @@ function openAdminPanel() {
 
 .chat-main__body {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   padding: 0 24px 10px;
   overflow: hidden;
 }
 
 .chat-scroll-shell {
-  height: 100%;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-top: 12px;
@@ -494,6 +523,7 @@ function openAdminPanel() {
 
   .chat-topbar__title {
     position: static;
+    width: auto;
     transform: none;
     justify-items: start;
     text-align: left;

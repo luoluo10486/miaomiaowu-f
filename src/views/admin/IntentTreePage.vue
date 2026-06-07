@@ -11,6 +11,7 @@ import {
   getIntentTree,
   updateIntentNode
 } from "../../services/intentTreeService";
+import { getKnowledgeBases } from "../../services/knowledgeService";
 import { flattenIntentTree, formatDateTime } from "./adminShared";
 
 const route = useRoute();
@@ -22,6 +23,7 @@ const tree = ref([]);
 const keywordInput = ref("");
 const keyword = ref("");
 const selectedIntentCode = ref("");
+const knowledgeBaseOptions = ref([]);
 
 const LEVEL_OPTIONS = [
   { value: 0, label: "DOMAIN" },
@@ -177,10 +179,11 @@ function buildEmptyForm() {
     level: 1,
     kind: 0,
     parentCode: "",
+    kbId: "",
     collectionName: "",
     mcpToolId: "",
     examplesText: "",
-    topK: 3,
+    topK: undefined,
     sortOrder: 0,
     enabled: true,
     promptSnippet: "",
@@ -239,6 +242,40 @@ async function loadTree() {
   }
 }
 
+async function loadKnowledgeBaseOptions() {
+  try {
+    const page = await getKnowledgeBases(1, 200, "");
+    knowledgeBaseOptions.value = Array.isArray(page?.records)
+      ? page.records.map((item) => ({
+          id: item.id ? String(item.id) : "",
+          name: item.name || "",
+          collectionName: item.collectionName || ""
+        }))
+      : [];
+  } catch (error) {
+    errorText.value = error?.message || "加载知识库列表失败。";
+  }
+}
+
+function resolveKnowledgeBaseOption(kbId) {
+  const normalized = String(kbId || "").trim();
+  if (!normalized) {
+    return null;
+  }
+  return knowledgeBaseOptions.value.find((item) => item.id === normalized) || null;
+}
+
+function syncFormKnowledgeBase() {
+  if (form.value.kind !== 0) {
+    form.value.kbId = "";
+    form.value.collectionName = "";
+    return;
+  }
+
+  const selectedKb = resolveKnowledgeBaseOption(form.value.kbId);
+  form.value.collectionName = selectedKb?.collectionName || "";
+}
+
 function syncSelectedCode(code) {
   selectedIntentCode.value = code || "";
   const nextQuery = { ...route.query };
@@ -269,6 +306,7 @@ function openCreateDialog(parent = null) {
     level: parent ? (parent.level || 0) + 1 : 1,
     parentCode: parent?.intentCode || ""
   };
+  syncFormKnowledgeBase();
   dialogOpen.value = true;
 }
 
@@ -283,16 +321,18 @@ function openEditDialog(item) {
     level: item.level ?? 1,
     kind: item.kind ?? 0,
     parentCode: item.parentCode || "",
+    kbId: item.kbId || "",
     collectionName: item.collectionName || "",
     mcpToolId: item.mcpToolId || "",
     examplesText: parseExamples(item.examples).join("\n"),
-    topK: item.topK ?? 3,
+    topK: item.topK ?? undefined,
     sortOrder: item.sortOrder ?? 0,
     enabled: item.enabled !== 0,
     promptSnippet: item.promptSnippet || "",
     promptTemplate: item.promptTemplate || "",
     paramPromptTemplate: item.paramPromptTemplate || ""
   };
+  syncFormKnowledgeBase();
   dialogOpen.value = true;
 }
 
@@ -304,6 +344,10 @@ function closeDialog() {
 
 async function handleSubmit() {
   if (!form.value.intentCode.trim() || !form.value.name.trim()) return;
+  if (form.value.kind === 0 && Number(form.value.level) === 2 && !String(form.value.kbId || "").trim()) {
+    errorText.value = "KB 类型的 TOPIC 节点必须选择知识库。";
+    return;
+  }
   if (form.value.kind === 2 && !form.value.mcpToolId.trim()) {
     errorText.value = "MCP 节点必须填写工具 ID。";
     return;
@@ -318,12 +362,13 @@ async function handleSubmit() {
       parentCode: form.value.parentCode || null,
       description: form.value.description.trim() || "",
       kind: form.value.kind,
+      kbId: form.value.kind === 0 ? String(form.value.kbId || "").trim() || undefined : undefined,
       collectionName: form.value.kind === 0 ? form.value.collectionName.trim() : "",
       mcpToolId: form.value.kind === 2 ? form.value.mcpToolId.trim() : "",
       examples: form.value.examplesText
         ? form.value.examplesText.split("\n").map((item) => item.trim()).filter(Boolean)
         : [],
-      topK: Number(form.value.topK) || 0,
+      topK: form.value.topK === undefined || form.value.topK === null || form.value.topK === "" ? undefined : Number(form.value.topK),
       sortOrder: Number(form.value.sortOrder) || 0,
       enabled: form.value.enabled ? 1 : 0,
       promptSnippet: form.value.promptSnippet.trim(),
@@ -405,8 +450,15 @@ watch(rows, (nextRows) => {
   }
 });
 
+watch(
+  () => [form.value.kind, form.value.kbId],
+  () => {
+    syncFormKnowledgeBase();
+  }
+);
+
 onMounted(() => {
-  void loadTree();
+  void Promise.all([loadTree(), loadKnowledgeBaseOptions()]);
 });
 </script>
 
@@ -652,8 +704,18 @@ onMounted(() => {
           </div>
 
           <div v-if="form.kind === 0" class="admin-dialog-field">
+            <label>知识库</label>
+            <select v-model="form.kbId" class="admin-select">
+              <option value="">请选择知识库</option>
+              <option v-for="item in knowledgeBaseOptions" :key="item.id" :value="item.id">
+                {{ item.name }} ({{ item.collectionName }})
+              </option>
+            </select>
+          </div>
+
+          <div v-if="form.kind === 0" class="admin-dialog-field">
             <label>集合名称</label>
-            <input v-model="form.collectionName" class="admin-input" placeholder="知识库集合名称" />
+            <input v-model="form.collectionName" class="admin-input" placeholder="选择知识库后自动带出" readonly />
           </div>
 
           <div v-if="form.kind === 2" class="admin-dialog-field">

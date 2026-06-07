@@ -12,7 +12,9 @@ import {
   getKnowledgeChunkLogsPage,
   getKnowledgeDocument,
   getKnowledgeDocumentsPage,
+  importQqChatTranscript,
   setKnowledgeDocumentEnabled,
+  startKnowledgeBaseChunkAll,
   startKnowledgeDocumentChunk,
   updateKnowledgeDocument,
   uploadKnowledgeDocument
@@ -58,6 +60,13 @@ const uploadFileRef = ref(null);
 const uploadFile = ref(null);
 const uploadForm = ref(createUploadForm());
 const uploadChunkConfig = ref({});
+const chatImportDialogOpen = ref(false);
+const chatImportSubmitting = ref(false);
+const chatImportFile = ref(null);
+const chatImportSummary = ref(null);
+const chatImportForm = ref(createChatImportForm());
+const chatImportErrorText = ref("");
+const chatImportSuccessText = ref("");
 const togglingDocumentId = ref("");
 
 const detailDialogOpen = ref(false);
@@ -70,6 +79,8 @@ const detailChunkConfig = ref({});
 const chunkDialogOpen = ref(false);
 const chunkTarget = ref(null);
 const chunkSubmitting = ref(false);
+const batchChunkDialogOpen = ref(false);
+const batchChunkSubmitting = ref(false);
 
 const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
@@ -104,6 +115,19 @@ function createDetailForm() {
   };
 }
 
+function createChatImportForm() {
+  return {
+    autoStart: true,
+    splitBy: "month",
+    minMessages: 6,
+    maxMessages: 12,
+    overlapMessages: 2,
+    targetChars: 900,
+    maxChars: 1200,
+    splitGapMinutes: 30
+  };
+}
+
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -117,6 +141,16 @@ function isDocumentEnabled(item) {
 }
 
 function parseChunkConfig(raw) {
+  if (!raw) return {};
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseMetadataJson(raw) {
   if (!raw) return {};
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -140,6 +174,14 @@ function normalizeConfigValue(raw, defaultValue) {
 function getStrategyOption(value) {
   const normalized = String(value || "").trim();
   return safeArray(strategies.value).find((item) => String(item?.value || item).trim() === normalized) || null;
+}
+
+function getChatMetadata(item) {
+  return parseMetadataJson(item?.metadataJson);
+}
+
+function isChatDocument(item) {
+  return getChatMetadata(item).docType === "chat_qq_group";
 }
 
 function syncConfigDefaults(targetRef, strategyValue, preserveExisting = true) {
@@ -198,6 +240,7 @@ function formatStrategyLabel(strategy) {
   const normalized = String(strategy || "").toLowerCase();
   if (normalized === "fixed_size") return "固定大小";
   if (normalized === "structure_aware") return "结构感知";
+  if (normalized === "chat_qq_window") return "chat_qq_window";
   return strategy || "--";
 }
 
@@ -241,10 +284,13 @@ const latestDocumentLabel = computed(() => {
 });
 const uploadStrategy = computed(() => getStrategyOption(uploadForm.value.chunkStrategy));
 const detailStrategy = computed(() => getStrategyOption(detailForm.value.chunkStrategy));
+const visibleStrategies = computed(() => safeArray(strategies.value).filter((item) => String(item?.value || item) !== "chat_qq_window"));
 const uploadConfigFields = computed(() => Object.entries(uploadStrategy.value?.defaultConfig || {}));
 const detailConfigFields = computed(() => Object.entries(detailStrategy.value?.defaultConfig || {}));
 const detailSourceType = computed(() => String(detailTarget.value?.sourceType || "").toLowerCase());
 const detailIsUrlSource = computed(() => detailSourceType.value === "url");
+const detailMetadata = computed(() => getChatMetadata(detailTarget.value));
+const detailIsChatDocument = computed(() => isChatDocument(detailTarget.value));
 
 const stats = computed(() => [
   { title: "文档数", value: visibleDocumentCount.value, hint: "当前知识库文档总数", tone: "indigo" },
@@ -361,6 +407,27 @@ function handleFileChange(event) {
   uploadFile.value = event.target?.files?.[0] || null;
 }
 
+function openChatImportDialog() {
+  chatImportDialogOpen.value = true;
+  chatImportSubmitting.value = false;
+  chatImportFile.value = null;
+  chatImportSummary.value = null;
+  chatImportForm.value = createChatImportForm();
+  chatImportErrorText.value = "";
+  chatImportSuccessText.value = "";
+}
+
+function closeChatImportDialog() {
+  chatImportDialogOpen.value = false;
+}
+
+function handleChatImportFileChange(event) {
+  chatImportFile.value = event.target?.files?.[0] || null;
+  chatImportSummary.value = null;
+  chatImportErrorText.value = "";
+  chatImportSuccessText.value = "";
+}
+
 function openDetailDialog(item) {
   detailTarget.value = item;
   detailDialogOpen.value = true;
@@ -460,21 +527,22 @@ async function handleDetailSave() {
   errorText.value = "";
 
   try {
-    const payload = {
-      docName: name,
-      processMode: detailForm.value.processMode,
-      chunkStrategy: detailForm.value.processMode === "chunk" ? detailForm.value.chunkStrategy : undefined,
-      pipelineId: detailForm.value.processMode === "pipeline" ? detailForm.value.pipelineId || null : null,
-      sourceLocation: detailIsUrlSource.value ? detailForm.value.sourceLocation.trim() || null : null,
-      scheduleEnabled: detailIsUrlSource.value && detailForm.value.scheduleEnabled,
-      scheduleCron:
+    const payload = { docName: name };
+
+    if (!detailIsChatDocument.value) {
+      payload.processMode = detailForm.value.processMode;
+      payload.chunkStrategy = detailForm.value.processMode === "chunk" ? detailForm.value.chunkStrategy : undefined;
+      payload.pipelineId = detailForm.value.processMode === "pipeline" ? detailForm.value.pipelineId || null : null;
+      payload.sourceLocation = detailIsUrlSource.value ? detailForm.value.sourceLocation.trim() || null : null;
+      payload.scheduleEnabled = detailIsUrlSource.value && detailForm.value.scheduleEnabled;
+      payload.scheduleCron =
         detailIsUrlSource.value && detailForm.value.scheduleEnabled
           ? detailForm.value.scheduleCron.trim() || null
-          : null
-    };
+          : null;
 
-    if (detailForm.value.processMode === "chunk") {
-      payload.chunkConfig = JSON.stringify(buildConfigPayload(detailChunkConfig.value, detailForm.value.chunkStrategy));
+      if (detailForm.value.processMode === "chunk") {
+        payload.chunkConfig = JSON.stringify(buildConfigPayload(detailChunkConfig.value, detailForm.value.chunkStrategy));
+      }
     }
 
     await updateKnowledgeDocument(detailTarget.value.id, payload);
@@ -485,6 +553,50 @@ async function handleDetailSave() {
     errorText.value = getErrorMessage(error, "保存文档失败，请稍后重试。");
   } finally {
     detailSaving.value = false;
+  }
+}
+
+async function handleChatImportSubmit() {
+  if (!kbId.value) return;
+  if (!chatImportFile.value) {
+    const message = "请选择聊天记录 txt 文件。";
+    errorText.value = message;
+    chatImportErrorText.value = message;
+    chatImportSuccessText.value = "";
+    return;
+  }
+
+  chatImportSubmitting.value = true;
+  errorText.value = "";
+  successText.value = "";
+  chatImportErrorText.value = "";
+  chatImportSuccessText.value = "";
+
+  try {
+    const payload = {
+      file: chatImportFile.value,
+      autoStart: chatImportForm.value.autoStart,
+      splitBy: "month",
+      minMessages: Number(chatImportForm.value.minMessages),
+      maxMessages: Number(chatImportForm.value.maxMessages),
+      overlapMessages: Number(chatImportForm.value.overlapMessages),
+      targetChars: Number(chatImportForm.value.targetChars),
+      maxChars: Number(chatImportForm.value.maxChars),
+      splitGapMinutes: Number(chatImportForm.value.splitGapMinutes)
+    };
+    const summary = await importQqChatTranscript(kbId.value, payload);
+    chatImportSummary.value = summary;
+    await loadDocuments();
+    const message = `群聊 ${summary.groupName || "--"} 已导入，生成 ${summary.createdDocCount || 0} 个月度文档。`;
+    chatImportSuccessText.value = message;
+    successText.value = message;
+    closeChatImportDialog();
+  } catch (error) {
+    const message = getErrorMessage(error, "导入聊天记录失败，请稍后重试。");
+    errorText.value = message;
+    chatImportErrorText.value = message;
+  } finally {
+    chatImportSubmitting.value = false;
   }
 }
 
@@ -517,6 +629,14 @@ function closeChunkDialog() {
   chunkTarget.value = null;
 }
 
+function openBatchChunkDialog() {
+  batchChunkDialogOpen.value = true;
+}
+
+function closeBatchChunkDialog() {
+  batchChunkDialogOpen.value = false;
+}
+
 async function handleChunk() {
   if (!chunkTarget.value) return;
 
@@ -532,6 +652,26 @@ async function handleChunk() {
     errorText.value = getErrorMessage(error, "触发切片失败，请稍后重试。");
   } finally {
     chunkSubmitting.value = false;
+  }
+}
+
+async function handleBatchChunk() {
+  if (!kbId.value) return;
+
+  batchChunkSubmitting.value = true;
+  errorText.value = "";
+
+  try {
+    const startedCount = await startKnowledgeBaseChunkAll(kbId.value);
+    closeBatchChunkDialog();
+    await loadDocuments();
+    successText.value = startedCount > 0
+      ? `已批量触发 ${startedCount} 个文档的切片任务。`
+      : "当前没有可触发切片的文档。";
+  } catch (error) {
+    errorText.value = getErrorMessage(error, "批量触发切片失败，请稍后重试。");
+  } finally {
+    batchChunkSubmitting.value = false;
   }
 }
 
@@ -711,6 +851,8 @@ onMounted(() => {
           <div class="admin-toolbar-right documents-toolbar-right">
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleSearch">搜索</button>
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
+            <button class="admin-button--ghost" type="button" @click="openChatImportDialog">导入聊天记录</button>
+            <button class="admin-button--ghost" type="button" :disabled="loading" @click="openBatchChunkDialog">全部切片</button>
             <button class="admin-button" type="button" @click="openUploadDialog">上传文档</button>
           </div>
         </div>
@@ -739,6 +881,11 @@ onMounted(() => {
                   <button class="admin-link" type="button" @click="openDetailDialog(item)">
                     {{ item.docName || item.id }}
                   </button>
+                  <div v-if="isChatDocument(item)" class="documents-tags">
+                    <span class="admin-badge is-muted">群聊</span>
+                    <span class="admin-badge is-muted">{{ getChatMetadata(item).bucketMonth || "--" }}</span>
+                    <span class="admin-badge is-muted">{{ getChatMetadata(item).groupName || "--" }}</span>
+                  </div>
                 </td>
                 <td>{{ formatSourceLabel(item.sourceType) }}</td>
                 <td>{{ formatModeLabel(item.processMode) }}</td>
@@ -900,7 +1047,7 @@ onMounted(() => {
             <label>切片策略</label>
             <select v-model="uploadForm.chunkStrategy" class="admin-select">
               <option v-if="strategies.length === 0" value="structure_aware">structure_aware</option>
-              <option v-for="item in strategies" :key="item.value || item" :value="item.value || item">
+              <option v-for="item in visibleStrategies" :key="item.value || item" :value="item.value || item">
                 {{ item.label || item.value || item }}
               </option>
             </select>
@@ -944,6 +1091,71 @@ onMounted(() => {
       </div>
     </div>
 
+    <div v-if="chatImportDialogOpen" class="admin-dialog-overlay">
+      <div class="admin-dialog admin-dialog--wide">
+        <button class="admin-dialog-close" type="button" @click="closeChatImportDialog">&times;</button>
+        <h3>导入聊天记录</h3>
+        <p>上传 QQ 群聊导出的 txt，系统会按月拆文档并按原始消息窗口切块。</p>
+        <div class="admin-dialog-body">
+          <p v-if="chatImportErrorText" class="admin-notice is-error">{{ chatImportErrorText }}</p>
+          <p v-if="chatImportSuccessText" class="admin-notice is-success">{{ chatImportSuccessText }}</p>
+          <div class="admin-dialog-field">
+            <label>聊天记录文件</label>
+            <input type="file" accept=".txt,text/plain" class="admin-input" @change="handleChatImportFileChange" />
+          </div>
+          <div class="admin-form-grid-2">
+            <div class="admin-dialog-field">
+              <label>自动开始切片</label>
+              <select v-model="chatImportForm.autoStart" class="admin-select">
+                <option :value="true">是</option>
+                <option :value="false">否</option>
+              </select>
+            </div>
+            <div class="admin-dialog-field">
+              <label>拆分方式</label>
+              <input v-model="chatImportForm.splitBy" class="admin-input" disabled />
+            </div>
+            <div class="admin-dialog-field">
+              <label>minMessages</label>
+              <input v-model="chatImportForm.minMessages" type="number" min="1" class="admin-input" />
+            </div>
+            <div class="admin-dialog-field">
+              <label>maxMessages</label>
+              <input v-model="chatImportForm.maxMessages" type="number" min="1" class="admin-input" />
+            </div>
+            <div class="admin-dialog-field">
+              <label>overlapMessages</label>
+              <input v-model="chatImportForm.overlapMessages" type="number" min="0" class="admin-input" />
+            </div>
+            <div class="admin-dialog-field">
+              <label>splitGapMinutes</label>
+              <input v-model="chatImportForm.splitGapMinutes" type="number" min="1" class="admin-input" />
+            </div>
+            <div class="admin-dialog-field">
+              <label>targetChars</label>
+              <input v-model="chatImportForm.targetChars" type="number" min="128" class="admin-input" />
+            </div>
+            <div class="admin-dialog-field">
+              <label>maxChars</label>
+              <input v-model="chatImportForm.maxChars" type="number" min="128" class="admin-input" />
+            </div>
+          </div>
+          <div v-if="chatImportSummary" class="admin-kv admin-kv--compact">
+            <div><dt>群名</dt><dd>{{ chatImportSummary.groupName || "--" }}</dd></div>
+            <div><dt>月份数</dt><dd>{{ chatImportSummary.months?.length || 0 }}</dd></div>
+            <div><dt>文档数</dt><dd>{{ chatImportSummary.createdDocCount || 0 }}</dd></div>
+            <div><dt>自动切片</dt><dd>{{ chatImportForm.autoStart ? "Yes" : "No" }}</dd></div>
+          </div>
+        </div>
+        <div class="admin-dialog-footer">
+          <button class="admin-button--ghost" type="button" @click="closeChatImportDialog">取消</button>
+          <button class="admin-button" type="button" :disabled="chatImportSubmitting" @click="handleChatImportSubmit">
+            {{ chatImportSubmitting ? "导入中..." : "开始导入" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="detailDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeDetailDialog">&times;</button>
@@ -962,16 +1174,16 @@ onMounted(() => {
               <option value="pipeline">数据通道</option>
             </select>
           </div>
-          <div v-if="detailForm.processMode === 'chunk'" class="admin-dialog-field">
+          <div v-if="!detailIsChatDocument && detailForm.processMode === 'chunk'" class="admin-dialog-field">
             <label>切片策略</label>
             <select v-model="detailForm.chunkStrategy" class="admin-select">
               <option v-if="strategies.length === 0" value="structure_aware">structure_aware</option>
-              <option v-for="item in strategies" :key="item.value || item" :value="item.value || item">
+              <option v-for="item in visibleStrategies" :key="item.value || item" :value="item.value || item">
                 {{ item.label || item.value || item }}
               </option>
             </select>
           </div>
-          <div v-if="detailForm.processMode === 'pipeline'" class="admin-dialog-field">
+          <div v-if="!detailIsChatDocument && detailForm.processMode === 'pipeline'" class="admin-dialog-field">
             <label>数据通道</label>
             <select v-model="detailForm.pipelineId" class="admin-select" :disabled="!hasPipelines">
               <option value="">请选择 pipeline</option>
@@ -987,7 +1199,13 @@ onMounted(() => {
             <div><dt>处理模式</dt><dd>{{ formatModeLabel(detailForm.processMode) }}</dd></div>
             <div><dt>更新时间</dt><dd>{{ formatDateTime(detailTarget?.updateTime || detailTarget?.createTime) }}</dd></div>
           </div>
-          <div v-if="detailIsUrlSource" class="admin-form-grid-2">
+          <div v-if="detailIsChatDocument" class="admin-kv admin-kv--compact">
+            <div><dt>群名</dt><dd>{{ detailMetadata.groupName || "--" }}</dd></div>
+            <div><dt>月份</dt><dd>{{ detailMetadata.bucketMonth || "--" }}</dd></div>
+            <div><dt>类型</dt><dd>{{ detailMetadata.docType || "--" }}</dd></div>
+            <div><dt>消息数</dt><dd>{{ detailMetadata.monthMessageCount ?? "--" }}</dd></div>
+          </div>
+          <div v-if="!detailIsChatDocument && detailIsUrlSource" class="admin-form-grid-2">
             <div class="admin-dialog-field">
               <label>来源地址</label>
               <input v-model="detailForm.sourceLocation" class="admin-input" placeholder="https://example.com/doc" />
@@ -1005,7 +1223,7 @@ onMounted(() => {
             </div>
           </div>
           <div v-else class="admin-empty-sm">本地文件来源不展示 URL 与定时同步配置。</div>
-          <div v-if="detailForm.processMode === 'chunk' && detailConfigFields.length > 0" class="admin-form-grid-2">
+          <div v-if="!detailIsChatDocument && detailForm.processMode === 'chunk' && detailConfigFields.length > 0" class="admin-form-grid-2">
             <div v-for="([key, value]) in detailConfigFields" :key="key" class="admin-dialog-field">
               <label>{{ key }}</label>
               <input v-model="detailChunkConfig[key]" class="admin-input" :placeholder="String(value)" />
@@ -1035,6 +1253,20 @@ onMounted(() => {
           <button class="admin-button--ghost" type="button" @click="closeChunkDialog">取消</button>
           <button class="admin-button" type="button" :disabled="chunkSubmitting" @click="handleChunk">
             {{ chunkSubmitting ? "执行中..." : "确认切片" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="batchChunkDialogOpen" class="admin-dialog-overlay">
+      <div class="admin-dialog">
+        <button class="admin-dialog-close" type="button" @click="closeBatchChunkDialog">&times;</button>
+        <h3>确认全部切片</h3>
+        <p class="admin-confirm-text">确认对当前知识库内所有已启用且未在运行中的文档统一触发切片任务？</p>
+        <div class="admin-dialog-footer">
+          <button class="admin-button--ghost" type="button" @click="closeBatchChunkDialog">取消</button>
+          <button class="admin-button" type="button" :disabled="batchChunkSubmitting" @click="handleBatchChunk">
+            {{ batchChunkSubmitting ? "执行中..." : "确认全部切片" }}
           </button>
         </div>
       </div>
@@ -1203,6 +1435,13 @@ onMounted(() => {
   padding-inline: 12px;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.documents-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
 }
 
 .dot {

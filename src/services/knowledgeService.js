@@ -64,6 +64,14 @@ export function uploadKnowledgeDocument(kbId, payload) {
   });
 }
 
+export function importQqChatTranscript(kbId, payload) {
+  const formData = buildFormData(payload);
+  return requestRag(`/knowledge-base/${kbId}/chat-import/qq`, {
+    method: "POST",
+    body: formData
+  });
+}
+
 export function updateKnowledgeDocument(docId, payload) {
   return requestRag(`/knowledge-base/docs/${docId}`, {
     method: "PUT",
@@ -73,6 +81,12 @@ export function updateKnowledgeDocument(docId, payload) {
 
 export function startKnowledgeDocumentChunk(docId) {
   return requestRag(`/knowledge-base/docs/${docId}/chunk`, {
+    method: "POST"
+  });
+}
+
+export function startKnowledgeBaseChunkAll(kbId) {
+  return requestRag(`/knowledge-base/${kbId}/docs/chunk-all`, {
     method: "POST"
   });
 }

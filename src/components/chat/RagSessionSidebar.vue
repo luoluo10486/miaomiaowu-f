@@ -256,8 +256,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .sidebar-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  height: 100%;
+  min-height: 0;
 }
 
 .sidebar-shell__overlay {
@@ -272,9 +274,9 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
   min-height: 0;
-  height: 100%;
   padding: 14px 12px 12px;
   background: #fafafa;
   box-shadow: none;

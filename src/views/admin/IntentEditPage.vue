@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
 import { getIntentTree, updateIntentNode } from "../../services/intentTreeService";
+import { getKnowledgeBases } from "../../services/knowledgeService";
 import { flattenIntentTree, formatDateTime } from "./adminShared";
 
 const route = useRoute();
@@ -20,6 +21,7 @@ const loading = ref(true);
 const saving = ref(false);
 const errorText = ref("");
 const tree = ref([]);
+const knowledgeBaseOptions = ref([]);
 
 const LEVEL_OPTIONS = [
   { value: 0, label: "DOMAIN", description: "顶层领域" },
@@ -29,7 +31,7 @@ const LEVEL_OPTIONS = [
 
 const KIND_OPTIONS = [
   { value: 0, label: "KB", description: "知识库检索" },
-  { value: 1, label: "SYSTEM", description: "系统交互" },
+  { value: 1, label: "SYSTEM", description: "系统意图" },
   { value: 2, label: "MCP", description: "工具调用" }
 ];
 
@@ -42,6 +44,7 @@ function buildEmptyForm() {
     level: 0,
     kind: 0,
     parentCode: "__ROOT__",
+    kbId: "",
     collectionName: "",
     mcpToolId: "",
     description: "",
@@ -59,7 +62,9 @@ function parseExamples(value) {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) return parsed.map((item) => String(item)).filter(Boolean);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item)).filter(Boolean);
+    }
   } catch {
     // fall back to line-based examples
   }
@@ -139,6 +144,7 @@ function fillForm(node) {
     level: node.level ?? 0,
     kind: node.kind ?? 0,
     parentCode: node.parentCode || "__ROOT__",
+    kbId: node.kbId ? String(node.kbId) : "",
     collectionName: node.collectionName || "",
     mcpToolId: node.mcpToolId || "",
     description: node.description || "",
@@ -164,6 +170,37 @@ async function loadTree() {
   }
 }
 
+async function loadKnowledgeBaseOptions() {
+  try {
+    const page = await getKnowledgeBases(1, 200, "");
+    knowledgeBaseOptions.value = Array.isArray(page?.records)
+      ? page.records.map((item) => ({
+          id: item.id ? String(item.id) : "",
+          name: item.name || "",
+          collectionName: item.collectionName || ""
+        }))
+      : [];
+  } catch (error) {
+    errorText.value = error?.message || "加载知识库列表失败。";
+  }
+}
+
+function resolveKnowledgeBaseOption(kbId) {
+  const normalized = String(kbId || "").trim();
+  if (!normalized) return null;
+  return knowledgeBaseOptions.value.find((item) => item.id === normalized) || null;
+}
+
+function syncFormKnowledgeBase() {
+  if (form.value.kind !== 0) {
+    form.value.kbId = "";
+    form.value.collectionName = "";
+    return;
+  }
+  const selectedKb = resolveKnowledgeBaseOption(form.value.kbId);
+  form.value.collectionName = selectedKb?.collectionName || "";
+}
+
 async function handleSubmit() {
   if (!currentNode.value) return;
   if (!form.value.name.trim()) {
@@ -176,6 +213,10 @@ async function handleSubmit() {
   }
   if (form.value.kind === 2 && !form.value.mcpToolId.trim()) {
     errorText.value = "MCP 节点必须填写工具 ID。";
+    return;
+  }
+  if (form.value.kind === 0 && Number(form.value.level) === 2 && !String(form.value.kbId || "").trim()) {
+    errorText.value = "TOPIC 层级的 KB 节点必须选择知识库。";
     return;
   }
   if (form.value.topK !== undefined && Number(form.value.topK) < 0) {
@@ -194,6 +235,7 @@ async function handleSubmit() {
       examples: form.value.examplesText
         ? form.value.examplesText.split("\n").map((item) => item.trim()).filter(Boolean)
         : [],
+      kbId: form.value.kind === 0 ? String(form.value.kbId || "").trim() || undefined : undefined,
       collectionName: form.value.kind === 0 ? form.value.collectionName.trim() : "",
       mcpToolId: form.value.kind === 2 ? form.value.mcpToolId.trim() : "",
       kind: form.value.kind,
@@ -217,12 +259,26 @@ function handleCancel() {
   router.push(fromRoute.value);
 }
 
-watch(currentNode, (node) => {
-  if (node) fillForm(node);
-}, { immediate: true });
+watch(
+  () => [form.value.kind, form.value.kbId],
+  () => {
+    syncFormKnowledgeBase();
+  }
+);
+
+watch(
+  currentNode,
+  (node) => {
+    if (node) {
+      fillForm(node);
+    }
+  },
+  { immediate: true }
+);
 
 onMounted(() => {
   void loadTree();
+  void loadKnowledgeBaseOptions();
 });
 </script>
 
@@ -231,7 +287,7 @@ onMounted(() => {
     <PageHeader
       tag="意图编辑"
       title="编辑意图节点"
-      :description="currentNode ? `${currentNode.name || '--'} · ${currentNode.intentCode || '--'}` : '选择一个节点继续编辑。'"
+      :description="currentNode ? `${currentNode.name || '--'} / ${currentNode.intentCode || '--'}` : '选择一个节点继续编辑。'"
     >
       <template #meta>
         <div class="intent-edit-header-meta">
@@ -255,10 +311,10 @@ onMounted(() => {
 
     <section class="admin-detail-card intent-edit-hero">
       <div class="intent-edit-hero__copy">
-        <p class="trace-hero-tag">意图概览</p>
+        <p class="trace-hero-tag">Intent Overview</p>
         <h2>{{ currentNode?.name || "--" }}</h2>
         <p>
-          {{ nodeSummary?.pathText || "--" }} · {{ currentNode?.intentCode || "--" }} ·
+          {{ nodeSummary?.pathText || "--" }} / {{ currentNode?.intentCode || "--" }} /
           {{ currentNode?.enabled === 1 || currentNode?.enabled === true ? "已启用" : "已禁用" }}
         </p>
       </div>
@@ -275,7 +331,7 @@ onMounted(() => {
         <div class="admin-table-card__header">
           <div>
             <h2>节点配置</h2>
-            <p>修改基础信息、Prompt 与高级参数。</p>
+            <p>修改基础信息、Prompt 和检索参数。</p>
           </div>
           <span class="admin-page-count">{{ currentNode ? currentNode.intentCode : "--" }}</span>
         </div>
@@ -289,7 +345,7 @@ onMounted(() => {
           <div class="admin-form-grid-2">
             <div class="admin-dialog-field">
               <label>节点名称</label>
-              <input v-model="form.name" class="admin-input" placeholder="例如：OA 系统" />
+              <input v-model="form.name" class="admin-input" placeholder="例如：阴阳师聊天记录" />
             </div>
             <div class="admin-dialog-field">
               <label>Intent Code</label>
@@ -324,8 +380,18 @@ onMounted(() => {
           </div>
 
           <div v-if="form.kind === 0" class="admin-dialog-field">
+            <label>知识库</label>
+            <select v-model="form.kbId" class="admin-select">
+              <option value="">请选择知识库</option>
+              <option v-for="item in knowledgeBaseOptions" :key="item.id" :value="item.id">
+                {{ item.name }} ({{ item.collectionName }})
+              </option>
+            </select>
+          </div>
+
+          <div v-if="form.kind === 0" class="admin-dialog-field">
             <label>集合名称</label>
-            <input v-model="form.collectionName" class="admin-input" placeholder="知识库集合名称" />
+            <input v-model="form.collectionName" class="admin-input" placeholder="选择知识库后自动带出" readonly />
           </div>
 
           <div v-if="form.kind === 2" class="admin-dialog-field">
@@ -355,7 +421,7 @@ onMounted(() => {
 
           <div v-if="form.kind === 2" class="admin-dialog-field">
             <label>参数 Prompt 模板</label>
-            <textarea v-model="form.paramPromptTemplate" class="admin-textarea" rows="3" placeholder="MCP 节点参数模板" />
+            <textarea v-model="form.paramPromptTemplate" class="admin-textarea" rows="3" placeholder="MCP 参数模板" />
           </div>
 
           <div class="admin-form-grid-2">
