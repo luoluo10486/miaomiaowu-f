@@ -6,6 +6,7 @@ import RagComposer from "../components/chat/RagComposer.vue";
 import RagMessageList from "../components/chat/RagMessageList.vue";
 import RagSessionSidebar from "../components/chat/RagSessionSidebar.vue";
 import { useRagChat } from "../composables/useRagChat";
+import { isAdminUser as isAdminAuthUser } from "../utils/auth";
 
 const router = useRouter();
 const sidebarOpen = ref(false);
@@ -43,11 +44,7 @@ const {
   handleLogout
 } = useRagChat();
 
-const isAdminUser = computed(() => {
-  return String(currentUser.value?.role || currentUser.value?.userType || "")
-    .trim()
-    .toLowerCase() === "admin";
-});
+const isAdminUser = computed(() => isAdminAuthUser(currentUser.value));
 
 function handleCreateConversation() {
   createConversation();

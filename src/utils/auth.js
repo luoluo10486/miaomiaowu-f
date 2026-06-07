@@ -132,6 +132,29 @@ export function normalizeAuthUser(source) {
   };
 }
 
+function normalizeRoleToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function extractRoleTokens(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeRoleToken(item))
+      .filter(Boolean);
+  }
+
+  return String(value || "")
+    .split(",")
+    .map((item) => normalizeRoleToken(item))
+    .filter(Boolean);
+}
+
+export function getUserRoleTokens(user) {
+  return extractRoleTokens(user?.role || user?.userType || "");
+}
+
 export function saveStoredAuthUser(user) {
   const normalized = normalizeAuthUser(user);
   if (!normalized) {
@@ -156,7 +179,8 @@ function mergeAuthUsers(currentUser, nextUser) {
 }
 
 export function isAdminUser(user) {
-  return String(user?.role || user?.userType || "").trim().toLowerCase() === "admin";
+  const roleTokens = getUserRoleTokens(user);
+  return roleTokens.includes("admin") || roleTokens.includes("superadmin");
 }
 
 export async function refreshStoredAuthUser() {

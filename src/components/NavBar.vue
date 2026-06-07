@@ -1,15 +1,24 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute } from "vue-router";
+import { getStoredAuthUser, isAdminUser } from "../utils/auth";
 
 const route = useRoute();
 const active = computed(() => route.name);
+const currentUser = computed(() => getStoredAuthUser());
 
-const navLinks = [
-  { name: "workspace-home", label: "工作台", to: "/workspace" },
-  { name: "rag-chat", label: "RAG 问答", to: "/chat" },
-  { name: "rag-admin", label: "后台管理", to: "/admin" }
-];
+const navLinks = computed(() => {
+  const links = [
+    { name: "workspace-home", label: "工作台", to: "/workspace" },
+    { name: "rag-chat", label: "RAG 问答", to: "/chat" }
+  ];
+
+  if (isAdminUser(currentUser.value)) {
+    links.push({ name: "rag-admin", label: "后台管理", to: "/admin" });
+  }
+
+  return links;
+});
 </script>
 
 <template>

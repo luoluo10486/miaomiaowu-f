@@ -1,10 +1,15 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import WorkbenchLive2DScene from "../components/WorkbenchLive2DScene.vue";
-import { clearStoredAuth, getStoredAuthUser, refreshStoredAuthUser } from "../utils/auth";
+import {
+  clearStoredAuth,
+  getStoredAuthUser,
+  isAdminUser,
+  refreshStoredAuthUser
+} from "../utils/auth";
 import { resolvePublicAssetUrl } from "../utils/assets";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -28,18 +33,25 @@ const artworkUrls = {
   todo: resolvePublicAssetUrl("artwork/workbench-person-choice.png")
 };
 
-const chapters = [
+const chapterDefinitions = [
   {
     key: "home",
     label: "起始",
     title: "工作台总览",
-    description: "向右滚动浏览模块。"
+    description: "向右滚动浏览模块。",
+    panelClass: "story-panel--home",
+    artworkClass: "person-asset--home",
+    renderMode: "live2d"
   },
   {
     key: "rag",
     label: "问答",
     title: "RAG 问答",
     description: "进入对话工作台。",
+    panelClass: "story-panel--rag",
+    artworkClass: "person-asset--rag",
+    artworkSrc: artworkUrls.rag,
+    artworkAlt: "RAG 问答人物",
     action: () => router.push("/chat")
   },
   {
@@ -47,6 +59,11 @@ const chapters = [
     label: "后台",
     title: "管理控制台",
     description: "进入后台管理。",
+    panelClass: "story-panel--admin",
+    artworkClass: "person-asset--admin",
+    artworkSrc: artworkUrls.admin,
+    artworkAlt: "后台管理人物",
+    adminOnly: true,
     action: () => router.push("/admin")
   },
   {
@@ -54,6 +71,11 @@ const chapters = [
     label: "灵感",
     title: "灵感随记",
     description: "记录想法与草稿。",
+    panelClass: "story-panel--ideas",
+    artworkClass: "person-asset--ideas",
+    artworkSrc: artworkUrls.ideas,
+    artworkAlt: "灵感随记人物",
+    adminOnly: true,
     action: () => router.push("/ideas")
   },
   {
@@ -61,6 +83,10 @@ const chapters = [
     label: "画廊",
     title: "美图鉴赏",
     description: "浏览图片内容。",
+    panelClass: "story-panel--gallery",
+    artworkClass: "person-asset--gallery",
+    artworkSrc: artworkUrls.gallery,
+    artworkAlt: "美图鉴赏人物",
     action: () => router.push("/gallery")
   },
   {
@@ -68,16 +94,29 @@ const chapters = [
     label: "文章",
     title: "文章馆",
     description: "阅读整理后的文章。",
+    panelClass: "story-panel--articles",
+    artworkClass: "person-asset--articles",
+    artworkSrc: artworkUrls.articles,
+    artworkAlt: "文章馆人物",
     action: () => router.push("/articles")
   },
   {
     key: "todo",
     label: "待开发",
     title: "待开发区域",
-    description: "后续功能预留。"
+    description: "后续功能预留。",
+    panelClass: "story-panel--todo",
+    artworkClass: "person-asset--todo",
+    artworkSrc: artworkUrls.todo,
+    artworkAlt: "待开发人物",
+    renderMode: "static"
   }
 ];
 
+const isAdmin = computed(() => isAdminUser(currentUser.value));
+const visibleChapters = computed(() =>
+  chapterDefinitions.filter((chapter) => !chapter.adminOnly || isAdmin.value)
+);
 const currentUserName = computed(() => {
   const user = currentUser.value;
   return user?.displayName || user?.username || user?.email || "当前用户";
@@ -85,6 +124,7 @@ const currentUserName = computed(() => {
 
 function scrollToChapter(index) {
   const trigger = ScrollTrigger.getById("workbench-horizontal-scroll");
+  const chapters = visibleChapters.value;
   if (!trigger || chapters.length <= 1) {
     return;
   }
@@ -95,6 +135,12 @@ function scrollToChapter(index) {
     top: nextScroll,
     behavior: "smooth"
   });
+}
+
+function handleChapterAction(chapter) {
+  if (typeof chapter?.action === "function") {
+    chapter.action();
+  }
 }
 
 function handleLogout() {
@@ -109,8 +155,9 @@ function setupHorizontalStory() {
     const track = trackRef.value;
     const viewport = viewportRef.value;
     const shell = shellRef.value;
+    const chapters = visibleChapters.value;
 
-    if (!track || !viewport || !shell) {
+    if (!track || !viewport || !shell || chapters.length === 0) {
       return;
     }
 
@@ -187,6 +234,18 @@ function setupHorizontalStory() {
   ScrollTrigger.refresh();
 }
 
+watch(
+  visibleChapters,
+  async (chapters) => {
+    if (activeChapter.value > chapters.length - 1) {
+      activeChapter.value = Math.max(chapters.length - 1, 0);
+    }
+    await nextTick();
+    setupHorizontalStory();
+  },
+  { flush: "post" }
+);
+
 onMounted(async () => {
   currentUser.value = (await refreshStoredAuthUser()) || currentUser.value;
   await nextTick();
@@ -208,7 +267,7 @@ onBeforeUnmount(() => {
 
       <nav class="workbench-nav__links" aria-label="工作台导航">
         <button
-          v-for="(chapter, index) in chapters"
+          v-for="(chapter, index) in visibleChapters"
           :key="chapter.key"
           type="button"
           :class="{ 'is-active': activeChapter === index }"
@@ -226,61 +285,42 @@ onBeforeUnmount(() => {
 
     <div ref="viewportRef" class="story-viewport">
       <div ref="trackRef" class="story-track">
-        <section class="story-panel story-panel--home">
-          <div class="scene-copy scene-copy--home"></div>
-          <WorkbenchLive2DScene class="person-asset person-asset--home" />
-        </section>
-
-        <section class="story-panel story-panel--rag">
-          <div class="scene-copy">
-            <button type="button" class="scene-copy__action" @click="chapters[1].action()">
-              {{ chapters[1].title }}
+        <section
+          v-for="chapter in visibleChapters"
+          :key="chapter.key"
+          class="story-panel"
+          :class="chapter.panelClass"
+        >
+          <div
+            class="scene-copy"
+            :class="{ 'scene-copy--home': chapter.key === 'home' }"
+          >
+            <button
+              v-if="chapter.action"
+              type="button"
+              class="scene-copy__action"
+              @click="handleChapterAction(chapter)"
+            >
+              {{ chapter.title }}
             </button>
+            <div v-else-if="chapter.renderMode === 'static'" class="scene-copy__static">
+              {{ chapter.title }}
+            </div>
           </div>
-          <img class="person-asset person-asset--rag" :src="artworkUrls.rag" alt="RAG 问答人物" />
-        </section>
 
-        <section class="story-panel story-panel--admin">
-          <div class="scene-copy">
-            <button type="button" class="scene-copy__action" @click="chapters[2].action()">
-              {{ chapters[2].title }}
-            </button>
-          </div>
-          <img class="person-asset person-asset--admin" :src="artworkUrls.admin" alt="后台管理人物" />
-        </section>
+          <WorkbenchLive2DScene
+            v-if="chapter.renderMode === 'live2d'"
+            class="person-asset"
+            :class="chapter.artworkClass"
+          />
 
-        <section class="story-panel story-panel--ideas">
-          <div class="scene-copy">
-            <button type="button" class="scene-copy__action" @click="chapters[3].action()">
-              {{ chapters[3].title }}
-            </button>
-          </div>
-          <img class="person-asset person-asset--ideas" :src="artworkUrls.ideas" alt="灵感随记人物" />
-        </section>
-
-        <section class="story-panel story-panel--gallery">
-          <div class="scene-copy">
-            <button type="button" class="scene-copy__action" @click="chapters[4].action()">
-              {{ chapters[4].title }}
-            </button>
-          </div>
-          <img class="person-asset person-asset--gallery" :src="artworkUrls.gallery" alt="美图鉴赏人物" />
-        </section>
-
-        <section class="story-panel story-panel--articles">
-          <div class="scene-copy">
-            <button type="button" class="scene-copy__action" @click="chapters[5].action()">
-              {{ chapters[5].title }}
-            </button>
-          </div>
-          <img class="person-asset person-asset--articles" :src="artworkUrls.articles" alt="文章馆人物" />
-        </section>
-
-        <section class="story-panel story-panel--todo">
-          <div class="scene-copy">
-            <div class="scene-copy__static">{{ chapters[6].title }}</div>
-          </div>
-          <img class="person-asset person-asset--todo" :src="artworkUrls.todo" alt="待开发人物" />
+          <img
+            v-else
+            class="person-asset"
+            :class="chapter.artworkClass"
+            :src="chapter.artworkSrc"
+            :alt="chapter.artworkAlt"
+          />
         </section>
       </div>
 
@@ -441,19 +481,6 @@ onBeforeUnmount(() => {
   max-width: min(520px, 38vw);
 }
 
-.scene-copy__eyebrow {
-  display: inline-flex;
-  margin-bottom: 18px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(20, 22, 19, 0.06);
-  color: rgba(20, 22, 19, 0.72);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-size: 12px;
-}
-
-.scene-copy h1,
 .scene-copy__action,
 .scene-copy__static {
   margin: 0;
@@ -477,13 +504,6 @@ onBeforeUnmount(() => {
 .scene-copy__action:hover {
   color: #8f3a32;
   transform: translateY(-2px);
-}
-
-.scene-copy p {
-  margin: 18px 0 0;
-  color: rgba(17, 22, 17, 0.78);
-  font-size: 16px;
-  line-height: 1.85;
 }
 
 .person-asset {
@@ -591,7 +611,6 @@ onBeforeUnmount(() => {
     max-width: 76vw;
   }
 
-  .scene-copy h1,
   .scene-copy__action,
   .scene-copy__static {
     font-size: 48px;

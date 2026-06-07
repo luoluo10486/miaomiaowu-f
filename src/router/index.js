@@ -190,6 +190,7 @@ const router = createRouter({
       component: IdeaNotesView,
       meta: {
         requiresAuth: true,
+        requiresAdmin: true,
         title: "Ideas",
         description: "灵感记录页。"
       }
