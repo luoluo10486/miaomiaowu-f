@@ -58,6 +58,7 @@ const uploadFileRef = ref(null);
 const uploadFile = ref(null);
 const uploadForm = ref(createUploadForm());
 const uploadChunkConfig = ref({});
+const togglingDocumentId = ref("");
 
 const detailDialogOpen = ref(false);
 const detailLoading = ref(false);
@@ -109,6 +110,10 @@ function safeArray(value) {
 
 function getErrorMessage(error, fallback) {
   return error?.message || fallback;
+}
+
+function isDocumentEnabled(item) {
+  return item?.enabled === 1 || item?.enabled === true || item?.enabled === "1";
 }
 
 function parseChunkConfig(raw) {
@@ -216,7 +221,7 @@ function logStatusLabel(status) {
 
 const documents = computed(() => pageRecords(page.value));
 const visibleDocumentCount = computed(() => pageTotal(page.value));
-const enabledCount = computed(() => documents.value.filter((item) => Boolean(item.enabled)).length);
+const enabledCount = computed(() => documents.value.filter((item) => isDocumentEnabled(item)).length);
 const chunkCount = computed(() => documents.value.reduce((sum, item) => sum + Number(item.chunkCount || 0), 0));
 const fileCount = computed(() => documents.value.filter((item) => String(item.sourceType || "").toLowerCase() === "file").length);
 const urlCount = computed(() => documents.value.filter((item) => String(item.sourceType || "").toLowerCase() === "url").length);
@@ -484,11 +489,21 @@ async function handleDetailSave() {
 }
 
 async function handleToggleEnabled(docItem) {
+  if (!docItem || togglingDocumentId.value) {
+    return;
+  }
+
+  const nextEnabled = !isDocumentEnabled(docItem);
+  togglingDocumentId.value = docItem.id;
+
   try {
-    await setKnowledgeDocumentEnabled(docItem.id, !Boolean(docItem.enabled));
+    await setKnowledgeDocumentEnabled(docItem.id, nextEnabled);
     await loadDocuments();
+    successText.value = `${docItem.docName || docItem.id} 已${nextEnabled ? "启用" : "禁用"}。`;
   } catch (error) {
     errorText.value = getErrorMessage(error, "切换启用状态失败。");
+  } finally {
+    togglingDocumentId.value = "";
   }
 }
 
@@ -736,11 +751,14 @@ onMounted(() => {
                 <td>
                   <button
                     type="button"
-                    class="admin-badge"
-                    :class="item.enabled ? 'is-success' : 'is-muted'"
+                    class="admin-badge documents-toggle-badge"
+                    :class="isDocumentEnabled(item) ? 'is-success' : 'is-muted'"
+                    :disabled="loading || togglingDocumentId === item.id"
+                    :aria-label="isDocumentEnabled(item) ? '当前状态：启用' : '当前状态：禁用'"
+                    :title="isDocumentEnabled(item) ? '当前状态：启用，点击可切换' : '当前状态：禁用，点击可切换'"
                     @click="handleToggleEnabled(item)"
                   >
-                    {{ item.enabled ? "启用" : "禁用" }}
+                    {{ isDocumentEnabled(item) ? "启用" : "禁用" }}
                   </button>
                 </td>
                 <td>{{ item.chunkCount ?? "-" }}</td>
@@ -1177,6 +1195,14 @@ onMounted(() => {
 
 .documents-select {
   min-width: 180px;
+}
+
+.documents-toggle-badge {
+  min-width: 56px;
+  justify-content: center;
+  padding-inline: 12px;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .dot {

@@ -653,6 +653,24 @@ onMounted(() => {
   user-select: text;
 }
 
+.admin-table th:first-child,
+.admin-table td:first-child {
+  width: 220px;
+  min-width: 220px;
+}
+
+.admin-table th:first-child {
+  white-space: nowrap;
+}
+
+.admin-table td:first-child .admin-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 960px) {
   .knowledge-hero-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));

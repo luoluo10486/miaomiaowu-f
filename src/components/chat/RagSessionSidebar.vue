@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
           </svg>
         </div>
         <div class="sidebar__brand-copy">
-          <p>Ragent AI 智能问答</p>
+          <p>博客知答</p>
           <small>Powered by knowledge retrieval</small>
         </div>
       </div>

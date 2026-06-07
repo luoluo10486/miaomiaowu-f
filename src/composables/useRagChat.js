@@ -215,11 +215,34 @@ export function useRagChat() {
     return null;
   }
 
+  function unwrapListPayload(data) {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.records)) {
+      return data.records;
+    }
+
+    if (Array.isArray(data?.rows)) {
+      return data.rows;
+    }
+
+    return [];
+  }
+
   function mapSession(item) {
     return {
-      id: item?.conversationId || "",
+      id: item?.conversationId || item?.conversation_id || item?.id || item?.sessionId || "",
       title: item?.title || "新对话",
-      lastTime: item?.lastTime || ""
+      lastTime:
+        item?.lastTime ||
+        item?.last_time ||
+        item?.updateTime ||
+        item?.update_time ||
+        item?.createTime ||
+        item?.create_time ||
+        ""
     };
   }
 
@@ -227,11 +250,17 @@ export function useRagChat() {
     return {
       id: String(item?.id ?? `${Date.now()}`),
       role: item?.role === "assistant" ? "assistant" : "user",
-      content: item?.content || "",
-      thinking: item?.thinkingContent || "",
-      thinkingDuration: item?.thinkingDuration || 0,
-      createdAt: item?.createTime || "",
-      feedback: mapVoteToFeedback(item?.vote),
+      content: item?.content || item?.messageContent || item?.message_content || "",
+      thinking: item?.thinkingContent || item?.thinking_content || "",
+      thinkingDuration:
+        item?.thinkingDuration || item?.thinking_duration || item?.thinkingTime || 0,
+      createdAt:
+        item?.createTime ||
+        item?.create_time ||
+        item?.updateTime ||
+        item?.update_time ||
+        "",
+      feedback: mapVoteToFeedback(item?.vote ?? item?.feedbackVote ?? item?.feedback_vote),
       status: "done",
       isThinking: false
     };
@@ -392,7 +421,7 @@ export function useRagChat() {
 
     try {
       const data = await listRagSessions();
-      const nextSessions = Array.isArray(data) ? sortSessions(data.map(mapSession)) : [];
+      const nextSessions = sortSessions(unwrapListPayload(data).map(mapSession));
       sessions.value = nextSessions;
       const routeSessionId = getRouteSessionId();
 
@@ -456,7 +485,7 @@ export function useRagChat() {
         return;
       }
 
-      messages.value = Array.isArray(data) ? data.map(mapMessage) : [];
+      messages.value = unwrapListPayload(data).map(mapMessage);
       showRetrievalPanel.value = hasCompletedRagAnswer.value;
       scrollToBottom();
     } catch (error) {
