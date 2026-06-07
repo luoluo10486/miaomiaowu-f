@@ -59,9 +59,7 @@ const currentKeywordLabel = computed(() => keyword.value || "全部");
 const latestKnowledgeBase = computed(() => records.value[0] || null);
 const latestKnowledgeBaseLabel = computed(() => {
   if (!latestKnowledgeBase.value) return "--";
-  const name = latestKnowledgeBase.value.name || latestKnowledgeBase.value.id || "--";
-  const collection = latestKnowledgeBase.value.collectionName || "未设置集合";
-  return `${name} · ${collection}`;
+  return latestKnowledgeBase.value.name || latestKnowledgeBase.value.id || "--";
 });
 const knowledgeHeroSummary = computed(() => [
   { label: "当前筛选", value: currentKeywordLabel.value },
@@ -404,7 +402,6 @@ onMounted(() => {
               <tr>
                 <th>名称</th>
                 <th>向量模型</th>
-                <th>集合</th>
                 <th>文档数</th>
                 <th>创建者</th>
                 <th>创建时间</th>
@@ -420,9 +417,6 @@ onMounted(() => {
                   </button>
                 </td>
                 <td class="is-code">{{ item.embeddingModel || "--" }}</td>
-                <td>
-                  <span class="admin-badge is-muted">{{ item.collectionName || "--" }}</span>
-                </td>
                 <td>{{ item.documentCount ?? "--" }}</td>
                 <td>{{ item.createdBy || "--" }}</td>
                 <td>{{ formatDateTime(item.createTime) }}</td>
@@ -565,6 +559,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.admin-split {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  align-items: start;
+}
+
 .admin-page-header-meta {
   display: flex;
   gap: 8px;
@@ -633,9 +632,14 @@ onMounted(() => {
 .knowledge-aside {
   display: grid;
   gap: 12px;
+  min-width: 0;
   align-self: start;
   position: sticky;
   top: 16px;
+}
+
+.admin-table-card {
+  min-width: 0;
 }
 
 .admin-form-hint {
@@ -671,13 +675,19 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-@media (max-width: 960px) {
-  .knowledge-hero-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 1320px) {
+  .admin-split {
+    grid-template-columns: 1fr;
   }
 
   .knowledge-aside {
     position: static;
+  }
+}
+
+@media (max-width: 960px) {
+  .knowledge-hero-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
