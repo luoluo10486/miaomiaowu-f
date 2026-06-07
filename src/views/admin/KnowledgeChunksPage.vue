@@ -17,6 +17,7 @@ import {
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const PAGE_SIZE = 10;
+const CHAT_DOC_TYPES = new Set(["chat_qq_group", "chat_wechat_group"]);
 
 const route = useRoute();
 const router = useRouter();
@@ -94,7 +95,7 @@ const allSelected = computed(() => chunks.value.length > 0 && chunks.value.every
 const latestLog = computed(() => recentLogs.value[0] || null);
 const latestChunk = computed(() => chunks.value[0] || null);
 const docMetadata = computed(() => parseMetadata(doc.value?.metadataJson));
-const isChatDocument = computed(() => docMetadata.value.docType === "chat_qq_group");
+const isChatDocument = computed(() => CHAT_DOC_TYPES.has(String(docMetadata.value.docType || "")));
 const previewMetadata = computed(() => parseMetadata(previewTarget.value?.metadata));
 
 const currentFilterLabel = computed(() => {
@@ -611,7 +612,7 @@ onMounted(() => {
               <dd><span :class="['admin-badge', enabledBadgeClass(previewTarget)]">{{ isEnabled(previewTarget) ? "启用" : "禁用" }}</span></dd>
             </div>
           </div>
-          <div v-if="previewMetadata.docType === 'chat_qq_group'" class="admin-kv admin-kv--compact">
+          <div v-if="CHAT_DOC_TYPES.has(String(previewMetadata.docType || ''))" class="admin-kv admin-kv--compact">
             <div><dt>群名</dt><dd>{{ previewMetadata.groupName || "--" }}</dd></div>
             <div><dt>月份</dt><dd>{{ previewMetadata.bucketMonth || "--" }}</dd></div>
             <div><dt>起始时间</dt><dd>{{ previewMetadata.startTime || "--" }}</dd></div>

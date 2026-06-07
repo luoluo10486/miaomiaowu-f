@@ -72,6 +72,14 @@ export function importQqChatTranscript(kbId, payload) {
   });
 }
 
+export function importWechatChatTranscript(kbId, payload) {
+  const formData = buildFormData(payload);
+  return requestRag(`/knowledge-base/${kbId}/chat-import/wechat`, {
+    method: "POST",
+    body: formData
+  });
+}
+
 export function updateKnowledgeDocument(docId, payload) {
   return requestRag(`/knowledge-base/docs/${docId}`, {
     method: "PUT",

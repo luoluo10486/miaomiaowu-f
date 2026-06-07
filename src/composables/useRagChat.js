@@ -15,19 +15,19 @@ import { clearStoredAuth, getStoredAuthUser, refreshStoredAuthUser } from "../ut
 
 const DEFAULT_SUGGESTIONS = [
   {
-    title: "内容总结",
-    description: "提炼 3 到 5 个要点",
-    question: "请帮我总结这段内容，并提炼 3 到 5 个关键要点。"
+    title: "Java 知识文档",
+    description: "适合查询 Java、Spring Boot 和项目实现细节",
+    question: "请结合知识库说明这个项目里的 Java 权限校验链路是怎么实现的？"
   },
   {
-    title: "任务拆解",
-    description: "拆成步骤和优先级",
-    question: "请把这个需求拆成可执行步骤，并给出优先级和里程碑。"
+    title: "微信聊天记录",
+    description: "查询前请先联系管理员开通 `impart` 权限",
+    question: "如果我已获得管理员授权，请帮我检索微信 impart 聊天记录里谁提到过安装问题？"
   },
   {
-    title: "方案对比",
-    description: "给出多个方案并比较",
-    question: "围绕这个主题给出 3 个可行方案，并比较优缺点和适用场景。"
+    title: "QQ 聊天记录",
+    description: "查询前请先联系管理员开通 `yys` 权限",
+    question: "如果我已获得管理员授权，请帮我检索 QQ 阴阳师群聊记录里 2022 年 1 月谁提到过游戏下载？"
   }
 ];
 

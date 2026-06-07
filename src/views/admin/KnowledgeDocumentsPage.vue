@@ -13,6 +13,7 @@ import {
   getKnowledgeDocument,
   getKnowledgeDocumentsPage,
   importQqChatTranscript,
+  importWechatChatTranscript,
   setKnowledgeDocumentEnabled,
   startKnowledgeBaseChunkAll,
   startKnowledgeDocumentChunk,
@@ -22,6 +23,27 @@ import {
 import { formatDateTime, formatDuration, pageRecords, pageTotal } from "./adminShared";
 
 const PAGE_SIZE = 10;
+const CHAT_DOC_TYPES = new Set(["chat_qq_group", "chat_wechat_group"]);
+const CHAT_IMPORT_SOURCES = {
+  qq: {
+    label: "QQ",
+    buttonLabel: "导入 QQ 聊天记录",
+    dialogTitle: "导入 QQ 聊天记录",
+    description: "上传 QQ 群聊导出的 txt 文件，系统会按月份拆分文档，并按聊天窗口切片。",
+    emptyFileMessage: "请选择 QQ 群聊 txt 文件。",
+    importSuccessPrefix: "QQ 群聊",
+    submit: importQqChatTranscript
+  },
+  wechat: {
+    label: "微信",
+    buttonLabel: "导入微信聊天记录",
+    dialogTitle: "导入微信聊天记录",
+    description: "上传微信聊天记录 txt 文件，系统会按月份拆分文档，并按聊天窗口切片。",
+    emptyFileMessage: "请选择微信聊天记录 txt 文件。",
+    importSuccessPrefix: "微信群聊",
+    submit: importWechatChatTranscript
+  }
+};
 
 const STATUS_OPTIONS = [
   { value: "", label: "全部状态" },
@@ -67,6 +89,7 @@ const chatImportSummary = ref(null);
 const chatImportForm = ref(createChatImportForm());
 const chatImportErrorText = ref("");
 const chatImportSuccessText = ref("");
+const chatImportPlatform = ref("qq");
 const togglingDocumentId = ref("");
 
 const detailDialogOpen = ref(false);
@@ -181,7 +204,14 @@ function getChatMetadata(item) {
 }
 
 function isChatDocument(item) {
-  return getChatMetadata(item).docType === "chat_qq_group";
+  return CHAT_DOC_TYPES.has(String(getChatMetadata(item).docType || ""));
+}
+
+function getChatPlatformLabel(item) {
+  const platform = String(getChatMetadata(item).chatPlatform || "").toLowerCase();
+  if (platform === "wechat") return "微信";
+  if (platform === "qq") return "QQ";
+  return "群聊";
 }
 
 function syncConfigDefaults(targetRef, strategyValue, preserveExisting = true) {
@@ -240,7 +270,7 @@ function formatStrategyLabel(strategy) {
   const normalized = String(strategy || "").toLowerCase();
   if (normalized === "fixed_size") return "固定大小";
   if (normalized === "structure_aware") return "结构感知";
-  if (normalized === "chat_qq_window") return "chat_qq_window";
+  if (normalized === "chat_window" || normalized === "chat_qq_window") return "聊天窗口";
   return strategy || "--";
 }
 
@@ -284,13 +314,19 @@ const latestDocumentLabel = computed(() => {
 });
 const uploadStrategy = computed(() => getStrategyOption(uploadForm.value.chunkStrategy));
 const detailStrategy = computed(() => getStrategyOption(detailForm.value.chunkStrategy));
-const visibleStrategies = computed(() => safeArray(strategies.value).filter((item) => String(item?.value || item) !== "chat_qq_window"));
+const visibleStrategies = computed(() =>
+  safeArray(strategies.value).filter((item) => {
+    const value = String(item?.value || item);
+    return value !== "chat_qq_window" && value !== "chat_window";
+  })
+);
 const uploadConfigFields = computed(() => Object.entries(uploadStrategy.value?.defaultConfig || {}));
 const detailConfigFields = computed(() => Object.entries(detailStrategy.value?.defaultConfig || {}));
 const detailSourceType = computed(() => String(detailTarget.value?.sourceType || "").toLowerCase());
 const detailIsUrlSource = computed(() => detailSourceType.value === "url");
 const detailMetadata = computed(() => getChatMetadata(detailTarget.value));
 const detailIsChatDocument = computed(() => isChatDocument(detailTarget.value));
+const activeChatImportSource = computed(() => CHAT_IMPORT_SOURCES[chatImportPlatform.value] || CHAT_IMPORT_SOURCES.qq);
 
 const stats = computed(() => [
   { title: "文档数", value: visibleDocumentCount.value, hint: "当前知识库文档总数", tone: "indigo" },
@@ -407,7 +443,8 @@ function handleFileChange(event) {
   uploadFile.value = event.target?.files?.[0] || null;
 }
 
-function openChatImportDialog() {
+function openChatImportDialog(platform = "qq") {
+  chatImportPlatform.value = CHAT_IMPORT_SOURCES[platform] ? platform : "qq";
   chatImportDialogOpen.value = true;
   chatImportSubmitting.value = false;
   chatImportFile.value = null;
@@ -559,7 +596,7 @@ async function handleDetailSave() {
 async function handleChatImportSubmit() {
   if (!kbId.value) return;
   if (!chatImportFile.value) {
-    const message = "请选择聊天记录 txt 文件。";
+    const message = activeChatImportSource.value.emptyFileMessage;
     errorText.value = message;
     chatImportErrorText.value = message;
     chatImportSuccessText.value = "";
@@ -584,12 +621,12 @@ async function handleChatImportSubmit() {
       maxChars: Number(chatImportForm.value.maxChars),
       splitGapMinutes: Number(chatImportForm.value.splitGapMinutes)
     };
-    const summary = await importQqChatTranscript(kbId.value, payload);
+    const summary = await activeChatImportSource.value.submit(kbId.value, payload);
     chatImportSummary.value = summary;
     await loadDocuments();
-    const message = `群聊 ${summary.groupName || "--"} 已导入，生成 ${summary.createdDocCount || 0} 个月度文档。`;
-    chatImportSuccessText.value = message;
-    successText.value = message;
+    const successMessage = `${activeChatImportSource.value.importSuccessPrefix} ${summary.groupName || "--"} 已导入，生成 ${summary.createdDocCount || 0} 个月度文档。`;
+    chatImportSuccessText.value = successMessage;
+    successText.value = successMessage;
     closeChatImportDialog();
   } catch (error) {
     const message = getErrorMessage(error, "导入聊天记录失败，请稍后重试。");
@@ -851,7 +888,8 @@ onMounted(() => {
           <div class="admin-toolbar-right documents-toolbar-right">
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleSearch">搜索</button>
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="handleRefresh">刷新</button>
-            <button class="admin-button--ghost" type="button" @click="openChatImportDialog">导入聊天记录</button>
+            <button class="admin-button--ghost" type="button" @click="openChatImportDialog('qq')">{{ CHAT_IMPORT_SOURCES.qq.buttonLabel }}</button>
+            <button class="admin-button--ghost" type="button" @click="openChatImportDialog('wechat')">{{ CHAT_IMPORT_SOURCES.wechat.buttonLabel }}</button>
             <button class="admin-button--ghost" type="button" :disabled="loading" @click="openBatchChunkDialog">全部切片</button>
             <button class="admin-button" type="button" @click="openUploadDialog">上传文档</button>
           </div>
@@ -882,6 +920,7 @@ onMounted(() => {
                     {{ item.docName || item.id }}
                   </button>
                   <div v-if="isChatDocument(item)" class="documents-tags">
+                    <span class="admin-badge is-muted">{{ getChatPlatformLabel(item) }}</span>
                     <span class="admin-badge is-muted">群聊</span>
                     <span class="admin-badge is-muted">{{ getChatMetadata(item).bucketMonth || "--" }}</span>
                     <span class="admin-badge is-muted">{{ getChatMetadata(item).groupName || "--" }}</span>
@@ -1094,8 +1133,8 @@ onMounted(() => {
     <div v-if="chatImportDialogOpen" class="admin-dialog-overlay">
       <div class="admin-dialog admin-dialog--wide">
         <button class="admin-dialog-close" type="button" @click="closeChatImportDialog">&times;</button>
-        <h3>导入聊天记录</h3>
-        <p>上传 QQ 群聊导出的 txt，系统会按月拆文档并按原始消息窗口切块。</p>
+        <h3>{{ activeChatImportSource.dialogTitle }}</h3>
+        <p>{{ activeChatImportSource.description }}</p>
         <div class="admin-dialog-body">
           <p v-if="chatImportErrorText" class="admin-notice is-error">{{ chatImportErrorText }}</p>
           <p v-if="chatImportSuccessText" class="admin-notice is-success">{{ chatImportSuccessText }}</p>
