@@ -13,6 +13,7 @@ import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared
 
 const loading = ref(false);
 const errorText = ref("");
+const successText = ref("");
 const keywordInput = ref("");
 const keyword = ref("");
 const pageNo = ref(1);
@@ -36,6 +37,24 @@ function buildEmptyForm() {
     description: "",
     question: ""
   };
+}
+
+function getErrorMessage(error, fallback) {
+  const message = String(error?.message || "").trim();
+  if (!message) {
+    return fallback;
+  }
+
+  const lower = message.toLowerCase();
+  if (lower.includes('column "id" is of type bigint') && lower.includes("character varying")) {
+    return "保存失败：后端样例问题 ID 字段类型不匹配，请检查数据库表结构。";
+  }
+
+  if (lower.includes("bad sql grammar") || lower.includes("psqlexception")) {
+    return "保存失败：后端数据库执行异常，请检查样例问题接口。";
+  }
+
+  return message;
 }
 
 const questions = computed(() => pageRecords(page.value));
@@ -85,7 +104,7 @@ const heroSummary = computed(() => [
 function loadData() {
   loading.value = true;
   errorText.value = "";
-  getSampleQuestionsPage(pageNo.value, pageSize, keyword.value)
+  return getSampleQuestionsPage(pageNo.value, pageSize, keyword.value)
     .then((data) => {
       page.value = data;
       const nextSelected = questions.value.find((item) => item.id === selectedQuestionId.value);
@@ -94,7 +113,7 @@ function loadData() {
       }
     })
     .catch((error) => {
-      errorText.value = error?.message || "加载样例问题失败。";
+      errorText.value = getErrorMessage(error, "加载样例问题失败。");
     })
     .finally(() => {
       loading.value = false;
@@ -104,10 +123,15 @@ function loadData() {
 function handleSearch() {
   pageNo.value = 1;
   keyword.value = keywordInput.value.trim();
+  errorText.value = "";
+  successText.value = "";
+  void loadData();
 }
 
 function handleRefresh() {
   pageNo.value = 1;
+  errorText.value = "";
+  successText.value = "";
   void loadData();
 }
 
@@ -139,6 +163,8 @@ function openCreateDialog() {
   dialogMode.value = "create";
   dialogTarget.value = null;
   form.value = buildEmptyForm();
+  errorText.value = "";
+  successText.value = "";
   dialogOpen.value = true;
 }
 
@@ -150,6 +176,8 @@ function openEditDialog(item) {
     description: item.description || "",
     question: item.question || ""
   };
+  errorText.value = "";
+  successText.value = "";
   dialogOpen.value = true;
 }
 
@@ -161,17 +189,21 @@ function closeDialog() {
 async function handleSubmit() {
   if (!form.value.question.trim()) {
     errorText.value = "请输入样例问题内容。";
+    successText.value = "";
     return;
   }
 
   submitting.value = true;
   errorText.value = "";
+  successText.value = "";
   try {
     const payload = {
       title: form.value.title.trim() || null,
       description: form.value.description.trim() || null,
       question: form.value.question.trim()
     };
+    const successMessage =
+      dialogMode.value === "create" ? "样例问题已创建。" : "样例问题已更新。";
     if (dialogMode.value === "create") {
       await createSampleQuestion(payload);
       pageNo.value = 1;
@@ -180,9 +212,10 @@ async function handleSubmit() {
       await updateSampleQuestion(dialogTarget.value.id, payload);
       await loadData();
     }
+    successText.value = successMessage;
     dialogOpen.value = false;
   } catch (error) {
-    errorText.value = error?.message || "保存样例问题失败。";
+    errorText.value = getErrorMessage(error, "保存样例问题失败。");
   } finally {
     submitting.value = false;
   }
@@ -202,13 +235,15 @@ async function handleDelete() {
   if (!deleteTarget.value) return;
   deleteSubmitting.value = true;
   errorText.value = "";
+  successText.value = "";
   try {
     await deleteSampleQuestion(deleteTarget.value.id);
     closeDeleteDialog();
     pageNo.value = 1;
     await loadData();
+    successText.value = "样例问题已删除。";
   } catch (error) {
-    errorText.value = error?.message || "删除样例问题失败。";
+    errorText.value = getErrorMessage(error, "删除样例问题失败。");
   } finally {
     deleteSubmitting.value = false;
   }
@@ -241,6 +276,7 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+    <p v-if="successText" class="admin-notice is-success">{{ successText }}</p>
 
     <section class="admin-detail-card sample-questions-hero">
       <div class="sample-questions-hero__copy">
