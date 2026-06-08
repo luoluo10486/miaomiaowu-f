@@ -112,7 +112,7 @@ onMounted(() => {
 <template>
   <section class="welcome-screen">
     <div class="welcome-screen__hero">
-      <span class="welcome-screen__badge">博客知答</span>
+      <span class="welcome-screen__badge">万事屋</span>
       <h1>把问题变成清晰答案</h1>
       <p>结构化提问、知识检索和深度思考放在同一个入口，尽量让每次对话都像一条清晰的工作流。</p>
     </div>

@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
           </svg>
         </div>
         <div class="sidebar__brand-copy">
-          <p>博客知答</p>
+          <p>万事屋</p>
           <small>Powered by knowledge retrieval</small>
         </div>
       </div>
