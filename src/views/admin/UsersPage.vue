@@ -3,11 +3,12 @@ import { computed, onMounted, ref } from "vue";
 
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
-import { createUser, deleteUser, getUsersPage, updateUser } from "../../services/userService";
+import { createUser, deleteUser, getUsersPage, resetUserDailyQuestionCount, updateUser } from "../../services/userService";
 import { formatDateTime, pageCount, pageRecords, pageTotal } from "./adminShared";
 
 const loading = ref(false);
 const errorText = ref("");
+const successText = ref("");
 const keywordInput = ref("");
 const keyword = ref("");
 const pageNo = ref(1);
@@ -24,6 +25,15 @@ const submitting = ref(false);
 const deleteDialogOpen = ref(false);
 const deleteTarget = ref(null);
 const deleteSubmitting = ref(false);
+
+const resetDialogOpen = ref(false);
+const resetTarget = ref(null);
+const resetSubmitting = ref(false);
+const resetDialogFeedback = ref("");
+const resetDialogFeedbackType = ref("");
+const resetResultDialogOpen = ref(false);
+const resetResultTitle = ref("");
+const resetResultMessage = ref("");
 
 function buildEmptyForm() {
   return {
@@ -44,6 +54,14 @@ function isProtectedUser(item) {
   return String(item?.username || "").trim().toLowerCase() === "admin";
 }
 
+function isPrivilegedRole(role) {
+  return ["ADMIN", "SUPERADMIN"].includes(normalizeRole(role));
+}
+
+function isPrivilegedUser(item) {
+  return isProtectedUser(item) || isPrivilegedRole(item?.role);
+}
+
 function userDisplayName(item) {
   return item?.nickname?.trim() || item?.username || "--";
 }
@@ -59,7 +77,7 @@ function roleLabel(role) {
 
 const pageUsers = computed(() => pageRecords(page.value));
 const totalUsers = computed(() => pageTotal(page.value));
-const adminCount = computed(() => pageUsers.value.filter((item) => normalizeRole(item.role) === "ADMIN").length);
+const adminCount = computed(() => pageUsers.value.filter((item) => isPrivilegedRole(item.role)).length);
 const enabledCount = computed(() => pageUsers.value.filter((item) => item.enabled !== false).length);
 const protectedCount = computed(() => pageUsers.value.filter((item) => isProtectedUser(item)).length);
 const activeFilterLabel = computed(() => (keyword.value ? keyword.value : "全部用户"));
@@ -93,6 +111,7 @@ const heroSummary = computed(() => [
 async function loadData(currentPage = pageNo.value, currentKeyword = keyword.value) {
   loading.value = true;
   errorText.value = "";
+  successText.value = "";
   try {
     page.value = await getUsersPage(currentPage, pageSize, currentKeyword);
     if (!selectedUserId.value && pageUsers.value.length > 0) {
@@ -178,6 +197,7 @@ async function handleSubmit() {
 
   submitting.value = true;
   errorText.value = "";
+  successText.value = "";
   try {
     const payload = {
       username: form.value.username.trim(),
@@ -192,12 +212,14 @@ async function handleSubmit() {
       await createUser(payload);
       pageNo.value = 1;
       await loadData(1, keyword.value);
+      successText.value = "用户创建成功。";
     } else if (dialogTarget.value) {
       if (form.value.password.trim()) {
         payload.password = form.value.password.trim();
       }
       await updateUser(dialogTarget.value.id, payload);
       await loadData(pageNo.value, keyword.value);
+      successText.value = "用户保存成功。";
     }
 
     closeDialog();
@@ -218,19 +240,78 @@ function closeDeleteDialog() {
   deleteTarget.value = null;
 }
 
+function openResetDialog(item) {
+  resetTarget.value = item;
+  resetDialogFeedback.value = "";
+  resetDialogFeedbackType.value = "";
+  resetDialogOpen.value = true;
+}
+
+function closeResetDialog(force = false) {
+  if (resetSubmitting.value && !force) {
+    return;
+  }
+  resetDialogOpen.value = false;
+  resetTarget.value = null;
+  resetDialogFeedback.value = "";
+  resetDialogFeedbackType.value = "";
+}
+
+function openResetResultDialog(title, message) {
+  resetResultTitle.value = title;
+  resetResultMessage.value = message;
+  resetResultDialogOpen.value = true;
+}
+
+function closeResetResultDialog() {
+  resetResultDialogOpen.value = false;
+  resetResultTitle.value = "";
+  resetResultMessage.value = "";
+}
+
 async function handleDelete() {
   if (!deleteTarget.value) return;
   deleteSubmitting.value = true;
   errorText.value = "";
+  successText.value = "";
   try {
     await deleteUser(deleteTarget.value.id);
     closeDeleteDialog();
     pageNo.value = 1;
     await loadData(1, keyword.value);
+    successText.value = "用户删除成功。";
   } catch (error) {
     errorText.value = error?.message || "删除用户失败。";
   } finally {
     deleteSubmitting.value = false;
+  }
+}
+
+async function confirmResetDailyQuestionCount() {
+  if (!resetTarget.value?.id) {
+    return;
+  }
+
+  resetSubmitting.value = true;
+  errorText.value = "";
+  successText.value = "";
+  resetDialogFeedback.value = "";
+  resetDialogFeedbackType.value = "";
+  const target = resetTarget.value;
+  try {
+    await resetUserDailyQuestionCount(target.id);
+    const successMessage = `${userDisplayName(target)} 今天的提问次数已重置。`;
+    successText.value = successMessage;
+    resetSubmitting.value = false;
+    closeResetDialog(true);
+    openResetResultDialog("重置成功", successMessage);
+  } catch (error) {
+    const message = error?.message || "重置用户今日提问次数失败。";
+    resetDialogFeedbackType.value = "error";
+    resetDialogFeedback.value = message;
+    errorText.value = message;
+  } finally {
+    resetSubmitting.value = false;
   }
 }
 
@@ -261,6 +342,7 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+    <p v-if="successText" class="admin-notice is-success">{{ successText }}</p>
 
     <div class="admin-stat-grid">
       <StatCard v-for="stat in stats" :key="stat.title" :title="stat.title" :value="stat.value" :hint="stat.hint" :tone="stat.tone" />
@@ -371,15 +453,23 @@ onMounted(() => {
                     <button
                       class="admin-button--ghost"
                       type="button"
-                      :disabled="isProtectedUser(item)"
+                      :disabled="isPrivilegedUser(item)"
                       @click.stop="openEditDialog(item)"
                     >
                       编辑
                     </button>
                     <button
+                      class="admin-button--ghost"
+                      type="button"
+                      :disabled="isPrivilegedUser(item)"
+                      @click.stop="openResetDialog(item)"
+                    >
+                      重置今日次数
+                    </button>
+                    <button
                       class="admin-button--danger"
                       type="button"
-                      :disabled="isProtectedUser(item)"
+                      :disabled="isPrivilegedUser(item)"
                       @click.stop="openDeleteDialog(item)"
                     >
                       删除
@@ -506,6 +596,36 @@ onMounted(() => {
           <button class="admin-button--danger" type="button" :disabled="deleteSubmitting" @click="handleDelete">
             {{ deleteSubmitting ? "删除中..." : "删除" }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="resetDialogOpen" class="admin-dialog-overlay">
+      <div class="admin-dialog">
+        <button class="admin-dialog-close" type="button" :disabled="resetSubmitting" @click="closeResetDialog">&times;</button>
+        <h3>确认重置今日次数</h3>
+        <p class="admin-confirm-text">
+          确认重置 <strong>{{ userDisplayName(resetTarget) }}</strong> 今天的提问次数吗？重置后该用户当天的配额计数会清零，下一次提问会重新开始计算。
+        </p>
+        <p v-if="resetDialogFeedback" :class="['admin-dialog-status', resetDialogFeedbackType === 'error' ? 'is-error' : 'is-success']">
+          {{ resetDialogFeedback }}
+        </p>
+        <div class="admin-dialog-footer">
+          <button class="admin-button--ghost" type="button" :disabled="resetSubmitting" @click="closeResetDialog">取消</button>
+          <button class="admin-button" type="button" :disabled="resetSubmitting" @click="confirmResetDailyQuestionCount">
+            {{ resetSubmitting ? "重置中..." : "确认重置" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="resetResultDialogOpen" class="admin-dialog-overlay">
+      <div class="admin-dialog">
+        <button class="admin-dialog-close" type="button" @click="closeResetResultDialog">&times;</button>
+        <h3>{{ resetResultTitle }}</h3>
+        <p class="admin-confirm-text">{{ resetResultMessage }}</p>
+        <div class="admin-dialog-footer">
+          <button class="admin-button" type="button" @click="closeResetResultDialog">知道了</button>
         </div>
       </div>
     </div>

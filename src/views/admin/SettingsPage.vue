@@ -3,12 +3,15 @@ import { computed, onMounted, ref } from "vue";
 
 import PageHeader from "../../components/admin/PageHeader.vue";
 import StatCard from "../../components/admin/StatCard.vue";
-import { getSystemSettings } from "../../services/settingsService";
+import { getSystemSettings, updateDailyQuestionLimit } from "../../services/settingsService";
 import { normalizeBooleanLabel } from "./adminShared";
 
 const loading = ref(false);
 const errorText = ref("");
+const successText = ref("");
 const settings = ref(null);
+const dailyQuestionLimitInput = ref(5);
+const savingDailyQuestionLimit = ref(false);
 
 const ragDefaults = computed(() => settings.value?.rag?.default || {});
 const queryRewrite = computed(() => settings.value?.rag?.queryRewrite || {});
@@ -88,12 +91,39 @@ const modelGroups = computed(() => [
 async function loadSettings() {
   loading.value = true;
   errorText.value = "";
+  successText.value = "";
   try {
     settings.value = await getSystemSettings();
+    dailyQuestionLimitInput.value = Number(settings.value?.rag?.rateLimit?.dailyQuestionLimit ?? 5);
   } catch (error) {
     errorText.value = error?.message || "加载系统设置失败。";
   } finally {
     loading.value = false;
+  }
+}
+
+async function handleSaveDailyQuestionLimit() {
+  const nextValue = Number(dailyQuestionLimitInput.value);
+  if (!Number.isInteger(nextValue) || nextValue < 1) {
+    errorText.value = "每日提问上限必须是大于 0 的整数。";
+    successText.value = "";
+    return;
+  }
+
+  savingDailyQuestionLimit.value = true;
+  errorText.value = "";
+  successText.value = "";
+  try {
+    const updatedLimit = await updateDailyQuestionLimit(nextValue);
+    if (settings.value?.rag?.rateLimit) {
+      settings.value.rag.rateLimit.dailyQuestionLimit = updatedLimit;
+    }
+    dailyQuestionLimitInput.value = updatedLimit;
+    successText.value = `每日提问上限已更新为 ${updatedLimit}。`;
+  } catch (error) {
+    errorText.value = error?.message || "更新每日提问上限失败。";
+  } finally {
+    savingDailyQuestionLimit.value = false;
   }
 }
 
@@ -124,6 +154,7 @@ onMounted(() => {
     </PageHeader>
 
     <p v-if="errorText" class="admin-notice is-error">{{ errorText }}</p>
+    <p v-if="successText" class="admin-notice is-success">{{ successText }}</p>
 
     <div class="admin-stat-grid">
       <StatCard
@@ -161,6 +192,33 @@ onMounted(() => {
         <div class="settings-hero-cardline">
           <span class="settings-hero-cardlabel">候选模型</span>
           <strong>{{ modelCoverageLabel }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-detail-card settings-control-card">
+      <div class="settings-control-copy">
+        <p class="trace-hero-tag">提问配额</p>
+        <h2>每日提问上限</h2>
+        <p>
+          非管理员用户每天可提问的次数上限。超过后会直接返回提示，不再进入模型生成流程，以减少 token 消耗。
+        </p>
+      </div>
+      <div class="settings-control-form">
+        <label class="settings-control-label" for="daily-question-limit">每日上限</label>
+        <input
+          id="daily-question-limit"
+          v-model.number="dailyQuestionLimitInput"
+          class="admin-input"
+          type="number"
+          min="1"
+          step="1"
+        />
+        <div class="settings-control-actions">
+          <span class="settings-control-hint">当前值：{{ dailyQuestionLimitInput }}</span>
+          <button class="admin-button" type="button" :disabled="savingDailyQuestionLimit" @click="handleSaveDailyQuestionLimit">
+            {{ savingDailyQuestionLimit ? "保存中..." : "保存设置" }}
+          </button>
         </div>
       </div>
     </section>
@@ -400,6 +458,61 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.settings-control-card {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.settings-control-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.settings-control-copy h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.settings-control-copy p {
+  margin: 0;
+  color: var(--admin-ink-soft);
+  line-height: 1.7;
+}
+
+.settings-control-form {
+  display: grid;
+  gap: 10px;
+  min-width: 280px;
+  padding: 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius-lg);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.settings-control-label {
+  color: var(--admin-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.settings-control-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-control-hint {
+  color: var(--admin-ink-soft);
+  font-size: 13px;
+}
+
 .settings-layout {
   align-items: start;
 }
@@ -409,7 +522,16 @@ onMounted(() => {
     flex-direction: column;
   }
 
+  .settings-control-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .settings-hero-side {
+    min-width: 0;
+  }
+
+  .settings-control-form {
     min-width: 0;
   }
 }

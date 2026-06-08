@@ -25,6 +25,12 @@ export function deleteUser(id) {
   });
 }
 
+export function resetUserDailyQuestionCount(id) {
+  return requestRag(`/rag/question-quota/users/${id}/reset`, {
+    method: "POST"
+  });
+}
+
 export function changeCurrentUserPassword(payload) {
   return requestRag("/user/password", {
     method: "PUT",

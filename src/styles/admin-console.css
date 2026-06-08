@@ -1116,6 +1116,24 @@
   line-height: 1.6;
 }
 
+.admin-dialog-status {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-dialog-status.is-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.admin-dialog-status.is-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
 /* ===== Card Header ===== */
 .admin-link-button {
   color: var(--admin-accent);
