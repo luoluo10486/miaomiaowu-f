@@ -36,7 +36,7 @@ export function useRagChat() {
   const route = useRoute();
   const sessions = ref([]);
   const messages = ref([]);
-  const suggestions = ref(DEFAULT_SUGGESTIONS);
+  const suggestions = ref([]);
   const currentSessionId = ref("");
   const draft = ref("");
   const loadingSessions = ref(false);
